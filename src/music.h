@@ -31,9 +31,13 @@
 
 #include "cmf.h"
 
-/* Where the intro's song is in MUC.ALL (STORY2.SL 0x10288 reads this block; docs/formats.md). */
+/* Where the intro's song is in MUC.ALL (STORY2.SL 0x10288 reads this block; docs/formats.md). The title
+ * (MARK.EXE 0x10577) and the ending (ENDING.SL) read the same block. */
 #define MUSIC_INTRO_OFFSET 0x27137u
 #define MUSIC_INTRO_LENGTH 0x49a2u
+/* The menu's song (WALK0.SL 0x10b0d: seek 2:0xbad9, read 0x1c92 bytes; also one of WALK.SL's reads). */
+#define MUSIC_MENU_OFFSET 0x2bad9u
+#define MUSIC_MENU_LENGTH 0x1c92u
 
 typedef struct music music_t;
 
@@ -44,6 +48,8 @@ void music_free(music_t *m);
 /* Convenience: read the intro song from MUC.ALL (assets.h) and create a player. NULL, with a
  * message on stderr, on failure. */
 music_t *music_load_intro(void);
+/* The same for any block of MUC.ALL holding one song. */
+music_t *music_load_at(size_t offset, size_t length);
 
 /* The rate of the samples music_render produces. */
 unsigned music_rate(void);

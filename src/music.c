@@ -238,15 +238,20 @@ void music_free(music_t *m)
 
 music_t *music_load_intro(void)
 {
-    uint8_t *buf = malloc(MUSIC_INTRO_LENGTH);
+    return music_load_at(MUSIC_INTRO_OFFSET, MUSIC_INTRO_LENGTH);
+}
+
+music_t *music_load_at(size_t offset, size_t length)
+{
+    uint8_t *buf = malloc(length);
     if (!buf)
         return NULL;
-    if (assets_read_at("MUC.ALL", MUSIC_INTRO_OFFSET, buf, MUSIC_INTRO_LENGTH) != 0) {
+    if (assets_read_at("MUC.ALL", offset, buf, length) != 0) {
         fprintf(stderr, "music: cannot read MUC.ALL\n");
         free(buf);
         return NULL;
     }
-    cmf_t *song = cmf_parse(buf, MUSIC_INTRO_LENGTH);
+    cmf_t *song = cmf_parse(buf, length);
     free(buf);
     music_t *m = music_create(song);
     if (!m)

@@ -319,6 +319,7 @@ static void test_intro0_sound(void)
     CHECK(t != NULL);
     if (!t)
         return;
+    intro0_set_music_replay(t, 0);   /* the single-play case; replay is the default */
     while (intro0_phase_now(t) == INTRO0_FADE_IN)
         intro0_step(t, &scr, 0);
     int started_at = -1;
@@ -341,10 +342,10 @@ static void test_intro0_sound(void)
     CHECK(fake.plays == 1);
     intro0_free(t);
 
-    /* Replay on: it starts again 20 passes after the pass that sees it stopped. */
+    /* Replay (the default, as in the original): it starts again 20 passes after the pass that
+     * sees it stopped. */
     fake_reset();
     t = intro0_create(&scr);
-    intro0_set_music_replay(t, 1);
     while (intro0_phase_now(t) == INTRO0_FADE_IN)
         intro0_step(t, &scr, 0);
     for (int i = 0; i < 20; i++)
@@ -362,6 +363,7 @@ static void test_intro0_sound(void)
      * as it is; with no sink it goes straight to the fade-out. */
     fake_reset();
     t = intro0_create(&scr);
+    intro0_set_music_replay(t, 0);
     while (intro0_phase_now(t) == INTRO0_FADE_IN)
         intro0_step(t, &scr, 0);
     unsigned tick = 0;

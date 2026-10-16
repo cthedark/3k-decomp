@@ -32,6 +32,22 @@ void platform_sleep_ms(uint32_t ms);
  * keyboard scan code from the hardware port and the mouse driver's button state. */
 int platform_pressed(void);
 
+/* The keyboard as the original's menu sees it: the value of port 0x60, which is the LAST scancode the
+ * keyboard sent and keeps that value until the next one (a make code when a key goes down, make | 0x80
+ * when it comes up). Auto-repeat is not reported (a held key sends nothing more). Only the keys the
+ * game uses are known: Up 0x48, Down 0x50, Left 0x4b, Right 0x4d, Enter 0x1c, Space 0x39, Esc 0x01.
+ * The value starts as the break code of Enter (0x9c), as if the game had been started from the DOS
+ * prompt with Enter, which is how the keyboard port is left. */
+unsigned platform_port60(void);
+
+/* The mouse in screen pixels (0..319, 0..199, the window scaled back), and the buttons held (bit 0
+ * left, bit 1 right, bit 2 middle). Returns 0 and leaves the arguments alone when there is no
+ * pointer to report (headless). */
+int platform_mouse(int *x, int *y, unsigned *buttons);
+
+/* Show or hide the system's mouse pointer over the window. The menu draws its own arrow. */
+void platform_show_pointer(int on);
+
 /* True once for each time Space was pressed since the last call. The slideshow's loops react to
  * the Space key only (scan code 0x39), not to Enter or the mouse. */
 int platform_space_hit(void);

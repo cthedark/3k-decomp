@@ -17,20 +17,19 @@ up later with no other context. Start here.
 8. `concepts.md`: short explanations of the terms used.
 9. `original_checksums.sha256`: SHA-256 of every original file.
 
-Tools live in `../tools/`: `run-original.sh` (run the original in DOSBox-X, `--trace`
-logs file I/O), `render_font.py` (draw text with the game's own font) and
-`voc_extract.py` (split the voice files into WAV) and `cmf_survey.py` (list a CMF song's
-patches, programs, controllers and length; standard library only) and `cmf_behaviour.py` (how a\nsong uses its channels: overlaps, stray note-offs, velocities) and `cmf_to_mid.py` (export every\nsong of `MUC.ALL` as a MIDI file, read back and checked; output goes under `work/`) and\n`mutate_music.sh` (deliberate bugs to show the music tests can fail) and `lcz_decode.py` (decode
-and render the `.LCZ` pictures) and `lcz_sheet.py` (contact sheet of all chunks of
-one `.LCZ` file, for testing frame-size hypotheses) and `dis16.py` (disassemble 16-bit
-code from an unpacked program; needs `work/venv`) and `calls16.py` (fold a stretch of
-disassembly into calls with their arguments and resolve `DS:` pointers to strings; needs
-`work/venv`) and `fit_timeline.py` (split event times from several `dosemu.py --log-files`
-runs into clock-bound and CPU-bound parts) and `mz_strings.py` (list the
-strings in an unpacked program with addresses; Ghidra defines almost none) and
-`dosemu.py` (run an unpacked original program in a small emulator and save its screen;
-the reference for the C port) and `compare_frames.py` (compare two screen dumps) and
-`compare_set.py` (compare many pairs of dumps at once).
+Tools live in `../tools/` (standard library only unless noted; `work/venv` is the Python with Capstone and
+Unicorn; every tool's header says how to use it). Output derived from the game goes under `work/`.
+
+| Area | Tools |
+|---|---|
+| Run and trace the original | `run-original.sh` (DOSBox-X, `--trace` logs file I/O); `dosemu.py` (the oracle: runs an unpacked program in a small emulator and saves its screen; options `--log-files`, `--snap-hit`, `--peek`, `--trace-calls`, `--dump-local`, scripted `--key`; needs the venv); `capture_original_audio.sh` (record what the original outputs in DOSBox-X, headless) |
+| Read code | `dis16.py`, `calls16.py` (disassemble; fold into calls with arguments; need the venv); `mz_strings.py` (strings with addresses) |
+| Pictures and sprites | `lcz_decode.py`, `lcz_sheet.py`, `lcz_at.py` (LCZ containers, also a block inside another file such as `RPG.LCP`); `buf_sheet.py` (contact sheet of raw buffers); `render_font.py` |
+| Compare screens | `compare_frames.py`, `compare_set.py`, `compare_raw.py` (raw dumps of 64,000 pixels + palette); `check_intro1.sh`..`check_intro6.sh`, `check_menu.sh` (re-run a scene against the original frame by frame) |
+| Voice and music data | `voc_extract.py`; `cmf_survey.py`, `cmf_behaviour.py`, `cmf_to_mid.py` (songs of `MUC.ALL`, also as MIDI) |
+| Recorded audio | `audio_timeline.py`, `find_clip.py`, `clip_scale.py`, `loop_period.py`, `onset_fit.py`, `pitch_check.py` (has a self-test), `emu_baseline.py`, `compare_music.py`; method and pitfalls in `findings.md`, 2026-10-15 |
+| Timing | `fit_timeline.py` (split event times into clock-bound and CPU-bound parts) |
+| Mutation checks (do the tests fail when the code is wrong?) | `mutate_audio.sh`, `mutate_music.sh`, `mutate_menu.sh` (needs `check_menu.sh` run first) |
 
 ## Current state (update this section each session)
 - Done: PKLITE unpacking of 5 programs; Ghidra loads MARK and TV; the original
@@ -62,7 +61,7 @@ the reference for the C port) and `compare_frames.py` (compare two screen dumps)
   matches in 440 more, including the final fade to black, so all seven slides of the intro are built
   and compared; `--scene intro` plays them in a row. Voice-over and slide 0's sound are built
   (2026-10-15); the operator confirmed subtitle and voice sync by listening; slide 0's sound was accepted by the operator; the slide 0 restart question is open; the FM music
-  (ymfm + CMF player, `port.md` "Milestone 5") is built and tested but not yet listened to. The timing policy is fixed durations (`port.md`).
+  (ymfm + CMF player, `port.md` "Milestone 5") is built and tested; the operator confirmed by listening (2026-10-15) that it plays along with the voice. Milestone 4 (`--scene game`: title -> intro -> title, with music in both) was built the same day and has not been looked at by the operator; the menu is not built. The timing policy is fixed durations (`port.md`).
 - Not done: no code analysed in the overlays; no function renamed or
   reconstructed; subtitle and picture formats unknown.
 - Operator note: the operator's keyboard has no function keys. Use the mouse on

@@ -66,4 +66,27 @@
  * rate is taken from slide 0's subtitle passes. GUESS. */
 #define TK_SUBTITLE_PASS_HZ 35
 
+/* The menu's loop (WALK0.SL 0x10b91): how many passes per second. Each original pass copies about 46 KB
+ * inside the machine and 32 KB to the video memory and has no pacing, so the backdrop's drift and
+ * the response to the keys depended on the machine (about 2.3 passes per BIOS tick in the oracle at an
+ * arbitrary 500,000 instructions per tick, which says nothing about real hardware). The backdrop moves one
+ * pixel per pass (one row, later): 35 per second takes 5.5 s for a full turn of the picture. Taken from
+ * the intro's rate, which was judged right by eye. GUESS. */
+#define TK_MENU_PASS_HZ 35
+
+/* The menu's opening (WALK0.SL 0x10357 .. 0x10537): a zoom of 20 steps, each stretching a rectangle of the
+ * picture to the whole screen (about 128 KB of memory traffic per step), then the lettering "Ready"
+ * shrinking away in 160 steps, each of them a few KB. Neither is paced in the original and it checks no
+ * retrace, so how long they took depended on the machine: in the oracle at 500,000 instructions per
+ * tick the zoom took about 12 BIOS ticks and the shrink about 4, which says nothing about real hardware.
+ * Chosen by eye: the zoom 0.7 s, the shrink 1.3 s. GUESS. */
+#define TK_MENU_WIPE_HZ 30
+#define TK_MENU_SHRINK_HZ 120
+
+/* The transition after a choice (WALK0.SL 0x10e9d .. 0x10fe1): 33 steps, each about 160 KB of memory
+ * traffic with no wait and no sound, so its length in the original was the speed of the machine. A
+ * check mark is drawn in the chosen label by an arrow; 33 steps per second makes it take a second,
+ * long enough to see it being drawn. GUESS. */
+#define TK_MENU_CONFIRM_HZ 33
+
 #endif

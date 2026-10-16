@@ -66,8 +66,8 @@ The port uses **fixed durations**, never a CPU-speed or emulator cycle setting.
 | 1 | Decode a full-screen picture and show it with the right palette | **done 2026-10-14** |
 | 2 | `MARK.EXE` title: palette fade, logo pieces, input, Space/Enter/mouse choice | **done 2026-10-14** (see below) |
 | 3 | `STORY2.SL` intro: slide order, timing, voice, subtitles | **in progress** (2026-10-15): slides 0-6 (the whole intro) done and match the original (see below); voice-over and slide 0's sound built 2026-10-15, voice-over and subtitle sync confirmed by the operator by listening (see "Sound"); FM music built, not yet heard (see "Music") |
-| 4 | Chain the modes: title -> intro -> title, or title -> menu | not started |
-| 5 | Music (`MUC.ALL`, FM) | **built 2026-10-15, awaiting the operator's ears**: ymfm OPL2 + CMF player, plays under slides 1-6 of `--scene intro` (see "Music") |
+| 4 | Chain the modes: title -> intro -> title, or title -> menu | **title <-> intro done 2026-10-15** (`--scene game`, see "Milestone 4"); the menu (`WALK0.SL`) is not built, so a key or click on the title ends the game; **menu built and playable 2026-10-15** (`--scene menu`, and `--scene game` after the title): frames, keyboard and mouse identical to the original (106 comparisons, "Milestone 4b" and "4c"); the opening animation is built ("Milestone 4d"); the closing transition, the four actions and the slot picker are not, so a choice ends the program |
+| 5 | Music (`MUC.ALL`, FM) | **done 2026-10-15 for the intro song** (operator confirmed by listening that the music plays along with the voice; the title plays it too since milestone 4, not yet listened to): ymfm OPL2 + CMF player, plays under slides 1-6 of `--scene intro` (see "Milestone 5"); rhythm mode (songs 0 and 3) deliberately deferred: build it when `CAST.SL` / `WALK.SL` are ported (operator decision 2026-10-15), checking it against a DOSBox-X recording of those programs |
 
 ### Milestone 1 evidence
 - `make test`: 0 failures, also clean under `-fsanitize=address,undefined`.
@@ -331,7 +331,8 @@ lines if it feels wrong, and the exec of `mark.exe` (milestone 4).
 
 Run `build/3k --scene intro` (or `intro1`..`intro6`, `intro0`) with the game's data; there is sound
 when the machine has an output device. `--no-audio` forces the silent path (the original's timing
-without a sound card: 74-tick holds). `--slide0-replay` turns on the restart described below.
+without a sound card: 74-tick holds). Slide 0's clip plays twice, as the original does; `--slide0-once`
+plays it once (see below).
 
 What it does, from the original's code (`findings.md`, "the sound path of STORY2.SL"):
 - **Slides 1 to 6:** for each subtitle line, the cross-fade runs first (14 passes, about 0.4 s at the
@@ -342,11 +343,14 @@ What it does, from the original's code (`findings.md`, "the sound path of STORY2
 - **Slide 0:** `STORY0_1` (20.87 s) starts on the 20th loop pass, about 0.5 s in. At the end of the
   loop, if it is still playing, the screen stays as it is until it ends (Space does not skip this,
   as in the original), then the fade-out.
-- **Decision for you, off by default: the restart.** The original's code starts the clip again 20
-  passes after it ends, and then waits for that second playing at the end. At this port's pacing the
-  loop outlasts the clip, so that adds 18 s of a frozen last frame (measured: 27 s without, 45 s with
-  `--slide0-replay`). Whether the authors meant that is unknown. If you listen and the replay seems
-  intended, make it the default.
+- **The restart is ON by default since 2026-10-15 (was a decision for you, off).** The original's
+  code starts the clip again 20 passes after it ends, and then waits for that second playing at the
+  end, so slide 0 holds its last frame while the clip plays a second time (27 s in this port with one
+  play, 45 s with two). A recording of the ORIGINAL running in DOSBox-X with the Sound Blaster on
+  settled it: the clip plays exactly twice at all three CPU speeds tried (max, 10,000 and 3,000
+  cycles per ms), the second play ending 43 to 50 s into the run (findings.md, 2026-10-15, "Slide 0's
+  sound: what the original does"). `--slide0-once` plays it once. Whether the authors *meant* it
+  stays unknown; it is what the program does.
 - **Design:** `src/audio.[ch]` is a three-function sink (play, playing, stop) that the scenes use as the
   original used the driver's status word. The SDL layer fills it; with no sink (stepped comparisons,
   the headless build, `--no-audio`, no device) the scenes run exactly as before, which is why the
@@ -373,7 +377,7 @@ What it does, from the original's code (`findings.md`, "the sound path of STORY2
 
 ## Milestone 5: music (`MUC.ALL`), built 2026-10-15
 
-**Status: built and tested, NOT yet listened to by anyone.** The note-to-register mapping follows
+**Status: built and tested; the operator listened on 2026-10-15 and confirmed that the music plays along with the voice during the slides. Only that was reported: instrument fidelity, loudness balance and the loop point were not commented on, so they are not confirmed.** The note-to-register mapping follows
 the public CMF description (ModdingWiki, "CMF Format"), not the original driver, whose handlers
 were not read. Whether it sounds like the original is for the operator's ears.
 
@@ -401,7 +405,8 @@ so it renders at 49,716 Hz. The Makefile builds ymfm into `build/opl/`.
   the rendered audio, A2/A3/A4/C5/A5/A6 are within 0.5 % of true.
 - Chip set-up: waveform select on, AM and vibrato depth both on (the CMF default).
 - Not used by this song, so not decided: rhythm mode (**songs 0 and 3 of MUC.ALL do use it** and
-  would play wrongly; see findings.md 2026-10-15), patches the song does not define (the
+  would play wrongly; song 0 is CAST.SL's, song 3 can only come from WALK.SL; see findings.md
+  2026-10-15), patches the song does not define (the
   original has 16 built-in defaults), pitch bend (the original CMF player ignores it).
 
 **In the game (`--scene intro` only):** the song starts after slide 0's fade to black, where
@@ -424,6 +429,198 @@ The standalone `--scene intro1` .. `intro6` play without music.
   samples in 45 s of wall clock after slide 0, with no stall.
 - To listen without the game: `make build/music_dump && build/music_dump original_bin out.wav 135`.
 
-**Not checked:** how it sounds; the original driver's register writes (could be logged in the
-oracle emulator if the sound is off); the volume balance between music and voice (`--music-gain`
+**Checked against the original (2026-10-15, findings.md "recording the original's audio"):** the
+original's loop period is independent of CPU speed and its tempo agrees with the port's within
+about +-1.5 % (limited by the recording clock); its pitch agrees (+0.00 semitones on a tool that
+reads +-1 and -2 exactly on fake captures). **Not established:** instrument timbre, volume mapping
+and channel mapping; the blunt spectral score cannot separate them from the difference between two
+chip emulators.
+
+**Not checked:** how it sounds to the operator beyond "plays along with the voice"; the original
+driver's register writes (could be logged in the oracle emulator if the sound is off); the volume balance between music and voice (`--music-gain`
 exists for that); whether the original restarts the song at exactly the end or after a delay.
+
+## Milestone 4: chaining title and intro, 2026-10-15
+
+`build/3k --scene game --data original_bin` runs the original's program chain in one process:
+title (`MARK.EXE`) -> after its 699-pass timeout the intro (`STORY2.SL`) -> back to the title, and
+so on until the window is closed. A key or click on the title would start the menu (`WALK0.SL`),
+which is not built: the game prints that and ends. `--scene title` and `--scene intro` still run
+alone, with the same music.
+
+**Design (`src/main.c`):** `play_title` and `play_intro` are real-time functions on an already
+initialised platform; `run_game` loops over them. Each original program is started fresh by `exec`,
+so each scene is created from its own initial state (the intro resets the random generator to seed
+1 itself). The hand-over message byte in `ANI.LCP` is 0x3f for every hand-over involving
+`STORY2.SL` and `STORY2.SL` leaves it alone (code.md, findings.md), so it is not modelled.
+Closing the window is now sticky (`platform_poll` keeps answering "quit"), so a chain ends instead
+of starting the next scene.
+
+**The title has music (MARK.EXE, read 2026-10-15, `tools/calls16.py`):** on the normal path it opens
+`MUC.ALL`, seeks to `0x27137`, reads `0x49a2` bytes (the same song as the intro) at `0x10577`..
+`0x105a4` and, if the sound flag `[0x1d0]:4` is set, calls `0x11160` with the buffer (`0x105d0`),
+before it sets the video mode. When the title loop ends it calls `0x1124a` and `0x11272`
+(`0x10b1c`, `0x10b21`). Roles of these calls are inferred from position and from the intro's use of
+the same driver (start, stop, shut down), not from the driver's code. The title therefore plays the
+song from its first moment, through the fade-out; the port does the same (`song_start` in
+`play_title`). The other song read at `0x103b8` (`0x2d76b`, 1,969 bytes) belongs to the optional
+scene that the shipped data skips; it is not built.
+
+**Checked:**
+- Real build with SDL's dummy audio and video drivers (nothing plays): title -> intro -> title ->
+  intro -> title -> intro went round three times (the intro sped up with `TK_AUTO_SPACE_MS=400`);
+  the music device kept pulling samples throughout.
+- Quit: a real `SDL_QUIT` event (`TK_AUTO_QUIT_MS`) during the title, slide 0 and the later slides
+  each ended the program with exit 0 within a second, without starting another scene.
+- Unchanged: `make test` (5 suites), slides 1-6 frame comparisons, sanitizer build of the headless
+  target. The title's stepped comparison path was not touched.
+
+**Not checked:** how the chain looks and sounds on a real display and speakers (nobody has run it
+yet); the sanitizer cannot run the SDL path (an SDL modal dialog once hung a run for 1.5 hours);
+whether the original's title after the intro starts with a held Space; the menu.
+
+**Test hooks (environment, testing only):** `TK_AUTO_SPACE_MS=N` presses Space in the slides every
+N ms (the title's held-key check is separate, so the title still times out); `TK_AUTO_QUIT_MS=N`
+posts an `SDL_QUIT` N ms after the first poll; `TK_AUDIO_LOG=1` reports music samples pulled.
+
+## Milestone 4b: the menu's static frame (WALK0.SL), built 2026-10-15
+
+`src/menu.[ch]` computes the menu's screen after N passes of its loop: no clock, no input, no SDL (so it
+can be compared and tested headless, like the title and the slides). `build/3k_headless --scene menu
+--step-dump N:FILE [--highlight K]` writes the screen after N passes in the oracle's raw format.
+It is not yet reachable from `--scene game`: nothing runs it in real time.
+
+**What a frame is:** `GMAIN.LCZ` with a 3-digit CPU label at the top right; a 192 x 168 backdrop at
+screen (64, 16) that rolls (below); the four labels (122 x 30 each) over the backdrop at (100, 40 + 30 k),
+colour 0 transparent, the selected one recoloured `0x17` -> `0x10` (white). The palette is `RPG.LCP`'s
+first 768 bytes, unchanged.
+
+**The roll:** a counter runs 0..200 (it starts at 0, is counted at the top of each pass, so the first pass
+has counter 1, and wraps to 0 after 200: a cycle of 201 passes). For counter 0..119 the backdrop rolls one
+pixel left (the first pixel of each row wraps to the end); for 120..200 it rolls one row up (the top row
+wraps to the bottom). [Corrected 2026-10-15: an earlier version of this text said the first frame was
+already one pixel on, for a cause unknown. That was a misreading of the oracle's snapshot index, see
+findings.md, "The one-pixel quirk was my own off-by-one".]
+
+**The CPU label** ("(2 + speed class) 8 6", so 486 with the shipped class 2; answers the operator's
+hunch, findings.md): three 8 x 8 tiles of a digit atlas (`RPG.LCP` `0x1643b`) into a 27 x 8 strip, a
+colour ramp `0xf0`..`0xfb` over it in bands of 20 bytes, a "stretch" to 53 x 15 that is really a sparse
+resampling (each source pixel written once, the pixels after it left 0, every other row blank, so the
+label looks dotted), blitted at (268, 12) with a 1-pixel shadow (colour 0) one row and column on.
+
+**Checked (re-run with `tools/check_menu.sh`, needs the oracle's set-up):**
+- 40 of 40 frames identical to the original's, pixels and palette: item 0 at 18 passes (both halves of
+  the roll and both counter wraps, up to pass 401), items 1-3 at 4 passes each, speed classes 0-4 at 2
+  passes each (a throwaway copy of the data with `RPG.LCP` byte 0 changed).
+- The CPU label's intermediate buffers (the strip and the stretched sprite) are byte-exact against dumps
+  of the original's memory (`--dump-local`); the first stretch attempt was wrong because the original does
+  not reload the pixel inside its inner loop (it writes a source pixel once, then zeros).
+- `tests/test_menu.c`: primitives on hand-worked synthetic sprites, plus invariants of the frame with the
+  real data (determinism over 450 passes, nothing outside the panel and label box is touched, the white
+  label follows the selection). `make test`: 6 suites, 0 failures.
+- `tools/mutate_menu.sh`: nine deliberate bugs, all caught by the frame comparison.
+- AddressSanitizer + UBSan: clean, output identical.
+
+**Not covered:** speed class bytes above 4 (the game cannot produce them; a tile read past the atlas is
+treated as zeros, the original reads on into memory); the opening (the 20-step wipe and the 160-step
+panel build, findings.md), key and mouse input, the confirm transition, the four actions, the slot
+picker, music, real-time pacing. Pacing will be a guess as for the intro: the original does not fix the
+pass rate (about 2.3 passes per tick in the oracle at 500,000 instructions per tick).
+
+## Milestone 4c: the menu is playable (keyboard, mouse, real time), built 2026-10-15
+
+`build/3k --scene menu --data original_bin` runs the menu in a window; `--scene game` goes title -> menu
+when a key or click leaves the title. A confirmed choice prints what the original would do and ends the
+program: new game (reads the new-game files, starts `WALK.SL`), load (the slot picker), credits
+(`CAST.SL`), quit. None of those four is built yet, nor the opening animations or the 33-step closing
+transition, so the menu appears at once and a choice returns at once.
+
+**Input rules (all checked against the original, see below):**
+- **Keyboard** is read as the keyboard PORT, not as key events: the last scancode the keyboard sent. The
+  menu ignores every make code until it has seen a break code, and takes one key per break code. So the
+  Space that left the title does nothing (it is still down, or its release opens the latch), and a held key
+  does not repeat. Up/Down move the selection and wrap at both ends; Space or Enter confirm. The platform
+  keeps `port60` (`platform_port60()`); auto-repeat sends nothing.
+- **Mouse** (`menu_mouse`): the arrow (an 18 x 21 sprite, `RPG.LCP` `0x3255`, 382 bytes, drawn raw) is
+  drawn on the panel at the position clamped to x 64..237, y 16..162. With x in 101..219 the item whose y
+  band holds the pointer becomes the selection (bands 41..63, 72..94, 105..127, 137..159; the gaps and the
+  band edges keep the old selection); a button down (either) inside that x range confirms the current
+  selection, also from a gap. Outside the x range nothing is selected or confirmed, whatever the buttons do.
+- **Order within a pass:** the picture is drawn with the OLD selection, then the input is read, then the
+  panel is shown. A selection takes effect in the next picture; a confirming pass shows nothing.
+
+**Decisions where the original gives no answer (all changeable):**
+- **Pass rate: `TK_MENU_PASS_HZ` = 35** (`timing.h`), a GUESS from the intro's rate. The original's loop is
+  unpaced; the backdrop moves one pixel per pass.
+- **Mouse scale 1:1.** The original takes the mouse driver's x as a pixel. A DOS driver in mode 13h
+  normally reports x in a virtual 0..639 range, which would make the arrow cross the panel twice as fast as
+  the pointer; whether the original's driver did so was not determined. The port maps the window pointer
+  to screen pixels. Until the pointer first moves it sits mid-screen (a driver's position after a reset).
+- **Keyboard port starts as the break code of Enter (0x9c)**, as if the game were started from the DOS
+  prompt: the latch is open from the first pass, so the first key counts. (With no scancode at all the
+  first key press would be ignored, as the stepped checks show.)
+- **A button still down when the menu opens confirms at once** if the pointer is over the item column,
+  as in the original (checked: "button held from the start" confirms after 0 passes). The title needs a
+  second or so to fade out, so a normal click has been released by then.
+
+**Checked (`tools/check_menu.sh`, re-run from scratch: 106 of 106 comparisons identical to the original):**
+- 40 frames of the static screen (milestone 4b); 20 frames of a keyboard script (latch opening, accepted
+  and ignored presses, wraps both ways); 33 frames of a mouse script (every band, the gaps, the x edges at
+  100/101 and 219/220, the four clamped corners, the band boundaries at 40/41, 63/64, 71/72, 94..96,
+  104/105, 127/128, 136/137, 159/160); and 13 confirmation decisions (the pass in which the original takes
+  its confirm branch, `0x10e9d`, for Enter, Space, clicks inside and outside the column, either button, a
+  click in a gap, and a button held from the start).
+- Through the scripted real-time runs under SDL's dummy drivers (`TK_TEST_INPUT`): `--scene menu` with
+  keys and with the mouse, and `--scene game` title -> menu -> choice, including a Space held for 7
+  seconds across the menu's opening, which did nothing until Enter.
+- `tests/test_menu.c` grew keyboard and mouse rules (28 of them in all with the frame ones); `tools/mutate_menu.sh`:
+  19 deliberate bugs (9 in the picture, 10 in the input), all caught. Sanitizers clean.
+
+**Not covered:** how the arrow and the keys FEEL at 35 passes per second (nobody has played it); the F1..F10
+buttons in the frame (no code for them was found in the menu loop); the mouse scale question above; the
+music of the menu (it plays the menu's song, `MUC.ALL` `0x2bad9`, but nobody has listened);
+that the oracle's mouse is my emulation of three INT 33h functions (reset, position, buttons), so
+the checks prove the port agrees with the original program given THAT driver, not with a particular real one.
+
+## Milestone 4d: the menu's opening animation, built 2026-10-15
+
+`menu_opening_frame(m, scr, n)` (`src/menu.c`) gives the screen after n of the 182 steps of the opening
+(`menu_opening_steps()`); `play_menu` runs them before the first pass, then starts the menu's song. What
+happens is described in `findings.md` ("The menu's opening animation"): a 20-step zoom of the finished
+picture stretched sparsely to the whole screen, the picture, the lettering "Ready" shrinking away in 160
+steps, and a clear.
+
+**Checked:** `tools/check_menu.sh` compares the port with the oracle at all 183 stages (before the first
+step, after each step): 183 of 183 identical, palette included; with the earlier checks 289 of 289.
+`tests/test_menu.c` has the resize routine (including the fraction that carries between rows) and the
+properties of the frames; `tools/mutate_menu.sh` 12 more deliberate bugs in the opening, see its output.
+The same dump under address and undefined-behaviour sanitizers is clean.
+
+**Pace (GUESS, `timing.h`):** the original does not wait anywhere in the opening, so the length of
+the real thing is only the speed of the machine. The port shows the zoom (and the whole picture) at 30
+steps per second (0.73 s) and the shrink at 120 per second (1.34 s); about 2.1 s in all. The step due is
+computed from elapsed time, so on a 60 Hz display the shrink shows every other step (each frame depends
+only on its step number). Nobody has watched it yet.
+
+**Not built:** the confirm transition (33 steps), the four actions, the slot picker.
+
+## Milestone 4e: the transition after a choice, built 2026-10-15
+
+`menu_confirm_begin` / `menu_confirm_step` (`src/menu.c`) draw the 33 steps that follow a choice: the
+backdrop keeps rolling and the arrow draws a check mark in the chosen label (findings.md, "The transition
+after a choice"). `play_menu` runs it after a choice and then holds the last frame for 0.3 s as a stand-in
+for the next program, which does not exist yet (the original goes straight on to load files and start it).
+
+**Checked:** `tools/check_menu.sh` now reports 553 of 553 comparisons identical to the original (the 289
+before, plus the transition in 8 scenarios of 33 frames); `tests/test_menu.c` counts the mark's pixels step
+by step for all four items; `tools/mutate_menu.sh` has 12 more bugs in the transition.
+
+**Found on the way, and fixed:** the "one-pixel quirk" of milestone 4c was an off-by-one of my own in how
+the check script numbered the oracle's snapshots (findings.md). The port is now simply the original's
+logic: counter 0 before the loop, no extra roll. Passes 119 and later were wrong before today.
+
+**Pace (GUESS, `timing.h`):** 33 steps per second, one second for the whole check mark. Not watched yet.
+
+**Not built:** the four actions (they need `WALK.SL`, `CAST.SL` or the slot picker; a choice still ends
+the program after the transition and prints what the original would do), the slot picker.
+

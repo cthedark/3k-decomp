@@ -41,8 +41,9 @@ void intro0_free(intro0_t *t);
 
 /* With sound, the clip STORY0_1.LCZ is started on the 20th loop pass. The original's code starts
  * it again 20 passes after it ends, whenever that happens before the loop does, and then waits for
- * that second playing at the end. Whether that is intended is not known (docs/findings.md); it is
- * off by default and `on` turns it on. */
+ * that second playing at the end. A recording of the original in DOSBox-X (Sound Blaster on) shows
+ * exactly two plays at every CPU speed tried (docs/findings.md, 2026-10-15), so this is ON by
+ * default; `on` = 0 plays the clip once (a shorter slide, not what the original does). */
 void intro0_set_music_replay(intro0_t *t, int on);
 
 /* One step of the current phase (a fade step or one loop pass). `tick` is the BIOS clock;

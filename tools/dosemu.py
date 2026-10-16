@@ -59,6 +59,7 @@ class Emu:
         self.dac_index = 0
         self.dac_sub = 0
         self.key = 0
+        self.mouse = None            # None = no mouse driver; else [x, y, buttons] in pixels
         self.vectors = {}
         self.next_para = HEAP_START
         self.blocks = []
@@ -167,7 +168,16 @@ class Emu:
             else:
                 self.note_unknown(f"int10 ah={ah:02x}")
         elif intno == 0x33:
-            self.w(UC_X86_REG_AX, 0)       # no mouse driver
+            if self.mouse is None:
+                self.w(UC_X86_REG_AX, 0)       # no mouse driver
+            elif ax == 0:                      # reset: a driver with two buttons is there
+                self.w(UC_X86_REG_AX, 0xFFFF)
+                self.w(UC_X86_REG_BX, 2)
+            elif ax == 3:                      # position and buttons, in pixels (the program takes them as such)
+                self.w(UC_X86_REG_BX, self.mouse[2])
+                self.w(UC_X86_REG_CX, self.mouse[0])
+                self.w(UC_X86_REG_DX, self.mouse[1])
+            # other functions (show/hide, ranges, ratios, motion counters): accepted and ignored
         elif intno == 0x16:
             self.w(UC_X86_REG_AX, 0)
             self.note_unknown(f"int16 ah={ah:02x}")
@@ -368,7 +378,7 @@ class Emu:
         self.w(UC_X86_REG_CS, v[0])
         self.w(UC_X86_REG_IP, v[1])
 
-    def watch_pass(self, addr, tick_div, snaps, keys, sync_var=None):
+    def watch_pass(self, addr, tick_div, snaps, keys, sync_var=None, mice=None):
         """Make a loop deterministic. `addr` is the loop-top instruction (linear address).
 
         Each arrival counts one more *completed pass*. From the first arrival on, the BIOS
@@ -398,6 +408,8 @@ class Emu:
             self.set_ticks(self.tick_base + n // tick_div)
             if n in keys:
                 self.key = keys[n]
+            if mice and n in mice:
+                self.mouse = list(mice[n])
             if n in snaps:
                 pix, pal = self.snapshot()
                 path = snaps[n]
@@ -462,6 +474,79 @@ class Emu:
         for addr, lin, n in specs:
             self.uc.hook_add(UC_HOOK_CODE, mk(addr, lin, n), None, addr, addr)
 
+    def watch_hit_pass(self, addrs, limit=40, stop_at_first=False):
+        """With --loop-top: print, for each arrival at one of `addrs`, the number of loop passes
+        completed so far (as watch_pass counts them). For finding in which pass a branch is taken."""
+        from unicorn import UC_HOOK_CODE
+        seen = [0]
+
+        def cb(uc, address, size, user):
+            if seen[0] < limit:
+                seen[0] += 1
+                print(f"reached {address:#x} after {getattr(self, 'pass_count', 0) - 1} completed pass(es)", flush=True)
+                if stop_at_first:
+                    self.stop_reason = f"stopped at the first arrival at {address:#x}"
+                    uc.emu_stop()
+
+        for a in addrs:
+            self.uc.hook_add(UC_HOOK_CODE, cb, None, a, a)
+
+    def watch_dump_local(self, specs):
+        """At the first arrival at `addr`, read the far pointer stored in the local variable at
+        [bp + bpoff] (offset word, then segment word, as the program's C code keeps them), and write
+        `n` bytes from that address to `path`. `specs` is a list of (addr, bpoff, n, path). Used to
+        look at the program's working buffers (decoded pictures, composed screens)."""
+        from unicorn import UC_HOOK_CODE
+
+        def mk(addr, bpoff, n, path):
+            seen = [False]
+
+            def cb(uc, address, size, user):
+                if seen[0]:
+                    return
+                seen[0] = True
+                bp = uc.reg_read(UC_X86_REG_BP)
+                ss = uc.reg_read(UC_X86_REG_SS)
+                at = ss * 16 + ((bp + bpoff) & 0xFFFF)
+                off = int.from_bytes(bytes(uc.mem_read(at, 2)), "little")
+                seg = int.from_bytes(bytes(uc.mem_read(at + 2, 2)), "little")
+                lin = seg * 16 + off
+                Path(path).write_bytes(bytes(uc.mem_read(lin, n)))
+                print(f"dump at {addr:#x}: [bp{bpoff:+#x}] = {seg:04x}:{off:04x} (linear {lin:#x}), {n} bytes -> {path}")
+            return cb
+
+        for addr, bpoff, n, path in specs:
+            self.uc.hook_add(UC_HOOK_CODE, mk(addr, bpoff, n, path), None, addr, addr)
+
+    def watch_calls(self, addrs, nwords, limit, outpath):
+        """Log each arrival at the given function entry addresses (far calls: the return address
+        takes 4 bytes, so the arguments start at ss:sp+4) with NWORDS argument words, in order, to
+        OUTPATH (one line per call: running number, tick, address, return cs:ip, arguments).
+        Stops logging after LIMIT calls. For reading what a program draws, and in what order."""
+        from unicorn import UC_HOOK_CODE
+        f = open(outpath, "w")
+        count = [0]
+
+        def cb(uc, address, size, user):
+            if count[0] >= limit:
+                return
+            sp = uc.reg_read(UC_X86_REG_SP)
+            ss = uc.reg_read(UC_X86_REG_SS)
+            raw = bytes(uc.mem_read(ss * 16 + sp, 4 + 2 * nwords))
+            ret_ip = int.from_bytes(raw[0:2], "little")
+            ret_cs = int.from_bytes(raw[2:4], "little")
+            args = [int.from_bytes(raw[4 + 2 * i:6 + 2 * i], "little") for i in range(nwords)]
+            f.write("%5d t%-4d %#x ret %04x:%04x (%#x) %s\n" % (
+                count[0], self.ticks, address, ret_cs, ret_ip, ret_cs * 16 + ret_ip,
+                " ".join("%04x" % a for a in args)))
+            count[0] += 1
+            if count[0] == limit:
+                f.write("-- limit reached\n")
+            f.flush()
+
+        for a in addrs:
+            self.uc.hook_add(UC_HOOK_CODE, cb, None, a, a)
+
     def run(self, max_ticks, hooks):
         u = self.uc
         total = 0
@@ -502,6 +587,10 @@ def main():
     ap.add_argument("--instr-per-tick", type=int, default=250_000)
     ap.add_argument("--snap", action="append", default=[], metavar="TICK:FILE.ppm")
     ap.add_argument("--key", action="append", default=[], metavar="TICK:SCANCODE[:RELEASE_TICK]")
+    ap.add_argument("--mouse", action="append", default=[], metavar="TICK:X:Y:BUTTONS",
+                    help="a mouse driver is present; from TICK the position is (X, Y) pixels and BUTTONS "
+                         "(bit 0 left, bit 1 right) the buttons held. Several allowed; the first sets the "
+                         "state from the start if its TICK is 0")
     ap.add_argument("--trace-int", action="store_true")
     ap.add_argument("--log-files", action="store_true", help="print each successful file open with the tick")
     ap.add_argument("--loop-top", metavar="ADDR", help="linear address of a loop's first instruction; enables pass counting")
@@ -511,9 +600,22 @@ def main():
     ap.add_argument("--snap-hit", action="append", default=[], metavar="ADDR:N:FILE.raw",
                     help="save screen+palette at the N-th (0-based) arrival at linear address ADDR "
                          "(hex); the clock is not touched")
+    ap.add_argument("--dump-local", action="append", default=[], metavar="ADDR:BPOFF:LEN:FILE",
+                    help="at the first arrival at ADDR (hex), write LEN bytes from the far pointer "
+                         "stored at [bp+BPOFF] (BPOFF like -0x2a) to FILE")
+    ap.add_argument("--hit-pass-stop", action="store_true",
+                    help="with --hit-pass: end the run at the first arrival (e.g. when the program leaves its loop)")
+    ap.add_argument("--hit-pass", metavar="ADDR[,ADDR...]",
+                    help="with --loop-top: print the number of completed passes at each arrival at these addresses (hex)")
+    ap.add_argument("--trace-calls", metavar="ADDR[,ADDR...]:NWORDS:LIMIT:FILE",
+                    help="log calls to these function entries (hex linear addresses) with NWORDS stack "
+                         "argument words, at most LIMIT calls, to FILE")
     ap.add_argument("--peek", action="append", default=[], metavar="ADDR:LINEAR:LEN",
                     help="print LEN bytes at linear address LINEAR (hex) the first time execution "
                          "reaches ADDR (hex)")
+    ap.add_argument("--mouse-pass", action="append", default=[], metavar="N:X:Y:BUTTONS",
+                    help="with --loop-top: a mouse driver is present; from the arrival at the loop top "
+                         "after N completed passes the position is (X, Y) pixels and BUTTONS the buttons held")
     ap.add_argument("--key-pass", action="append", default=[], metavar="N:CODE",
                     help="set keyboard port 0x60 to CODE after N completed passes")
     ap.add_argument("--sync-var", metavar="BPOFF",
@@ -544,6 +646,11 @@ def main():
                 print(f"tick {e.ticks}: wrote {f} (mode {e.mode:#x})")
             return fn
         add(int(t), mk())
+    if a.mouse:
+        emu.mouse = [0, 0, 0]
+        for k in a.mouse:
+            t, mx, my, mb = (int(x, 0) for x in k.split(":"))
+            add(t, lambda e, mx=mx, my=my, mb=mb: setattr(e, "mouse", [mx, my, mb]))
     for k in a.key:
         parts = k.split(":")
         t, sc = int(parts[0]), int(parts[1], 0)
@@ -551,6 +658,17 @@ def main():
         if len(parts) > 2:
             add(int(parts[2]), lambda e: setattr(e, "key", 0))
 
+    if a.hit_pass:
+        emu.watch_hit_pass([int(x, 16) for x in a.hit_pass.split(",")], stop_at_first=a.hit_pass_stop)
+    if a.trace_calls:
+        al, nw, lim, path = a.trace_calls.split(":", 3)
+        emu.watch_calls([int(x, 16) for x in al.split(",")], int(nw), int(lim), path)
+    if a.dump_local:
+        specs = []
+        for x in a.dump_local:
+            addr, bpoff, n, path = x.split(":", 3)
+            specs.append((int(addr, 16), int(bpoff, 0), int(n, 0), path))
+        emu.watch_dump_local(specs)
     if a.peek:
         emu.watch_peeks([(int(x.split(":")[0], 16), int(x.split(":")[1], 16), int(x.split(":")[2], 0)) for x in a.peek])
 
@@ -570,8 +688,14 @@ def main():
         for k in a.key_pass:
             n, code = k.split(":", 1)
             keys[int(n)] = int(code, 0)
+        mice = {}
+        for k in a.mouse_pass:
+            n, mx, my, mb = (int(x, 0) for x in k.split(":"))
+            mice[n] = (mx, my, mb)
+            if emu.mouse is None:
+                emu.mouse = [0, 0, 0]
         emu.watch_pass(int(a.loop_top, 16), a.tick_div, snaps, keys,
-                       int(a.sync_var, 16) if a.sync_var else None)
+                       int(a.sync_var, 16) if a.sync_var else None, mice)
 
     emu.run(a.ticks, hooks)
     r = emu.r

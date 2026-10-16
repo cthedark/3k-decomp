@@ -1108,7 +1108,8 @@ unpacked `MARK.EXE` machine code; `build/3k --step-dump` runs the C title;
 - **IN THE PORT:** `src/voc.c` (VOC and ADPCM), `src/voice.c` (TAB.TAB lookup), `src/audio.c` (the sink
   that stands for the driver), `src/subs.c` (the hold), `src/intro0.c` (slide 0). The SDL layer
   queues the clip and "playing" means the queue is not empty. Without a sink the old timed hold is used.
-  **Slide 0 replay is off by default** (`--slide0-replay` turns the original's restart on): at the
+  **[Superseded 2026-10-15: the replay is now ON by default, see the entry at the end of this file.]**
+  Slide 0 replay was off by default (`--slide0-replay` turned the original's restart on): at the
   port's pacing slide 0 then takes 27 s instead of 45 s, the extra 18 s being a frozen screen with the
   clip playing a second time. Measured with the real build: wall time 27 s and 45 s.
 - **CHECKED:** `make test` (new `tests/test_audio.c`), 0 failures; five deliberate breakages of the
@@ -1196,4 +1197,391 @@ unpacked `MARK.EXE` machine code; `build/3k --step-dump` runs the C title;
   programs play songs 0 and 3 has not been checked. Rhythm mode needs the OPL rhythm registers
   (`0xBD` bits 0-5, channels 6-8 reassigned to the drums) and the drum patch loading rule from the
   wiki; not built.
+
+### 2026-10-15: operator listening result for the music
+- The operator listened to `build/3k --scene intro` and confirmed that the music plays along with the
+  voice during the slides. This is all that was reported. NOT confirmed: whether the instruments
+  sound like the original, the volume balance with the voice (default `--music-gain` 100), and the
+  loop point. The work was committed by the operator as `ea692f7` ("initial commit with intro fully working").
+
+### 2026-10-15: MARK.EXE's title plays song 22; the chain title <-> intro runs
+- **WHAT WAS FOUND (MARK.EXE, `tools/calls16.py`, read-only):** at `0x10577`..`0x105a4` the title opens
+  `MUC.ALL`, seeks to `0x27137` (cx:dx = 2:0x7137) and reads `0x49a2` bytes: song 22, the intro's
+  song. With the sound flag `[0x1d0]:4` set it calls `0x11160(buffer)` (`0x105d0`), then sets
+  mode 13h. After the loop, with the flag set, it calls `0x1124a` and `0x11272` (`0x10b1c`/`0x10b21`).
+  The earlier read at `0x103b8` (seek `0x2d76b`, `0x7b1` bytes = song 24) is inside the optional
+  scene skipped by the shipped message byte, followed by a call to the same `0x11160`.
+  CONFIDENCE: high for which file, offset and length (literal arguments); medium for the roles
+  "start" (`0x11160`), "stop" (`0x1124a`), "shut down" (`0x11272`): inferred from where they sit
+  and from the intro's use of the same driver, the driver code was not read.
+- **WHAT WAS BUILT:** `--scene game` chains title -> intro -> title (milestone 4 in `port.md`). The
+  title now plays the song from its start, like the original.
+- **NOT KNOWN:** whether the original's title restarts the song or the driver keeps state across
+  `exec` (each program loads the driver again, so a fresh start is the likely case; not tested).
+
+### 2026-10-15: recording the original's audio in DOSBox-X; slide 0's sound; the music's tempo
+**METHOD (reusable).** `tools/capture_original_audio.sh PROGRAM CYCLES SECONDS OUT.raw` runs the
+original in DOSBox-X with SDL's dummy video driver (no window) and SDL's `disk` audio driver, which
+writes the mixer output to a file instead of the speakers. Options by environment: `CAP_SBTYPE=none`
+(no Sound Blaster), `CAP_OPLMODE=opl2` (AdLib only), `CAP_OPLEMU=nuked|fast|compat` (OPL core). It
+works in a throwaway copy, `work/dosroot_cap/3K`; `STORY2.SL` is started through a copy named
+`STORY2X.EXE` because DOS only starts .EXE/.COM files directly. Readers: `audio_timeline.py`
+(sound/silence), `find_clip.py` (where a known clip plays), `clip_scale.py`, `loop_period.py`,
+`onset_fit.py`, `pitch_check.py` (has a self-test), `emu_baseline.py`, `compare_music.py`.
+- **PITFALL (my mistake, caught the same day): the file is 48,000 Hz stereo, S16LE, not 44,100.**
+  SDL prints it at start ("format=S16LE channels=2 freq=48000" in the `.log` next to the capture).
+  I assumed 44,100 and every time I read was 8.8 % too long (a 215 s run gave "227 s" of audio, which
+  a real-time writer cannot do; that is what exposed it). The tools now default to 48,000. Two
+  conclusions I drew with the wrong rate, a "5.7 % slower tempo" and a "-1.5 semitone pitch", were
+  artefacts of it and are withdrawn; with the right rate they become 0 and +0.00 (below).
+- **The capture clock is about 3 % off real emulated time.** Three measurements agree: the file is
+  208.7 s for a 215 s run (0.97); a clip of known length (STORY0_1, 20.864 s) fits best at a stretch
+  of 0.945-0.97; two beeps 20 s apart by the DOS timer (`CHOICE /T`) are 19.7 s apart in the file
+  (about 0.985, a lower bound). So times read from captures are good to about +-3 %, and slower
+  than that for anything fine. Pitch is not affected (it is fixed by the sample rate).
+
+**SLIDE 0's SOUND (answers the open "restart question"; `STORY2X.EXE` with the Sound Blaster on).**
+`find_clip.py` matches the loudness envelope of `STORY0_1` (20.87 s) against the recording:
+
+| cycles per ms | play 1 | play 2 | scores |
+|---|---|---|---|
+| max | 2.55 s | 22.2 s | 0.93 / 0.94 |
+| 10,000 | 4.05 s | 24.75 s | 0.97 / 0.96 |
+| 3,000 | 7.95 s | 29.0 s | 0.95 / 0.94 |
+
+(best score anywhere else: 0.30, 0.29, 0.35; start times are good to about +-1 s because the clip is
+quiet at its ends.) **The clip plays exactly twice at every speed**, the second play ends 43 to 50 s
+into the run, and slide 1's music starts 3.5 s after that in the 10,000 run (RMS table read off the
+capture). That is what the code reading said: restart 20 passes after it ends, wait for the second
+play at the end. CONFIDENCE: high that the original does this with an emulated Sound Blaster at the
+speeds tried; NOT known that real hardware does the same (DOSBox-X's Sound Blaster is an emulation),
+or whether the authors meant it. The port now does it by default (`--slide0-once` for one play).
+
+**THE MUSIC'S TEMPO AND PITCH (OPL only: `CAP_SBTYPE=none CAP_OPLMODE=opl2`).**
+- Loop period of the original's song, by matching the recording against itself (`loop_period.py`):
+  127.4 s (10,000 cycles), 127.1 s (max), 127.2 s (3,000): **independent of CPU speed**. The port's
+  song is 131.2 s. The ratio 0.970 is the capture clock (above), not a tempo difference.
+- Aligning note onsets between the recording and the port's render (`onset_fit.py`) gives a time
+  scale 0.972 (150 of 212 capture onsets matched, against 67-70 at scales 0.92, 1.00 and 1.04), the
+  same on a separate capture of the title (0.972, 48 of 76). Same ratio as the clock error, so **no
+  tempo difference is visible at about +-1.5 %** (the clock calibration's accuracy).
+- **Pitch** (`pitch_check.py`, which reads back +1.00 and -2.00 semitones on fake captures made by
+  resampling): the recording is **+0.00 semitones** relative to the port's render, with a match score
+  of 0.76 against 0.36-0.55 for deliberately wrong alignments. So the pitch formula (note 69 = 440 Hz,
+  f-number by the standard rule) agrees with the original driver's output for this song.
+- **NOT established: timbre, volume mapping, channel mapping.** The spectrum similarity score cannot
+  separate right from wrong at fine level: two DOSBox-X OPL cores playing the same original score
+  0.66-0.74 against each other, and the port's render scores 0.66-0.74 against them (`emu_baseline.py`),
+  while wrong time alignments score 0.36-0.55. Meaning: the port is as close to the original as two
+  chip emulations are to each other, by this blunt measure; nothing finer is claimed. Overall level:
+  the original's title music is about 1 dB louder than the port's render (RMS 3,818 vs 3,414 over the
+  first 15 s, different chip emulation scaling, so weak evidence). Earlier attempts with a spectral
+  window score at a constant offset failed for the clock error and the wrong rate; they are not evidence.
+
+**WHICH PROGRAM PLAYS WHICH SONG (literal arguments of the `MUC.ALL` reads; `calls16.py --ds-off`).**
+The seek wrapper's arguments are (handle, origin, offset-low, offset-high); this reading puts every
+offset found so far exactly on a `CTMF` signature. Song 22 (`0x27137`, 18,850 B): MARK (title),
+STORY2.SL (intro), ENDING.SL. Song 24 (`0x2d76b`, 1,969 B): MARK's optional scene. Song 23
+(`0x2bad9`, 7,314 B): WALK0.SL (the menu) and one of WALK.SL's two reads. **CAST.SL: seek 0:2 = file
+offset 2, reads 20,000 B: song 0 (8,996 B) and the first 11,004 B of song 1** (so it plays song 0).
+WALK.SL's second read takes its position and length from variables (a song chosen at run time).
+CORRECTION (mine, the same day): an earlier version of this paragraph said CAST.SL reads "the last
+20,000 bytes"; that misread the seek arguments.
+**The drum songs: song 0 (rhythm mode, 290 drum notes) is CAST.SL's song; song 3 can only come from
+WALK.SL's run-time choice.** So rhythm mode is not needed for the title, intro, menu or ending, and
+it is needed for CAST.SL (reached from the menu: WALK0.SL names it) and the world. CAST.SL was not
+run here, and which song it actually starts from that buffer is inferred (the driver starts at the
+beginning of the buffer it is given, as in the other programs).
+
+### 2026-10-15: decision on rhythm mode
+- The operator agreed to defer rhythm mode (controller `0x67` = 1, MIDI channels 11-15 as drums) until
+  `CAST.SL` (plays song 0) and `WALK.SL` (can play song 3) are ported. Reason: the title, intro, menu
+  and ending only use melody-mode songs, and a drum implementation can then be checked against a
+  recording of the original program that plays it (`tools/capture_original_audio.sh`) instead of
+  against the public CMF description alone. Until then `src/music.c` ignores rhythm mode, warns once
+  and counts the ignored events.
+
+### 2026-10-15: survey of WALK0.SL (the menu), read-only
+- **SIZE:** unpacked image 30,681 bytes; code and data end at `0x16db0`/`0x17xxx`, so about 28 KB of
+  code, the size class of `MARK.EXE` (23 KB) and a fraction of `WALK.SL` (118 KB). METHOD: file sizes,
+  `tools/mz_strings.py`, `tools/calls16.py --ds-off 0x6db0` (the data segment starts 8 bytes before the
+  "MS Run-Time Library" string, as in every program here).
+- **FILES IT TOUCHES** (oracle run, `--log-files`, and the filename table at `DS:0x42`...): `walk0.sl`
+  (itself), `rpg.lcp` (four reads), `gmain.lcz`, `muc.all` (song 23, `0x2bad9`, 7,314 bytes), `__1.al1`,
+  `__1.al2`, `__1.now`, `man_info.all`, `man_info.now`, `ani.lcp`. It can start `walk.sl`, `cast.sl`, or
+  end the program. The save files (`SAVEnn.000/.001/.002`) are NOT named in its string table; how it
+  finds them is not read.
+- **ON SCREEN (oracle, 500,000 instructions per tick, ready by tick 30):** the stone frame of
+  `GMAIN.LCZ` (milestone 1) with a dark-red panel and four menu items, read from the snapshot
+  (`work/walk0/t030.png`, git-ignored): 新遊戲開始 (new game), 取一舊進度 (load a saved game),
+  製作群介紹 (credits), 回到 DOS (back to DOS). The translations are mine. F1..F10 buttons sit in the
+  left and right columns of the frame. Faint characters inside the panel differ between snapshots
+  (30, 60 and 119 ticks), so something animates. NOT identified: what moves, and how a menu item is
+  chosen (keys, mouse, or the F buttons).
+- **THE EXIT PATH** (`0x11790`..`0x11a10`): writes `__1.now` (`DS:0xc4`), then reads `walk0.sl` and
+  `ani.lcp` (from offset `0x600`) and compares them, and if they differ writes `walk0.sl` back from
+  the `ani.lcp` copy. **CONFIRMED on the files: `ANI.LCP` after its first `0x600` bytes is an exact
+  copy of `WALK0.SL` (17,631 bytes, 0 differing).** This is the program checking and repairing its own
+  file (an integrity check). The port does not run this code and has no program file to protect, so
+  it is NOT reproduced; recorded so it is not mistaken for part of the menu. After it come
+  `cmp [bp-0x2c], 0xe51` (below: start `walk.sl`), `== 0x1c9c` (start `cast.sl`), otherwise return to
+  DOS. NOT UNDERSTOOD: [bp-0x2c] is also the variable the check uses, so this reading of the
+  decision variable is probably wrong; where the menu choice is kept was not found. Needs a read of
+  the code above `0x11790` (the menu loop).
+- **ORACLE LABEL NOT EXPLAINED:** the run reports "video mode 0x3" at the end though the snapshots
+  are 320x200 graphics. Not looked into; the pictures are the evidence.
+- **WHAT THE PORT WILL NEED (inferred):** the frame and palette (done in milestone 1), the four
+  items (text probably from a font or a picture chunk; not found yet), mouse hit-testing (the port has
+  only a "button held" signal today), the animation, hand-over to `walk.sl` / `cast.sl`, and song 23.
+  No work on any of it has been done.
+
+### 2026-10-15: WALK0.SL (the menu): how it is controlled, and what each item does
+METHOD: the call-level outline (`tools/calls16.py --ds-off 0x6db0`, saved as `work/walk0/calls_main.txt`),
+raw disassembly of the key read (`tools/dis16.py 0x10c80..0x10cf0`), and runs in the oracle emulator
+(`tools/dosemu.py`, 500,000 instructions per tick) with scripted keys, watching the file opens and
+snapshots. Everything below that says "oracle" was observed, not inferred.
+- **The selection is a screen offset, not an index.** `[bp-0x2c]` holds the highlighted item as the
+  pixel offset (320 per row) of its top edge: `0x4`, `0xe50`, `0x1c9c`, `0x2ae8`, `0xe4c` apart (11.4
+  rows). This is also what the exit path compares (`0xe51` is "item 2 or later", `0x1c9c` item 3);
+  the earlier note that the decision variable "collided" with the self-check's was a mix-up caused by
+  `calls16.py` not tracking loads. CORRECTED.
+- **Keyboard** (the loop `0x10c8d`..`0x10e9a`, one pass per BIOS tick or so): scancode read straight from
+  port `0x60` (`0x131b6`). Up `0x48` / Down `0x50` move the highlight and wrap at both ends. Space
+  `0x39` or Enter `0x1c` confirms (`0x10e9d`). **A key only counts after a key RELEASE (a break code,
+  scancode >= 0x80) has been seen**: until then every make code is replaced by `0x82` and ignored
+  (`0x10cac`..`0x10cba`), and the latch clears after each accepted key. Effect: the Space that left
+  the title cannot select an item, and holding a key does not repeat. The port must reproduce this
+  (a key event, not a held state).
+- **Mouse** (`0x11dc7`): position clamped to x `0x40..0xed`, y `0x10..0xa2`; moving over an item
+  highlights it: y `0x28..0x40` item 1, `0x47..0x5f` item 2, `0x68..0x80` item 3, `0x88..0xa0` item 4
+  (and presumably a click confirms; the click path was not read). The oracle has no mouse, so this was
+  read, not run. The F1-F10 buttons in the frame: no code for them was found in the menu loop; they
+  may be part of the picture only. NOT established.
+- **Transition:** after a confirm, 33 steps of an animation (`0x10ecf`..`0x10fe1`: blits through
+  `0x13201`, `0x13119`, `0x127d0`) run before the action; about 11 ticks in the oracle.
+- **The four items (all observed in the oracle):**
+  1. New game (highlight `0x4`): reads `__1.al1` and `__1.al2` (20,000 bytes each), decompresses
+     them (`0x11c97`), writes `__1.now` (47,250 + 45,500 bytes), reads `man_info.all` (504 bytes) and
+     writes `man_info.now`, runs the self-check, starts `walk.sl`.
+  2. Load a saved game (`0xe50`): reads `rpg.lcp`, then opens `save00.000`, `save01.000`, `save03.000`,
+     `save04.000`, `save07.000`, `save09.000`, `save10.000` and probes `save02/05/06/08.000` (missing in
+     the copy). So **saves are found by probing `saveNN.000` for NN = 0..10**. On screen the item turns
+     into a row of ten numbered cells with markers below them (slot picker). Not read further.
+  3. Credits (`0x1c9c`): self-check, then starts `cast.sl` (the credits are a separate program).
+  4. Quit (`0x2ae8`): self-check, then exits with code 1.
+- **Screens seen** (`work/walk0/*.png`, git-ignored): the main menu; the highlight in white on the
+  chosen item; a small green arrow appears next to it once something is selected (the cursor?
+  not identified); the slot picker.
+- **THE SELF-CHECK is not part of the menu** (see the entry above): it runs on every exit path.
+- **WHERE THE ITEM TEXT COMES FROM: not found.** `rpg.lcp` is read at offset `0x1643b` (1,214
+  bytes, `0x101dc`) and at `0x58f4` (7,811 bytes, `0x1055c`), and `0x3a1e` later; one of these is the
+  likely source of the four labels and the slot picker, unverified.
+- **ORACLE NOTE (for later runs):** `tools/dosemu.py --key T:CODE` sets port `0x60` to CODE and keeps
+  it until changed, like a real keyboard keeps the last scancode. Programs that latch on break codes
+  (this one) need a release (CODE | 0x80) before the press, e.g.
+  `--key 60:0x9c --key 80:0x1c --key 82:0x9c`. Holding a key from tick 0 does nothing here, by design.
+
+### 2026-10-15: WALK0.SL (the menu): what it draws, in what order, and where the pictures come from
+METHOD: new oracle options `--trace-calls` (log the stack arguments of chosen function entries) and
+`--dump-local` (write the buffer a local far pointer points to), then `tools/lcz_at.py` to decode
+`RPG.LCP` blocks and `tools/buf_sheet.py` to view buffers. All numbers below are from a run of
+`WALK0.SL` in the oracle (`--instr-per-tick 500000`), 1,200 drawing calls logged up to tick 40.
+- **Data the menu loads from `RPG.LCP`** (offsets are the seek arguments, low word then high word):
+  `0x0` 768-byte palette; `0x1643b` (1,214 bytes -> 2,148 decoded, small tiles, use not yet read);
+  `0x58f4` (7,811 bytes) and `0x3a1e` (later, save picker); and the two that matter now:
+  - `0x1384`, 7,889 bytes -> **14,644 decoded = a sprite with header `7a 00 78 00` (width 122,
+    height 120) + 122 x 120 pixels: the four labels, 30 rows each** (新遊戲開始, 取一舊進度,
+    製作群介紹, 回到 DOS). Item offsets `4 + 3,660 x k` are the highlight values.
+  - `0x1d3e` + `0x10000` = `0x11d3e`, 7,000 bytes -> **32,260 decoded = header `c0 00 a8 00`
+    (192 x 168) + 32,256 pixels: the dark-red backdrop with the faint characters** that scroll.
+  Both render correctly with the interface palette (`work/walk0/lab_a.png`, `lab_b.png`).
+- **The panel** is 192 x 168 at screen (64, 16); the pixels the menu adds to `GMAIN.LCZ` span x 64..255,
+  y 16..183 (plus the three small digits at the top right). Presented with
+  `0x13026(0x1440, buffer)`, where `0x1440` = 16 x 320 + 64 = the panel's top-left in a 320-wide screen.
+- **Opening, in phases** (oracle ticks at 500,000 instructions per tick; the real timing is not known):
+  1. ticks 0-3: load palette and `gmain.lcz`; three small blits; twelve palette fills (`0x13143`, the
+     F-key cells?).
+  2. ticks 3-15: **a wipe of 20 steps**: each step blits a 16-pixel-wide piece at `x += 16, y += 10`
+     (`0x12f8b`, `0x12b5d`, `0x13201` to the screen). The "Ready" lettering of `GMAIN` is built up
+     in pieces: the first snapshots show it as scattered dots that resolve into the word.
+  3. ticks 15-19: **160 steps** (`0x130f6`, `0x12c70`, `0x12786`, `0x13026`) in which the frame appears
+     and the word "Ready" shrinks to a point, leaving the empty dark panel. (The reverse of an
+     expanding effect.) The number at the top right appears here and does not change afterwards.
+  4. tick 19: 100 calls of `0x11cef` with random values (`0x136aa` = rand) and two `0x12dde` calls;
+     then both pictures above are decoded.
+  5. from tick 19: the loop, about 2.3 passes per tick in the oracle. Per pass: **rotate or shift the
+     backdrop** (a 1-pixel step, `0x1328b`, or for pass counter >= 0x78 a different shift
+     `0x1e4:0x25f` with two 96-byte copies); copy 16,130 bytes; copy the label strip (7,322 bytes =
+     `0x1c9a`); **recolour the highlighted 122 x 30 label** (`0x13119(ptr + highlight, 3660, 0x17, 0x10)`:
+     colour 0x17 -> 0x10, i.e. the selected label changes shade); a masked blit (`0x127d0`, colour 0
+     transparent, as everywhere else) of the label onto the panel; present. Counter `[bp-0x12]`
+     wraps at 0xc8.
+- **THE NUMBER AT THE TOP RIGHT ("486" in the snapshots) is static** (checked: the region is
+  identical at 250k, 500k, 1M and 2M instructions per tick, 0 of 1,248 pixels differ). It is three
+  small 8x8 blits at x = 4, 13, 22 (`0x12902`, `0x10278`..`0x102be`) from the 2,148-byte block at
+  `0x1643b`; this is a stored picture, not a measured value. Per the operator it is not a priority.
+- **NOT READ YET:** the exact semantics of `0x1328b`, `0x1209f`, `0x13119`, `0x12f8b`, `0x12c70`,
+  `0x12786` (several have equivalents already identified in other programs by address; the
+  addresses differ per program), the slot picker, the click path, the 33-step confirm transition.
+
+### 2026-10-15: THE "486" ON THE MENU IS A CPU-CLASS LABEL DERIVED FROM THE SPEED CLASS (answers the operator's hunch)
+- **WHAT:** the three digits at the top right of the menu (`WALK0.SL`) are drawn from three 8 x 8
+  tiles of the 2,148-byte block at `RPG.LCP` `0x1643b` (an atlas of digits, 64 bytes per tile, in
+  digit order). The first tile is `RPG.LCP` byte 0 x 64 + 0x80 = tile (byte 0 + 2); the other two are
+  fixed tiles 6 and 8 (offsets `0x180`, `0x200`). So the label is **"(2 + speed class) 8 6"**.
+- **EVIDENCE (oracle, `--data` pointing at a copy with byte 0 changed; only the copy was edited):**
+  byte 0 = 0, 1, 2, 3, 4 gives the first digit 2, 3, 4, 5, 6 (read from the glyph shapes in the
+  snapshots; the original file has byte 0 = 2, which gives the "486" the operator saw). The other
+  two digits did not change with the byte. The label did NOT change with the oracle's emulated CPU
+  speed (identical at 250k..2M instructions per tick), so it is not measured by this program: it
+  only reads the stored byte that `TV.EXE` wrote after timing the machine.
+- **MEANING:** byte 0 of `RPG.LCP` is the speed class written by `TV.EXE` (class 0..4, larger =
+  faster, see code.md); `WALK0.SL` shows it as the CPU generation 286..686 next to the frame. My earlier
+  statement that "no code reads the CPU" stands (no CPUID or similar), but the earlier
+  hypothesis that "486" was an unrelated stored game value was WRONG, and the operator's guess
+  (an 80486-class label) was right about what the number means.
+- **NOT KNOWN:** whether other programs show it too; what the label is for beyond display; the
+  mapping of classes 5+ (the byte can only be 0..4 from `TV.EXE`'s table). Glyph shapes for the
+  non-486 values were identified by eye on a coarse text rendering, not compared pixel by pixel.
+
+### 2026-10-15: the menu's static frame matches the original (WALK0.SL)
+- **RESULT:** `src/menu.c` reproduces the original's menu screen pixel for pixel: 40 of 40 frames
+  (`tools/check_menu.sh`). Details and what is not covered: `port.md`, "Milestone 4b".
+- **METHOD, for later programs:** (1) `--trace-calls` to see the order and arguments of the drawing helpers;
+  (2) `lcz_at.py` / `buf_sheet.py` to find the pictures; (3) screen diffs against the plain base picture
+  to find what the program adds and where; (4) read each helper's disassembly and reimplement it;
+  (5) `--dump-local` to compare intermediate buffers byte for byte before the whole screen.
+- **HELPERS IDENTIFIED** (linear addresses in the unpacked WALK0.SL; the same routines exist at other
+  addresses in the other programs): `0x127d0` masked blit (colour 0 transparent), `0x1280f` stencil blit
+  (paints a sprite's silhouette in one colour), `0x12902` masked tile copy into a wider strip, `0x12b5d`
+  the sparse "stretch" (see port.md), `0x13119` recolour, `0x13143` shade (every non-zero byte to one
+  value), `0x13201` copy counted in WORDS, `0x13026` present a sprite at a screen offset, `0x1328b`
+  roll rows left, `0x1209f` scroll up, `0x130f6` memset, `0x11cef` store a word, `0x11c97` LCZ decode.
+- **CORRECTIONS (mine, the same day):** (a) I first read the strip tile columns as 4, 13, 22; the 4 is the
+  sprite header, the columns are 0, 9, 18. (b) The `0x13201` argument order is (source, destination,
+  words), the first pointer is the SOURCE. (c) My first stretch re-read the source pixel in the inner
+  loop; the original reads it once per carry, which makes the label dotted. (d) A "highlight 3" check
+  showed differences only because the oracle's third key press had not landed yet at those passes
+  (verified by counting white pixels per label); settled passes match.
+
+### 2026-10-15: the menu's input, checked against the original (WALK0.SL)
+- **KEYBOARD, exactly:** `0x10c8d`..`0x10d65`. Reads port `0x60` once per pass. A byte above `0x7f` sets
+  the latch `[bp-0x32]`; with the latch clear a make code is replaced by `0x82`; below `0x80` the latch is
+  cleared and Space/Enter jump to the confirmation, Up/Down move the selection (wrapping). Confirmed pass
+  by pass in the oracle's pass-synchronised mode (`--loop-top`, `--key-pass`, `--hit-pass`).
+- **MOUSE, exactly:** `0x10d69`..`0x10e86`. The wrapper at `0x11d54` only does a reset (INT 33h function 0)
+  at the start (`0x100e5`); each pass `0x11dc7` calls function 3 and clamps CX to 314 and DX to 194, and
+  the menu clamps again to x 64..237, y 16..162. The cursor sprite is the 382 raw bytes after the label
+  strip in `RPG.LCP` (offset `0x3255`; the read continues from the label read, `0x10aab`). It is drawn at
+  `(y-16)*192 + (x-64)` in the panel buffer after the labels, before the present. Hover and click rules in
+  `port.md`, "Milestone 4c". The flag `[bp-0x22]` is the reset's result (mouse present); `es:[4]` (the sound
+  flag set by `0x122d0`) is a different thing, and I had briefly misread it as the mouse flag.
+- **ORACLE EXTENDED:** `dosemu.py` now emulates a mouse driver for the three functions the menu uses
+  (`--mouse`, `--mouse-pass`), reports the pass at which an address is reached (`--hit-pass`,
+  `--hit-pass-stop`), and replays keys per pass (`--key-pass`, existing). LIMIT: an emulation written by me.
+- **A TWO-MODE ORACLE QUIRK, unexplained:** the oracle's free-running run (`--snap-hit`) shows the backdrop
+  one pixel further on than its pass-synchronised run (`--loop-top`) after the same number of passes.
+  The port's default matches the free-running run (verified at 20 passes up to 401); the input checks use
+  `--menu-no-initial-roll` to line up with the pass-synchronised run. Cause not found (the tick manipulation
+  of `--loop-top` is the suspect). Not visible in play.
+- **MY MISTAKES (the same day), so nobody repeats them:** (a) my first scripted confirm tests held the mouse
+  button down for the rest of the run, so the original kept confirming in later screens and the oracle runs
+  took minutes; my script printed "never" for runs it had killed on a timeout. Release the button, and
+  distinguish "never" from "did not finish" (`check_menu.sh` now does). (b) I compared the first keyboard
+  frames against the wrong pass (an off-by-one between "snapshot at the loop top" and "picture
+  presented by the pass") and spent a while chasing a phantom; the fix was to line up two simple frames
+  first. (c) My first mutation checks missed three input mutations because the scripted positions did not
+  include the band edges and Space; the scripts now do.
+
+### 2026-10-15: THE MENU'S OPENING ANIMATION (WALK0.SL 0x10357 .. 0x10537), read and checked frame by frame
+- **WHAT IT DRAWS** (all three phases: oracle `--snap-hit` at the return from each present, 183 screens, all
+  reproduced pixel for pixel by `menu_opening_frame`):
+  1. **A zoom of 20 steps** (`0x1035c .. 0x103cc`). Step i grabs the rectangle (2 + 16 i) x (2 + 10 i) of the
+     finished picture (GMAIN with the CPU label), top-left at linear offset `0x7c5f - 0x648 i` (so it
+     grows around the centre, 5 rows and 8 columns per step), with `0x12f8b` (a rectangle copy into a
+     sprite), stretches it to 320 x 200 with the SPARSE stretch `0x12b5d` (the same routine as the CPU
+     label's: one source pixel written per carry, zeros between) and copies the 64,000 bytes to the
+     screen. That is why the picture starts as a few dots and fills in.
+  2. **The whole picture** is copied to the screen (`0x103dd`).
+  3. **The lettering shrinks in 160 steps** (`0x10410 .. 0x104c7`). The 83 x 33 rectangle at `0x65b1`
+     = (113, 81) is copied from the screen once. Each step clears an 83 x 33 frame (2,740 bytes: one
+     more than the pixels), resizes the lettering to w x h with `0x12c70` (a DIFFERENT routine from the
+     sparse stretch: nearest neighbour, every destination pixel filled), places it with `0x12786` at an
+     offset that keeps it centred, and shows the frame with `0x13026`. Every 5th step w -= 2 and the
+     offset moves one column; every 10th h -= 2 and it moves one row. The loop runs while h > 1:
+     160 steps in all, ending at 21 x 3.
+  4. **A clear** of 84 x 33 at the same place (`0x12dde`, colour 0): the area is under the panel anyway.
+- **THE TWO STRETCHES, so nobody confuses them:** `0x12b5d` (sparse, zeroes its destination first, the
+  horizontal accumulator restarts every source row) and `0x12c70` (dense nearest neighbour). In `0x12c70`
+  **the horizontal fraction is NOT reset per row**: it carries from one row into the next, so
+  neighbouring rows can pick different source columns. The port reproduces that (unit test with a
+  hand-computed 3x2 -> 2x2 case); with a reset per row the shrink frames differ from the original's.
+- **NOTHING IN THE OPENING WAITS:** no retrace test, no delay, no BIOS clock (`0x13026`, `0x13201` and the
+  rest are plain copies). The pace is whatever the CPU gives. In the oracle (500,000 instructions per
+  tick) the zoom took about 12 ticks and the shrink about 4; on a real machine of the time the
+  shrink, which moves a few KB per step, was probably over in a fraction of a second. This is why
+  the port's rates are guesses (`timing.h`).
+- **CORRECTION TO THE EARLIER NOTE ("tick 19: 100 calls of 0x11cef ... then both pictures are decoded"):**
+  after the 100 random words (written into a buffer that the backdrop's decode later overwrites, so
+  invisible) the code does NOT skip straight to the pictures. It runs `0x1054a .. 0x107be`: it reads
+  `RPG.LCP` `0x58f4` (7,811 bytes), seeds the random generator, fills a 10-byte digit table, draws
+  random digits and a few glyphs into two work buffers (one of them the 7,811-byte buffer, which the
+  song later overwrites; the other the digit atlas, which is not used again). None of it reaches the
+  screen. The code after it, `0x107c1 .. 0x10a4c` (which handles Left/Right keys and a counter to 5000
+  and would belong to a screen of selectable cells), is NEVER reached: the loop's test at `0x10a50` is
+  three `nop`s, so the program falls through to `0x10a53`. It looks like a part of the game that was
+  switched off by patching the test. My earlier guess that this was the slot picker was WRONG: the picker
+  is reached from item 1 (seen by clicking it in the oracle); where its code lies was not read. The 7,811-byte block at `0x58f4` is read by the opening, whatever else uses it. Not reproduced, because nothing visible depends on it.
+- **THE SONG** is started after the opening (`0x10b3b .. 0x10b54`, only if the sound flag
+  `es:[4]` is set), not at the start as the port did before today.
+- **KEYS DURING THE OPENING:** no input is read; the keyboard port keeps its value, so a key still down
+  when the loop starts is handled by the latch rule (it is ignored until released). The port does the same.
+
+### 2026-10-15: THE "ONE-PIXEL QUIRK" WAS MY OWN OFF-BY-ONE (correction of the entry on the menu's input)
+- **WHAT I HAD WRITTEN:** that the oracle's free-running run (`--snap-hit 0x10e97:N`) shows the backdrop one
+  pixel further on than its pass-synchronised run (`--loop-top`, `--snap-pass N`), cause unknown, and
+  the port started one roll in with the counter at 1 to match the first, with a switch
+  (`--menu-no-initial-roll`) for the second.
+- **WHAT IT WAS:** `--snap-hit ADDR:N` is the N-th arrival at ADDR counting from 0, so `0x10e97:N` is the
+  screen after N + 1 passes, not N. The port's "pass N" was compared with it, and I made up the
+  difference with a hidden extra roll and a counter that started one ahead. In the original the counter
+  is set to 0 before the loop and counted at its top (`0x10b89`, `0x10b91`): no extra roll, and the first
+  pass has counter 1. The hack gave the right pictures up to the pass where the counter reaches 120 (the
+  switch from rolling left to rolling up) and the wrong ones from there on, which none of the
+  input scenarios (up to 66 passes) reached. It was found when the first transition test at pass 130 failed.
+- **FIXED:** no initial roll, counter starts at 0, `check_menu.sh` asks the oracle for arrival N - 1 to get
+  N passes. All 289 comparisons that existed then were identical again under the correct model (the pass
+  frames at the 119/120 turn and at 125, 150, 199-202 among them). The flag `--menu-no-initial-roll` and
+  the function `menu_set_initial_roll` are gone.
+- **WHY IT SURVIVED:** the earlier checks compared the same frame numbers under both modes without
+  asking what an "N" meant in each tool. Lesson recorded: when two tools count "N", test with a case
+  where the answer depends on the exact count (here: the turn of the roll).
+
+### 2026-10-15: THE TRANSITION AFTER A CHOICE (WALK0.SL 0x10e9d .. 0x10fe4) AND WHAT THE FOUR ACTIONS DO
+- **THE TRANSITION IS A CHECK MARK DRAWN BY THE ARROW.** 33 steps, no wait, no sound. Per step: the backdrop
+  rolls one pixel left (always, even in the vertical-roll phase; `0x1328b`); two words `0x0024` are
+  written into the chosen label's pixels (`0x11cef`) one row apart, i.e. colour `0x24` and a 0 that erases
+  the pixel beside it; the panel is built as a pass does; the arrow sprite is drawn over it at the head of the
+  stroke; the panel is shown. The stroke starts at row 10, column 0 of the label and moves one row and one
+  column per step: down for 11 steps, then up for 22 (`0x10fc1`/`0x10fcd`). The arrow's own position starts
+  at panel row 33 + 30 k, column 37 and moves with it. Two pixels of colour `0x24` per step are the only
+  `0x24` pixels in the label box (66 after 33 steps), which the unit test uses.
+- **THE MARK IS WRITTEN INTO THE LABEL STRIP ITSELF** (it is not undone), so the original cannot return to the
+  menu loop afterwards; it never does: every item ends the program or starts another one.
+- **CHECKED:** 8 scenarios x 33 frames identical to the oracle: the four items, at the turn of the roll
+  (pass 119), in the vertical phase (130), after the counter wrapped (204), and by mouse click.
+- **WHAT EACH ITEM DOES AFTER IT** (`0x10fe4 ..`; read from the call list and from the file opens seen in the
+  oracle; not run to the end because the next programs are not unpacked here):
+  - **Item 0, new game:** stops the music, reads `__1.al1` and `__1.al2` (20,000 bytes each), decodes them,
+    writes `__1.now` (0xb892 + 0xb1bc bytes), reads `man_info.all` (504 bytes), decodes it and writes
+    `man_info.now`; then the common end.
+  - **Item 1, load:** the slot picker (`0x111a1 ..`): `RPG.LCP` at `0x3a1e` (2,354 bytes), the file names
+    `saveNN.000` are built and probed (11 slots; seen in the oracle by clicking the item). That the chosen
+    slot's data ends up in `__1.now` and `man_info.now` is READ from the call list (`0x115d0 ..`, `0x1167e ..`),
+    NOT RUN: medium confidence. NOT BUILT. (`0x11304 ..` is the picker's own loop, with the mouse and keys.)
+  - **Item 2, credits:** the common end with `cast.sl`.
+  - **Item 3, quit:** exit code 1 (seen in the oracle: the run ended with code 1). Why code 1 is not known.
+  - **The common end:** a self-check (the first 0x600 bytes of `walk0.sl` against the copy in `ani.lcp`,
+    which is an integrity check and is not reproduced), frees the buffers and starts `walk.sl` (items 0, 1)
+    or `cast.sl` (item 2) with the exec call at `0x136d2`.
 

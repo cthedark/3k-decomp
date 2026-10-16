@@ -151,6 +151,7 @@ intro0_t *intro0_create(screen_t *scr)
         free(snd);
     }
 
+    t->music_replay = 1;   /* the original's behaviour (docs/port.md, "Slide 0's sound") */
     t->phase = INTRO0_FADE_IN;
     t->cur_mask = 0;
     t->old_mask = MASK_ALT;
