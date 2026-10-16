@@ -1,0 +1,9 @@
+ymfm - Yamaha FM sound chip emulation, by Aaron Giles
+Source:   https://github.com/aaronsgiles/ymfm
+Commit:   81aec25ccbb98f4873a255f7551ac4dadac59b4a (main at the time of vendoring, 2026-10-15)
+Licence:  BSD 3-Clause (see LICENSE in this directory)
+
+The upstream project has no release tags, so a commit is the pin.
+Files are copied unmodified from the upstream src/ directory. Only what the YM3812 (OPL2)
+needs is included: ymfm.h, ymfm_fm.h, ymfm_fm.ipp, ymfm_opl.h/.cpp, ymfm_adpcm.h/.cpp and
+ymfm_pcm.h/.cpp (ymfm_opl.cpp also builds the OPL4 class, which uses the PCM engine).

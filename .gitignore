@@ -1,0 +1,14 @@
+# Original game files: copyrighted, never commit or redistribute
+original_bin/
+
+# Kiro agent/tooling files, not part of the project
+.kiro/
+
+# macOS
+.DS_Store
+
+# Derived from the original game (unpacked executables, scratch output)
+work/
+
+# Build output
+build/
