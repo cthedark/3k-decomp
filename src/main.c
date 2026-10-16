@@ -19,6 +19,7 @@
 
 #include "assets.h"
 #include "audio.h"
+#include "credits.h"
 #include "intro0.h"
 #include "intro1.h"
 #include "intro2.h"
@@ -68,6 +69,17 @@ static int g_pick_n[MAX_DUMPS];
 static const char *g_pick_file[MAX_DUMPS];
 static int g_pick_count;
 static int g_pick_mask = -1;
+/* The credits, stepped and headless (--scene credits): --credits-wipe-dump N:FILE writes the screen after N steps
+ * of the wipe, --step-dump N:FILE after N completed passes of the loop, --credits-key N:CODE sets the keyboard
+ * port 0x60 to CODE from the pass after N completed passes, and --screen-from FILE starts from the screen
+ * (raw: 64,000 pixels then the 768-byte palette) that an earlier program left. */
+static int g_cwipe_n[MAX_DUMPS];
+static const char *g_cwipe_file[MAX_DUMPS];
+static int g_cwipe_count;
+static struct { int pass; unsigned code; } g_credits_keys[MAX_SCRIPT];
+static int g_credits_nkeys;
+static const char *g_screen_from;
+static int g_stepped;          /* --stepped: the credits headless even with no dump and no key (only the end is reported) */
 static int g_no_audio;        /* --no-audio */
 static int g_no_music;        /* --no-music */
 static unsigned g_music_gain = 100;   /* --music-gain PERCENT */
@@ -317,6 +329,82 @@ static int run_menu_stepped(screen_t *scr, int ndump, const int *dump_pass, char
     }
     menu_free(m);
     return 0;
+}
+
+/* Read a raw dump (64,000 pixels, then the 768-byte palette) into the screen: what an earlier program left. */
+static int read_raw(screen_t *s, const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        fprintf(stderr, "cannot read %s\n", path);
+        return -1;
+    }
+    size_t a = fread(s->pix, 1, SCREEN_PIXELS, f);
+    size_t b = fread(s->pal, 1, 768, f);
+    fclose(f);
+    if (a != SCREEN_PIXELS || b != 768) {
+        fprintf(stderr, "%s is not a raw screen dump\n", path);
+        return -1;
+    }
+    return 0;
+}
+
+/* The credits, stepped and headless. The screen at the start is --screen-from's, or the menu's frame (GMAIN with
+ * the interface palette). Dumps: --credits-wipe-dump N:FILE after N wipe steps, --step-dump N:FILE after N completed
+ * passes (N = 0: the wipe is over, no pass yet). The reference is the oracle's screen at its N-th arrival at the
+ * loop top (tools/check_credits.sh). Prints how the loop ended, in passes started (the original's count of
+ * completed passes plus one). */
+static int run_credits_stepped(screen_t *scr, int ndump, const int *dump_pass, char **dump_file)
+{
+    if (g_screen_from) {
+        if (read_raw(scr, g_screen_from) != 0)
+            return 1;
+    } else if (load_palette(scr, "rpg.lcp", 0) != 0 || load_screen(scr, "gmain.lcz", 0) != 0) {
+        return 1;
+    }
+    credits_t *c = credits_create(scr);
+    if (!c)
+        return 1;
+    int rc = 0;
+    for (int i = 0; i < g_cwipe_count && rc == 0; i++)   /* wipe dumps may be asked for in any order: replay */
+        if (g_cwipe_n[i] == 0 && write_raw(scr, g_cwipe_file[i]) != 0)
+            rc = 1;
+    for (int step = 1; step <= CREDITS_WIPE_STEPS && rc == 0; step++) {
+        credits_wipe_step(c, scr);
+        for (int i = 0; i < g_cwipe_count; i++)
+            if (g_cwipe_n[i] == step && write_raw(scr, g_cwipe_file[i]) != 0) {
+                fprintf(stderr, "cannot write %s\n", g_cwipe_file[i]);
+                rc = 1;
+            }
+    }
+    int last = -1;
+    for (int i = 0; i < ndump; i++)
+        if (dump_pass[i] > last)
+            last = dump_pass[i];
+    unsigned port60 = 0;   /* scripted runs start like the oracle: no scancode yet */
+    for (int done = 0; rc == 0; done++) {
+        for (int i = 0; i < ndump; i++)
+            if (dump_pass[i] == done) {
+                if (write_raw(scr, dump_file[i]) != 0) {
+                    fprintf(stderr, "cannot write %s\n", dump_file[i]);
+                    rc = 1;
+                }
+                printf("pass %d: wrote %s\n", done, dump_file[i]);
+            }
+        if (rc != 0 || (last >= 0 && done >= last))
+            break;
+        for (int i = 0; i < g_credits_nkeys; i++)
+            if (g_credits_keys[i].pass == done)
+                port60 = g_credits_keys[i].code;
+        credits_status st = credits_pass(c, scr, port60);
+        if (st != CREDITS_RUNNING) {
+            printf("credits ended by %s after %d pass(es) started\n", st == CREDITS_END_KEY ? "key" : "time",
+                   done + 1);
+            break;
+        }
+    }
+    credits_free(c);
+    return rc;
 }
 
 static int run_title_stepped(screen_t *scr, int ndump, const int *dump_pass, char **dump_file,
@@ -727,6 +815,66 @@ static const char *menu_item_name(menu_result r)
     }
 }
 
+/* The screen the credits start from when nothing was handed over: the menu's frame, GMAIN with the interface
+ * palette (--screen-from FILE takes a screen dump instead). */
+static int credits_start_screen(screen_t *scr)
+{
+    if (g_screen_from)
+        return read_raw(scr, g_screen_from);
+    if (load_palette(scr, "rpg.lcp", 0) != 0 || load_screen(scr, "gmain.lcz", 0) != 0)
+        return -1;
+    return 0;
+}
+
+/* The credits in real time (CAST.SL), on an already initialised platform, over what is on `scr` now (the menu's
+ * last frame, whose palette they keep). Returns 0 when they ended (by time or by Space or Enter, after which the
+ * original starts the menu again), 1 if the window was closed, -1 if they could not start. There is no sound yet:
+ * the original plays song 0 of MUC.ALL, which uses the OPL rhythm mode that the music player does not have. */
+static int play_credits(screen_t *scr)
+{
+    credits_t *c = credits_create(scr);
+    if (!c)
+        return -1;
+    int quit = 0;
+    uint32_t t0 = platform_ticks_ms();
+    unsigned done = 0;
+    while (!quit && done < CREDITS_WIPE_STEPS) {
+        if (!platform_poll()) {
+            quit = 1;
+            break;
+        }
+        unsigned due = (unsigned)((platform_ticks_ms() - t0) * TK_CREDITS_WIPE_HZ / 1000u);
+        if (due > CREDITS_WIPE_STEPS)
+            due = CREDITS_WIPE_STEPS;
+        if (due > done) {   /* steps are sequential: catch up, then show */
+            while (done < due) {
+                credits_wipe_step(c, scr);
+                done++;
+            }
+            platform_present(scr);
+        } else {
+            platform_sleep_ms(1);
+        }
+    }
+    uint32_t next = platform_ticks_ms();
+    credits_status st = CREDITS_RUNNING;
+    while (!quit && st == CREDITS_RUNNING && platform_poll()) {
+        uint32_t now = platform_ticks_ms();
+        if ((int32_t)(now - next) < 0) {
+            platform_sleep_ms(1);
+            continue;
+        }
+        next = next_due(next, now, TK_CREDITS_PASS_HZ);
+        st = credits_pass(c, scr, platform_port60());
+        if (st != CREDITS_END_TIME)
+            platform_present(scr);
+    }
+    if (st == CREDITS_RUNNING)   /* the loop above left because platform_poll said quit */
+        quit = 1;
+    credits_free(c);
+    return quit ? 1 : 0;
+}
+
 /* Slide 0, then the slides after it, in real time, on an already initialised platform. Returns
  * 0, or 1 if a scene could not be created. It also returns early (0) when the window is closed. */
 static int play_intro(screen_t *scr, int faithful, int last)
@@ -785,16 +933,29 @@ static int run_game(screen_t *scr, int scale, int faithful)
             break;
         }
         if (r == TITLE_TO_MENU) {
-            printf("game: menu\n");
-            int slot = MENU_NONE;
-            menu_result c = play_menu(scr, &slot);
-            if (c == MENU_NONE) {
-                rc = platform_poll() ? 1 : 0;   /* window closed (or the menu could not start) */
-                break;
+            int stop = 0;
+            while (!stop) {
+                printf("game: menu\n");
+                int slot = MENU_NONE;
+                menu_result c = play_menu(scr, &slot);
+                if (c == MENU_NONE) {
+                    rc = platform_poll() ? 1 : 0;   /* window closed (or the menu could not start) */
+                    break;
+                }
+                if (c == MENU_CREDITS) {   /* CAST.SL, which ends by starting the menu again */
+                    printf("game: credits\n");
+                    int q = play_credits(scr);
+                    if (q != 0) {
+                        rc = q < 0 ? 1 : 0;
+                        break;
+                    }
+                    continue;
+                }
+                if (slot != MENU_NONE)
+                    printf("game: slot %d picked\n", slot);
+                printf("game: the menu chose %s; that part is not built yet, stopping\n", menu_item_name(c));
+                stop = 1;
             }
-            if (slot != MENU_NONE)
-                printf("game: slot %d picked\n", slot);
-            printf("game: the menu chose %s; that part is not built yet, stopping\n", menu_item_name(c));
             break;
         }
         printf("game: intro\n");
@@ -928,6 +1089,29 @@ int main(int argc, char **argv)
             g_menu_mice[g_menu_nmice].y = y;
             g_menu_mice[g_menu_nmice++].buttons = b;
         }
+        else if (!strcmp(argv[i], "--credits-wipe-dump") && i + 1 < argc && g_cwipe_count < MAX_DUMPS) {
+            char *arg = argv[++i];
+            char *colon = strchr(arg, ':');
+            if (!colon) {
+                fprintf(stderr, "--credits-wipe-dump wants N:FILE\n");
+                return 2;
+            }
+            *colon = 0;
+            g_cwipe_n[g_cwipe_count] = atoi(arg);
+            g_cwipe_file[g_cwipe_count++] = colon + 1;
+        } else if (!strcmp(argv[i], "--credits-key") && i + 1 < argc && g_credits_nkeys < MAX_SCRIPT) {
+            int n;
+            unsigned code;
+            if (sscanf(argv[++i], "%d:%i", &n, &code) != 2) {
+                fprintf(stderr, "--credits-key wants N:CODE\n");
+                return 2;
+            }
+            g_credits_keys[g_credits_nkeys].pass = n;
+            g_credits_keys[g_credits_nkeys++].code = code;
+        } else if (!strcmp(argv[i], "--screen-from") && i + 1 < argc)
+            g_screen_from = argv[++i];
+        else if (!strcmp(argv[i], "--stepped"))
+            g_stepped = 1;
         else if (!strcmp(argv[i], "--music-gain") && i + 1 < argc) {
             long gain = strtol(argv[++i], NULL, 10);
             if (gain < 0 || gain > 400) {
@@ -971,7 +1155,7 @@ int main(int argc, char **argv)
             dump1_file[ndump1++] = c2 + 1;
         } else {
             fprintf(stderr,
-                    "usage: %s [--data DIR] [--scale N] [--scene title|gmain|intro0|intro1|intro2|intro3|intro4|intro5|intro6|intro|game|menu] [--ppm FILE]\n"
+                    "usage: %s [--data DIR] [--scale N] [--scene title|gmain|intro0|intro1|intro2|intro3|intro4|intro5|intro6|intro|game|menu|credits] [--ppm FILE]\n"
                     "          [--step-dump N:FILE]... [--press-pass N]... [--tick-div N]\n"
                     "          [--dump anim|sub|out|end|final:N:FILE]... [--faithful-keys] [--rand-state HEX]\n"
                     "          [--no-audio] [--no-music] [--music-gain PERCENT] [--slide0-once]\n",
@@ -1014,6 +1198,18 @@ int main(int argc, char **argv)
         return run_intro(&screen, scale, faithful, NSLIDES);
     if (!strcmp(scene, "game"))
         return run_game(&screen, scale, faithful);
+    if (!strcmp(scene, "credits")) {
+        if (g_cwipe_count > 0 || ndump > 0 || g_credits_nkeys > 0 || g_stepped)
+            return run_credits_stepped(&screen, ndump, dump_pass, dump_file);
+        if (init_platform(scale) != 0)
+            return 1;
+        int rc = credits_start_screen(&screen);
+        if (rc == 0)
+            rc = play_credits(&screen);
+        printf("credits: %s\n", rc == 0 ? "ended" : rc > 0 ? "closed" : "could not start");
+        shutdown_platform();
+        return rc < 0 ? 1 : 0;
+    }
     if (!strcmp(scene, "menu")) {
         if (g_open_count > 0)
             return run_menu_opening_stepped(&screen);

@@ -67,6 +67,7 @@ The port uses **fixed durations**, never a CPU-speed or emulator cycle setting.
 | 2 | `MARK.EXE` title: palette fade, logo pieces, input, Space/Enter/mouse choice | **done 2026-10-14** (see below) |
 | 3 | `STORY2.SL` intro: slide order, timing, voice, subtitles | **in progress** (2026-10-15): slides 0-6 (the whole intro) done and match the original (see below); voice-over and slide 0's sound built 2026-10-15, voice-over and subtitle sync confirmed by the operator by listening (see "Sound"); FM music built, not yet heard (see "Music") |
 | 4 | Chain the modes: title -> intro -> title, or title -> menu | **title <-> intro done 2026-10-15** (`--scene game`, see "Milestone 4"); the menu (`WALK0.SL`) is not built, so a key or click on the title ends the game; **menu built and playable 2026-10-15** (`--scene menu`, and `--scene game` after the title): frames, keyboard and mouse identical to the original (106 comparisons, "Milestone 4b" and "4c"); the opening animation, the choice transition and the slot picker are built ("Milestones 4d-4f"); the four actions are not (they start WALK.SL or CAST.SL), so a choice ends the program |
+| 6 | Credits (`CAST.SL`), from the menu's third item | **built 2026-10-16** (`--scene credits`, and from the menu in `--scene game`): wipe, loop, keys and end identical to the original in 46 comparisons; pace confirmed by the operator; silent (song 0 needs the OPL rhythm mode, see "Milestone 6") |
 | 5 | Music (`MUC.ALL`, FM) | **done 2026-10-15 for the intro song** (operator confirmed by listening that the music plays along with the voice; the title plays it too since milestone 4, not yet listened to): ymfm OPL2 + CMF player, plays under slides 1-6 of `--scene intro` (see "Milestone 5"); rhythm mode (songs 0 and 3) deliberately deferred: build it when `CAST.SL` / `WALK.SL` are ported (operator decision 2026-10-15), checking it against a DOSBox-X recording of those programs |
 
 ### Milestone 1 evidence
@@ -643,3 +644,43 @@ GUESS; nobody has watched it.
 
 **Not built:** loading the picked save (the three `saveNN.00x` files into the game state), which belongs with WALK.SL.
 
+## Milestone 6: the credits (CAST.SL), built 2026-10-16
+
+`src/credits.[ch]` reproduces the program the menu's third item starts: the wipe, the main loop, the keys and the
+end. It has no clock, input or SDL, like `menu.c`. Details of the original are in `findings.md` ("CAST.SL ...").
+
+**Run it:** `build/3k --scene credits --data original_bin` (alone, starting from the menu's frame), or
+`--scene game` and choose the third item of the menu; when the credits end the menu starts again, as the original
+does (CAST.SL starts WALK0.SL). Space or Enter ends the credits at once; closing the window ends the program.
+
+**What it does**
+- **Wipe (200 steps):** the picture the previous program left rolls up and off the top; the lower half of the credits'
+  background rolls in from the bottom edge, then stays whole while the upper half goes to colour 0.
+- **Loop (1,790 passes):** one new row of the text bitmap per pass; a 120 x 100 window of staff names at x = 100,
+  faded at its top and bottom; below, the same rows stretched wider with distance (120 to 320 pixels) and squeezed
+  in height form a reflection on the floor.
+- **End:** after 1,790 passes, or when the last scancode read at the end of a pass is Space (0x39) or Enter (0x1c).
+  The original reads port 0x60 raw, with no release latch, so a key held from before counts; in the port the Enter that
+  chose the item is normally released during the 2 s wipe.
+- **Palette:** never touched here; the screen keeps what the menu left (the interface palette, `RPG.LCP[0:768]`).
+
+**Checked** (`tools/check_credits.sh`, from a common starting screen in the oracle emulator): 46 of 46 comparisons
+identical to the original: 13 screens of the wipe (steps 0-200), 24 of the loop (after 0 to 1,790 passes, both
+sides of the scroll end and of the hold), and 9 decisions about the end (no key, Space, Enter, Esc then Space, a
+make-and-break pair, only break codes, Space at pass 1000, 1789 and 1790). `tests/test_credits.c` (hand-worked
+resize, scroll, expansion, the wipe's end state, the pass count, the keys, reproducibility); 17 deliberate bugs in
+`tools/mutate_credits.sh`, all caught. Clean under AddressSanitizer and UBSan. Real-time runs under SDL's dummy
+drivers: uninterrupted 52 s and `credits: ended`; Space (scripted port 0x60) at 6 s ends at 6 s; Esc ignored;
+title -> menu -> credits -> menu through `--scene game`.
+
+**Pace (operator ran it on 2026-10-16 and found it right: the wipe and the loop need no change):** the original has no wait anywhere in the credits, so its speed was the
+CPU's. The wipe runs at 100 steps per second (`TK_CREDITS_WIPE_HZ`, 2 s) and the loop at 35 passes per second
+(`TK_CREDITS_PASS_HZ`, the text moves 35 rows per second, 51 s for the whole credits). Still the port's own choice, not a measurement of the original.
+
+**Not built: sound.** The original starts song 0 of `MUC.ALL` (20,000 bytes read from the start of song 0) when the sound
+start-up succeeds, and stops it at the end. Song 0 uses the OPL rhythm mode, which the music player does not have
+(deferred on purpose, see "Milestone 5"), so the credits are silent. Not read: the sound start-up `0x10c1e`, the
+song start `0x10c58` and the poll `0x10d1a` that each pass makes.
+
+**Open:** the old picture the wipe rolls away is the menu's last frame; if the menu closes its window before, the
+credits start from whatever `scr` holds. Mouse: the original reads none here, so the port ignores it.

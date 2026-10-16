@@ -52,6 +52,7 @@ class Emu:
         self.datadir = Path(datadir)
         self.instr_per_tick = instr_per_tick
         self.trace_int = trace_int
+        self.vga_log = None     # set to {} by --log-vga: (port, size, value) -> [first tick, count]
         self.log_files = False
         self.ticks = 0
         self.mode = 3
@@ -350,7 +351,10 @@ class Emu:
                 self.dac_sub = 0
                 self.dac_index = (self.dac_index + 1) & 0xFF
         elif port in (0x3D8, 0x61, 0x20, 0x3C0, 0x3C4, 0x3C5, 0x3CE, 0x3CF, 0x3D4, 0x3D5):
-            pass
+            if self.vga_log is not None:
+                key = (port, size, value)
+                first = self.vga_log.setdefault(key, [self.ticks, 0])
+                first[1] += 1
         else:
             self.note_unknown(f"out {port:04x}")
 
@@ -521,6 +525,35 @@ class Emu:
         for addr, bpoff, n, path in specs:
             self.uc.hook_add(UC_HOOK_CODE, mk(addr, bpoff, n, path), None, addr, addr)
 
+    def watch_dump_hit(self, specs):
+        """Like watch_dump_local, but at the N-th arrival (0-based) at `addr` instead of the first.
+        `specs` is a list of (addr, n_arrival, bpoff, length, path). Several specs may share an address
+        (one arrival counter per address); the stack frame is the one of the code that reaches `addr`."""
+        from unicorn import UC_HOOK_CODE
+
+        counts = {}
+        by_addr = {}
+        for addr, nth, bpoff, n, path in specs:
+            by_addr.setdefault(addr, []).append((nth, bpoff, n, path))
+
+        def mk(addr, items):
+            def cb(uc, address, size, user):
+                k = counts.get(addr, 0)
+                counts[addr] = k + 1
+                for nth, bpoff, n, path in items:
+                    if nth != k:
+                        continue
+                    bp = uc.reg_read(UC_X86_REG_BP)
+                    ss = uc.reg_read(UC_X86_REG_SS)
+                    at = ss * 16 + ((bp + bpoff) & 0xFFFF)
+                    off = int.from_bytes(bytes(uc.mem_read(at, 2)), "little")
+                    seg = int.from_bytes(bytes(uc.mem_read(at + 2, 2)), "little")
+                    Path(path).write_bytes(bytes(uc.mem_read(seg * 16 + off, n)))
+            return cb
+
+        for addr, items in by_addr.items():
+            self.uc.hook_add(UC_HOOK_CODE, mk(addr, items), None, addr, addr)
+
     def watch_calls(self, addrs, nwords, limit, outpath):
         """Log each arrival at the given function entry addresses (far calls: the return address
         takes 4 bytes, so the arguments start at ss:sp+4) with NWORDS argument words, in order, to
@@ -607,10 +640,22 @@ def main():
     ap.add_argument("--dump-local", action="append", default=[], metavar="ADDR:BPOFF:LEN:FILE",
                     help="at the first arrival at ADDR (hex), write LEN bytes from the far pointer "
                          "stored at [bp+BPOFF] (BPOFF like -0x2a) to FILE")
+    ap.add_argument("--dump-hit", action="append", default=[], metavar="ADDR:N:BPOFF:LEN:FILE",
+                    help="at the N-th (0-based) arrival at ADDR (hex) write LEN bytes from the far pointer stored "
+                         "at [bp+BPOFF] to FILE (like --dump-local, for a later arrival)")
     ap.add_argument("--hit-pass-stop", action="store_true",
                     help="with --hit-pass: end the run at the first arrival (e.g. when the program leaves its loop)")
     ap.add_argument("--hit-pass", metavar="ADDR[,ADDR...]",
                     help="with --loop-top: print the number of completed passes at each arrival at these addresses (hex)")
+    ap.add_argument("--log-vga", action="store_true",
+                    help="at the end print each distinct write to the VGA sequencer, graphics controller, "
+                         "CRTC and mode ports (port, width, value) with its first tick and count")
+    ap.add_argument("--screen-from", metavar="FILE.raw",
+                    help="start with the 64,000 screen bytes taken from the start of FILE (a raw snapshot of an "
+                         "earlier program): a program started by exec finds the screen its parent left")
+    ap.add_argument("--palette-from", metavar="FILE.raw",
+                    help="start with the DAC palette taken from the last 768 bytes of FILE (a raw snapshot of "
+                         "an earlier program): programs started by exec inherit the DAC of their parent")
     ap.add_argument("--trace-calls", metavar="ADDR[,ADDR...]:NWORDS:LIMIT:FILE",
                     help="log calls to these function entries (hex linear addresses) with NWORDS stack "
                          "argument words, at most LIMIT calls, to FILE")
@@ -633,6 +678,14 @@ def main():
             shutil.copy2(p, work / p.name)       # overwrite the private copy; original_bin is only read
 
     emu = Emu(a.exe, work, a.instr_per_tick, a.trace_int)
+    if a.log_vga:
+        emu.vga_log = {}
+    if a.palette_from:
+        with open(a.palette_from, "rb") as f:
+            emu.pal[:] = f.read()[-768:]
+    if a.screen_from:
+        with open(a.screen_from, "rb") as f:
+            emu.uc.mem_write(VGA, f.read()[:64000])
     emu.log_files = a.log_files
     hooks = {}
 
@@ -667,6 +720,12 @@ def main():
     if a.trace_calls:
         al, nw, lim, path = a.trace_calls.split(":", 3)
         emu.watch_calls([int(x, 16) for x in al.split(",")], int(nw), int(lim), path)
+    if a.dump_hit:
+        specs = []
+        for x in a.dump_hit:
+            addr, nth, bpoff, n, path = x.split(":", 4)
+            specs.append((int(addr, 16), int(nth), int(bpoff, 0), int(n, 0), path))
+        emu.watch_dump_hit(specs)
     if a.dump_local:
         specs = []
         for x in a.dump_local:
@@ -709,6 +768,10 @@ def main():
     print(f"cpu at stop: cs:ip={r(UC_X86_REG_CS):04x}:{r(UC_X86_REG_IP):04x} (linear {r(UC_X86_REG_CS) * 16 + r(UC_X86_REG_IP):#x})"
           f" ax={r(UC_X86_REG_AX):04x} bx={r(UC_X86_REG_BX):04x} cx={r(UC_X86_REG_CX):04x} dx={r(UC_X86_REG_DX):04x}"
           f" si={r(UC_X86_REG_SI):04x} di={r(UC_X86_REG_DI):04x} ds={r(UC_X86_REG_DS):04x} es={r(UC_X86_REG_ES):04x}")
+    if emu.vga_log:
+        print("VGA port writes (port size value: first tick, count):")
+        for (p, sz, v), (t, n) in sorted(emu.vga_log.items(), key=lambda kv: kv[1][0]):
+            print(f"  out {p:04x} /{sz} = {v:#06x}: tick {t}, x{n}")
     if emu.stdout:
         print("program output:", emu.stdout.decode("ascii", "replace"))
     if emu.unknown:

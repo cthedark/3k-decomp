@@ -1623,3 +1623,172 @@ METHOD: new oracle options `--trace-calls` (log the stack arguments of chosen fu
   the opening's leftover code (at least 0x57, so the first pass would reset it to 0 and the marker would
   show 5 passes); two frames of 15 differed. The program sets it to 0 at `0x107b6`, so the first cycle is 4 passes.
 
+
+## 2026-10-16: CAST.SL (the credits), first survey in the oracle
+
+Read-only survey; nothing of `CAST.SL` is built. Run: `work/venv/bin/python tools/dosemu.py
+work/unpacked/CAST.SL.exe --data original_bin --ticks 1500 --instr-per-tick 500000 --log-files --log-vga
+--palette-from work/check_menu/o_conf_item0_1.raw --snap TICK:FILE.ppm ...` (`CAST.SL` is not packed; the exe in
+`work/unpacked/` is the file itself).
+
+- **Files, in order:** `cast.sl` (tick 0), `cast1.lcz` (3), `cast2.lcz`, `ani.lcp`, `muc.all` (14). Nothing is
+  opened after tick 14 in 1,500 ticks.
+- **It never sets the DAC.** The palette routine (`0x116a6`) and the port-write helper (`0x10bcc`) get zero calls
+  in 1,500 ticks, there are no `int 10h` palette calls, and no other `0x3c8`/`0x3c9` writes exist in the code.
+  Run from zero, the oracle shows pixels with an all-black palette. With the menu's palette preloaded
+  (`--palette-from`, new) the picture is coherent (navy sky, blue floor, gold text). That the program inherits its
+  parent's palette (as an exec'd program would) is the likeliest reading; NOT confirmed: which palette the
+  menu actually hands over, and whether the credits rotate or fade colours.
+- **What is on screen (five snapshots, ticks 100-1400):** the title lettering (三界論) on a floor under a sky;
+  staff credits (出品, 第三波文化事業, 發行人, 製作人, 技術支援, 創意支援 and names) fade and move in the sky; the
+  floor shows streaks of the credits' text in perspective. Whether the streaks are the intended effect is not known.
+- **A WRONG WARNING of mine, corrected:** the code has Mode X routines (sequencer `0x3c4`, graphics controller
+  `0x3ce`, write mode 1 at `0x10be3` / `0x10bf2`), and I suspected the oracle's flat video memory was corrupting
+  the floor. `--log-vga` (new) shows NO write to `0x3c4`, `0x3ce` or `0x3d4` in 1,500 ticks: the routines are not
+  used (as in MARK, where the Mode X routines are never called). The picture is plain mode 13h, so a planar model
+  in the oracle is not needed.
+- **The only unusual port traffic:** 539 reads and 11 writes of `0x388`/`0x389` (AdLib detection or register
+  writes, answered with 0 by the oracle) in the first ticks, and `0x61`/`0x20` keyboard acknowledgements.
+- **New oracle options:** `--palette-from FILE.raw`, `--log-vga` (see `tools/dosemu.py --help`).
+- **Not known:** timing and scroll of the credits, what ends the program, whether the music is song 0 (only the
+  `muc.all` read is observed), and the keys it reads.
+
+### CAST.SL: main loop, pacing and exit (same day, from `calls16.py` on `0x10000..0x10800` and oracle runs)
+
+- **Structure of `main` (`0x10000`, SEEN in the call list):** allocates 7 buffers, opens `cast1.lcz` / `cast2.lcz` /
+  `ani.lcp` and reads them (decoding the pictures with the LCZ routine already known), calls `0x10c1e` (sound
+  start-up; its result goes to a flag at `[seg 0x1a6]:4`), reads `muc.all` (seek 0:2 first, then up to 20,000 bytes)
+  and starts the song with `0x10c58`, builds the sky/floor/title pictures, then runs the loop at
+  `0x103fa .. 0x106af`.
+- **The loop:** one pass per displayed frame. A scroll value `[bp-0x14]` grows by 15 each pass; when it exceeds
+  `0x6144` (24,900) it is clamped and a second counter `[bp-0x58]` is incremented, and the loop ends when that
+  counter exceeds `0x82`. So **the credits last about 1,661 passes of scrolling plus 130 held passes** (my reading
+  of the code; the measured total below agrees). Each pass also
+  polls the music (`0x10d1a`) when the sound flag is set, and reads the keyboard through `0x116f0`.
+- **MEASURED in the oracle (no key):** the loop's exit at `0x106b2` is reached after **1,790 completed passes**
+  (1,791 started; the predicted 1,661 + 130 = 1,791). In the oracle that takes about 1,576 ticks at 500,000
+  instructions per tick; the real pace is not known.
+- **Keys (SEEN and MEASURED):** `0x116f0` reads port `0x60` raw, with no release latch and no queue (acks
+  `0x61` and `0x20`); the loop ends when the scan code read in that pass is `0x39` (Space) or `0x1c` (Enter). A press at
+  tick 100 ended the run after 97 passes for both; Esc (`0x01`) did nothing. Unlike the menu, a held key is enough
+  and a key already down when the program starts counts at once.
+- **Exit (SEEN):** stops the music (`0x10d42`, `0x10d6a`), frees the buffers, then calls the exec wrapper
+  `0x11bce` with the string `walk0.sl` (the only other program name in the file), so the credits return to the menu.
+- **What I have not read:** what each per-pass call draws. Seen only by name of shape: `0x10748` expands a 1-bit-per-pixel
+  bitmap into two colours (15x16 glyphs, so the staff names probably come from a bitmap font in `cast1.lcz` or
+  `cast2.lcz`), `0x11653` is a masked blit, `0x114e2` a stretch (120x120), `0x1173b` / `0x11712` are copies. How the
+  floor streaks are made is unknown.
+
+### CAST.SL: the per-pass drawing, first reading (same day; SEEN in disassembly, nothing built or compared yet)
+
+Data-segment names (file offsets checked): `DS:0x42` cast.sl, `0x4a` cast1.lcz, `0x54` cast2.lcz, `0x5e` ani.lcp,
+`0x66` muc.all, `0x6e` walk0.sl. `main` reads `cast1.lcz` into `[bp-0x12]`, decodes it with the LCZ routine
+(`0x10855`) into `[bp-0xe]`; reads `cast2.lcz` into `[bp-0x56]` and decodes it into `[bp-0x24]` after zero-filling
+25,000 (`0x61a8`) bytes; reads `ani.lcp` into `[bp-0x48]` (first `0x600` bytes); music in `[bp-0x1a]`.
+
+Primitives identified (address: what it does; argument order = parameter order as printed by `calls16.py`):
+- `0x10748 (src, dst, nbytes, colour)`: expands a 1-bit-per-pixel bitmap, MSB first, set bit -> `colour`,
+  clear bit -> 0. Called per pass with 15 bytes = one **120-pixel row** and colour `0x10`.
+- `0x10b6f (sprite, n)`: scrolls a sprite (`w,h` header) up by `n` rows inside itself (copies `(h-n)*w` bytes from
+  row `n` to row 0). Called with n = 1 on two sprites per pass.
+- `0x11653 (ptr, count, from, to)`: recolours: every byte equal to `from` becomes `to` (in a run of `count`
+  bytes). Used with count `0xf0` (two rows of 120) and `to` running through `0xdf..0xd0` and `0xd1..0xdf`, i.e. a 16-shade
+  ramp, so the text colour varies by row (the fade seen at the top and bottom of the credit column).
+  These palette entries must come from the inherited palette (see the earlier entry).
+- `0x114e2 (src, dst, srclen, dstlen)`: nearest-neighbour resize of one line, 16.16 fixed-point step
+  `0xffff * srclen / dstlen`. (`0x11519` does the same for a sprite with header.)
+- `0x11560 (screen offset, sprite)`: opaque blit of a sprite to the screen; `0x115a9`: the same with colour 0
+  transparent; `0x111d2`: masked byte copy; `0x11630 (ptr, count, value)`: fill; `0x1173b` / `0x11712`: copies.
+
+What one pass of the loop does (`0x103fa..0x106af`), in order:
+1. Music poll (`0x10d1a`) if the sound flag is set.
+2. Scrolls the two credit-text sprites up one row; expands one new 120-pixel row of the 1-bit text bitmap into the
+   bottom (source offset from the scroll value `[bp-0x14]`, +15 bytes per pass: inferred from the `add cx, ax`
+   before the call, not verified).
+3. Recolours the sprites row pair by row pair with the 16-shade ramps.
+4. **The floor** (`0x105b2..0x1063c`): for 101 rows, resizes one 120-pixel row of the title-lettering sprite to a
+   width that grows from 120 to 320 in steps of 2, writing each result 319 bytes after the previous one (so the
+   rows shear by one pixel each). The source row advances only after `[bp-0x42] + 1` rows, and `[bp-0x42]` grows
+   by 1 every 4 rows, which compresses the lettering vertically with distance: a perspective floor.
+5. Composites (copies of 16,000 and 32,000 bytes, a masked copy) into the screen halves, then reads the key.
+
+The start-up before the loop (`0x100ba..0x10330`) copies the screen to and from buffers in 320-byte rows, a vertical
+wipe, in a pattern I have not read. Not yet understood: the exact source offsets in steps 2 and 5, the wipe, and
+what gives the text its horizontal position.
+
+Size estimate for porting (a guess from the amount of code): about the size of the menu without its input; the
+primitives are small and several are known from other programs, but the composite order and buffer offsets need
+the same pass-by-pass comparison with the oracle (`--loop-top 0x103fa`, about 1.1 passes per tick, 1,790 passes).
+
+### CAST.SL: the loop's model, checked against the oracle's buffers (2026-10-16)
+
+`tools/cast_buffers.py` runs a Python model of one pass of the main loop (`0x103fa..0x106af`) from the buffers at
+the top of pass 0 and compares it with buffers dumped by the oracle at 22 later passes (0-3, 300-302, 700-702,
+1000-1002, 1650/1651, 1659-1663, 1700/1701) and with 11 screen snapshots. Dumps come from the new
+`dosemu.py --dump-hit ADDR:N:BPOFF:LEN:FILE` (and `--snap-hit`), run with `--loop-top 0x103fa`; the file names
+and sizes are in the tool's header. **Result: A, B, C, L and F identical at all 21 dumped passes after pass 0, and
+the screen identical in all 11 snapshots.** The model (all of it SEEN in the code first, then confirmed):
+1. `B` last row = `A` row 0 (`0x1173b`, 60 **words**, from `A+4` to `B+0x2e6c`). Note `0x1173b` counts words, so
+   `0x7d00` = 64,000 bytes (the whole screen) and `0x3e80` = 32,000 bytes (half).
+2. `A` (120x30) and `B` (120x100) each scroll up one row (`0x10b6f`, n = 1); the bottom rows stay as they were.
+3. `A` row 26 (offset `A+0xc34`) = text-bitmap row at byte offset `s` expanded to colour `0x10` (`0x10748`);
+   then `s += 15`, at most `0x6144`. `T` (the 25,000-byte bitmap from `cast2.lcz`) never changes.
+4. `C` (120x100, `A+0x4268`) = first 12,000 bytes of `B` (header + 11,996 pixels; the last 4 bytes are stale),
+   then colour `0x10` becomes `0xdf..0xd1` over 15 bands of 2 rows from row 0 and `0xd1..0xdf` over 15 bands of
+   2 rows from row 70.
+5. `L` = rows 0-26 of `A` (3,240 bytes), rows 0-15 recoloured one by one `0xdf..0xd0`.
+6. The floor `F` (320 wide, header says 80 rows but 101 are written): for i = 0..100, `L` row `r(i)` is resized from
+   120 to `120+2i` pixels (`0x114e2`, 16.16 step `0xffff*120/dstlen`, accumulator starting at 1, step carried by
+   `adc`) and written at `F + 0x68 + 319*i`; `r` advances after `rep+1` rows, and `rep` grows by 1 every 4 source rows
+   (starting 0). `F` is not cleared between passes (rows without lettering leave older pixels).
+7. Screen: `C` copied opaque to x = 100, y = 0, 120x100 (`0x11560`); the lower half is the first 32,000 bytes of
+   the decoded `cast1.lcz` picture with the non-zero pixels of `F+4` (32,000 bytes) over them (`0x111d2`), copied to
+   `A000:0x7d00`.
+
+Negative controls (the same tool with one thing changed): new row written at A row 24-29 except 26, the floor
+shear 320 instead of 319, the repeat rule (3 instead of 4 rows), a ramp one band short or misplaced, the copy done
+after the scroll, `C` blitted at x = 101, the floor not masked, the background offset by one byte, floor row
+off by one: each is caught at some dumped pass. **Not distinguishable by these dumps:** the accumulator start (0 or
+1) of the resize and the clamp value `0x6144` (the text bitmap is blank there), so those two come from the code only.
+
+Open for the port: the screen at the top of pass 0 is an input here (`S_0`) and so is the decoded background (`G_0`);
+the start-up that makes them (the vertical wipe from `0x100ba`, the pictures built before the loop, the palette
+question) is not read yet. Pass count, keys and exit: see the entry above.
+
+### CAST.SL: the start-up before the loop, and the palette (2026-10-16)
+
+- **Order (SEEN in `main`, `0x10000..0x10747`):** allocate buffers; open and close `cast.sl` (check that it exists);
+  sound start-up (`0x10c1e`); read and decode `cast1.lcz`; copy the whole screen to a save buffer; the wipe;
+  read and decode `cast2.lcz`; read the first `0x600` bytes of `ani.lcp`; read 20,000 bytes of song 0 from
+  `muc.all`; start the music if the sound flag is set (`0x10c58`); zero the floor buffer and the sprite buffer and
+  write the headers (floor 320x80, `A` 120x30, `B` 120x100); the loop. At the end: stop the music, free, exec `walk0.sl`.
+- **Pictures (CHECKED against the oracle's buffers):** `cast1.lcz` is one LCZ chunk that decodes to 32,000 bytes: the
+  lower half of the screen (the background of the floor), not a full screen. `cast2.lcz` is one chunk that decodes to
+  **24,900** bytes, which is the text bitmap (the buffer is zero-filled to 25,000 first) and equals the scroll clamp
+  `0x6144`, so the credits scroll ends exactly at the end of the bitmap. Both agree with `lcz_decode.py`.
+- **The wipe (`0x101b0..0x10240`), CHECKED:** `tools/cast_wipe.py` reproduces the oracle's screen after 0, 1, 2, 3,
+  50, 99, 100, 101, 102, 150, 199 and 200 steps, using a real menu screen as the old picture (new oracle option
+  `--screen-from FILE.raw`). Each of the 200 steps: the old picture (saved) shifts up one row at the top; for the first
+  100 steps the new background rolls up from the bottom edge of the screen (`bg[0:320*k]` at `64000 - 320*k`); from step
+  101 the background stays whole in the lower half, and the row at the bottom of the shrinking old picture is
+  cleared to colour 0 as it goes. At step 200 the upper half is colour 0 and the screen is **identical to the screen at
+  the top of pass 0** (CHECKED). The old picture is whatever the previous program left (the menu): the port has to pass its last
+  frame on. The wipe has no wait of its own, so its speed in the original is the CPU's.
+  Two changes to the model that the 12 screens cannot tell apart are equivalent: the threshold `0x7d00` moved by less than
+  320, and copying one row more in the first copy (the next copy or the clear overwrites it).
+- **The palette (resolved as far as it can be):** the DAC at the menu is **exactly `RPG.LCP[0:768]`** (the interface
+  palette; compared with the oracle's menu snapshots, 0 entries differ). `CAST.SL` never touches the DAC. It reads the first
+  `0x600` bytes of `ani.lcp` (two 768-byte palettes) and computes pointers to them, but nothing in `main` uses them
+  (they are freed unused), and neither equals the menu palette. With the interface palette preloaded, the credits'
+  ramps `0xd0..0xdf` are gold, as on screen. So the port should show the credits with the interface palette that the
+  menu leaves. NOT verified in the original itself: only that a DOS exec leaves the DAC alone, which is standard
+  behaviour.
+- **New oracle option:** `--screen-from FILE.raw` (start with the screen of an earlier program).
+
+### CAST.SL: details that the port reproduces (2026-10-16, from building `src/credits.c`)
+
+- The pass that finds the scroll finished (the 131st with the scroll clamped) leaves at `0x1049d` **before drawing and
+  before reading the key**: 1,790 passes draw, the 1,791st only ends. A key is read at the **end** of a pass, after
+  the drawing, so a key pressed in a pass ends the loop after that pass has drawn; Space at pass 1790 is never seen.
+- All of this was compared with the oracle in `tools/check_credits.sh` (46 of 46) and the port runs the same
+  numbers; see `port.md`, "Milestone 6".

@@ -89,4 +89,14 @@
  * long enough to see it being drawn. GUESS. */
 #define TK_MENU_CONFIRM_HZ 33
 
+/* The credits' wipe (CAST.SL 0x101c3): 200 steps, each shifting the old picture up one row and copying the new
+ * picture's growing part, up to about 64 KB of memory traffic per step, with no wait of its own: its length in the
+ * original was the speed of the machine. 100 steps per second make it take 2 s. A choice; the operator found the credits' pace right (2026-10-16). */
+#define TK_CREDITS_WIPE_HZ 100
+/* The credits' loop (CAST.SL 0x103fa): 1,790 passes, each moving the text one row and redrawing 12 KB of
+ * window and 32 KB of floor (101 resized lines), unpaced in the original. The text moves one row per pass, so
+ * this is also rows per second: at 35 (taken from the menu and the intro, judged right by eye) a 16-row line
+ * of names takes 0.46 s to move its own height and the whole credits last 51 s. A choice, not a measurement;
+ * the operator found it right (2026-10-16). */
+#define TK_CREDITS_PASS_HZ 35
 #endif

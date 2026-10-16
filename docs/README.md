@@ -22,14 +22,15 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
 
 | Area | Tools |
 |---|---|
-| Run and trace the original | `run-original.sh` (DOSBox-X, `--trace` logs file I/O); `dosemu.py` (the oracle: runs an unpacked program in a small emulator and saves its screen; options `--log-files`, `--snap-hit`, `--peek`, `--trace-calls`, `--dump-local`, scripted `--key`; needs the venv); `capture_original_audio.sh` (record what the original outputs in DOSBox-X, headless) |
+| Run and trace the original | `run-original.sh` (DOSBox-X, `--trace` logs file I/O); `dosemu.py` (the oracle: runs an unpacked program in a small emulator and saves its screen; options `--log-files`, `--snap-hit`, `--peek`, `--trace-calls`, `--dump-local`, `--dump-hit`, `--screen-from`, scripted `--key`, `--palette-from`, `--log-vga`; needs the venv); `capture_original_audio.sh` (record what the original outputs in DOSBox-X, headless) |
 | Read code | `dis16.py`, `calls16.py` (disassemble; fold into calls with arguments; need the venv); `mz_strings.py` (strings with addresses) |
 | Pictures and sprites | `lcz_decode.py`, `lcz_sheet.py`, `lcz_at.py` (LCZ containers, also a block inside another file such as `RPG.LCP`); `buf_sheet.py` (contact sheet of raw buffers); `render_font.py` |
-| Compare screens | `compare_frames.py`, `compare_set.py`, `compare_raw.py` (raw dumps of 64,000 pixels + palette); `check_intro1.sh`..`check_intro6.sh`, `check_menu.sh` (re-run a scene against the original frame by frame) |
+| Compare screens | `compare_frames.py`, `compare_set.py`, `compare_raw.py` (raw dumps of 64,000 pixels + palette); `check_intro1.sh`..`check_intro6.sh`, `check_menu.sh`, `check_credits.sh` (re-run a scene against the original frame by frame) |
 | Voice and music data | `voc_extract.py`; `cmf_survey.py`, `cmf_behaviour.py`, `cmf_to_mid.py` (songs of `MUC.ALL`, also as MIDI) |
 | Recorded audio | `audio_timeline.py`, `find_clip.py`, `clip_scale.py`, `loop_period.py`, `onset_fit.py`, `pitch_check.py` (has a self-test), `emu_baseline.py`, `compare_music.py`; method and pitfalls in `findings.md`, 2026-10-15 |
 | Timing | `fit_timeline.py` (split event times into clock-bound and CPU-bound parts) |
-| Mutation checks (do the tests fail when the code is wrong?) | `mutate_audio.sh`, `mutate_music.sh`, `mutate_menu.sh` (needs `check_menu.sh` run first) |
+| Check a model of CAST.SL's loop against the oracle's buffers | `cast_buffers.py` (loop) and `cast_wipe.py` (start-up wipe); they need dumps in `work/cast/buf`, see their headers and `findings.md` |
+| Mutation checks (do the tests fail when the code is wrong?) | `mutate_audio.sh`, `mutate_music.sh`, `mutate_menu.sh` (needs `check_menu.sh` run first), `mutate_credits.sh` (needs `check_credits.sh` run first) |
 
 ## Current state (update this section each session)
 - Done: PKLITE unpacking of 5 programs; Ghidra loads MARK and TV; the original
