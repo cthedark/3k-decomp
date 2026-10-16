@@ -1585,3 +1585,41 @@ METHOD: new oracle options `--trace-calls` (log the stack arguments of chosen fu
     which is an integrity check and is not reproduced), frees the buffers and starts `walk.sl` (items 0, 1)
     or `cast.sl` (item 2) with the exec call at `0x136d2`.
 
+### 2026-10-15: THE SLOT PICKER (WALK0.SL 0x111a1 .. 0x115bf), read and checked against the oracle
+- **SETUP (item 1, after the check-mark transition):** reads `RPG.LCP` `0x3a1e`, 2,354 bytes = **2,301 bytes of
+  LCZ (`0x8fd`) that decode to 3,172 = 122 x 26 raw pixels (the 11 numbered cells, colours `0xf0` and up)
+  followed by 53 raw bytes = a 7 x 7 sprite (header `07 00 07 00`, colour `0x54` with a few `0x1a/0x1c/0x1d`
+  pixels)**. The cells are decoded straight into the label strip at label 1's place (`0xe50`), so they
+  cover the top 26 rows of the "load" label (and with them the check mark); its bottom 4 rows stay.
+  The sprite is copied to the start of its buffer (`0x131d8`: a plain BYTE copy, not the word copy `0x13201`).
+- **ICONS:** for each of 11 slots the program tries to open `saveNN.000` (NN = 00..10, built digit by digit
+  by `0x12258`, which writes a 3-digit decimal); if it opens, the 7 x 7 sprite is stamped (opaque,
+  stride 122) into the label strip at `0x166c + 11 NN` (row 17, column 2 + 11 NN of the strip). Then the
+  sprite's colour `0x54` is turned into `0x11` (`0x13119` over all 53 bytes), which makes the blinking marker.
+  With the shipped data the saves are 00, 01, 03, 04, 07, 09, 10 (seen as the oracle's file opens).
+- **PER PASS (`0x11304`):** the backdrop rolls one row UP, every pass (the same code as the menu's vertical phase;
+  there is no counter test here); the strip is copied; a counter `[bp-8]` goes 1..10, 0, 1.. (set to 0 at
+  `0x107b6`, before the jump over the unused code), and while it is below 5 the marker is drawn at the
+  selected cell (opaque, 7 x 7, row 9, column 2 + 11 slot): 4 passes on at first, then 5 on and 6 off;
+  the strip is laid over the panel with colour 0 transparent (no white highlight here); the keyboard
+  with the menu's latch; the mouse; the panel is shown at (64, 16).
+- **KEYS:** Left (0x4b) and Right (0x4d) move the selection and stop at the ends; Space (0x39) or Enter (0x1c) pick
+  if the selected slot has a save, which the program tests by reading one pixel of the icon (offset `+0x44a`
+  from the cell = one row down and over in the strip: colour `0x54` only where the icon was stamped); on
+  an empty slot they do nothing. **There is no Escape or any other way out** (the picker only ends by a pick).
+- **MOUSE:** the arrow is drawn like in the menu. With x in 100..220 and y in 70..95 (strictly: x > 0x63 and
+  < 0xdd, y > 0x45 and < 0x60) the cell under the pointer, (x - 100) / 11, becomes the selection; a button
+  down there acts as Space. The latch is the menu's variable, so the Space/Enter that chose the item
+  must be released before another key counts, as in the menu.
+- **THE PICK** (`0x115c2 ..`, not reproduced): stops the music, builds `saveNN.000`, reads it (504 bytes after
+  decoding), writes `man_info.now`; reads `saveNN.001` and `.002` (up to 65,500 bytes each), decodes both and
+  writes them as `__1.now`; then the common end (starts `walk.sl`). From the call list; not run to the end.
+- **CHECKED:** 87 comparisons identical to the oracle: 18 frames of the blink, 34 of the keys, 21 of the mouse,
+  and 14 decisions (the pass in which the original takes the pick branch `0x115c2` and which `saveNN.000`
+  it opens next) for Enter, Space, no release first, Right to every end, empty slots, clicks in and out of the cells,
+  a button held at the start. To count the picker's passes next to the menu's, `dosemu.py --loop-top` now takes a
+  comma-separated list: arrivals at all the addresses count as one sequence.
+- **A WRONG FIRST GUESS, corrected by the check the same hour:** I took the blink counter's start from
+  the opening's leftover code (at least 0x57, so the first pass would reset it to 0 and the marker would
+  show 5 passes); two frames of 15 differed. The program sets it to 0 at `0x107b6`, so the first cycle is 4 passes.
+

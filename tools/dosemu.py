@@ -420,7 +420,10 @@ class Emu:
                 self.stop_reason = f"snapshots done at pass {n}"
                 uc.emu_stop()
 
-        self.uc.hook_add(UC_HOOK_CODE, cb, None, addr, addr)
+        # `addr` may be one loop-top address or a list: arrivals at any of them count as passes of one
+        # sequence (for a program that goes from one loop to another, e.g. the menu and its slot picker).
+        for a in (addr if isinstance(addr, (list, tuple)) else [addr]):
+            self.uc.hook_add(UC_HOOK_CODE, cb, None, a, a)
 
     def watch_hits(self, specs):
         """Snapshot at the N-th (0-based) arrival at an address, without touching the clock.
@@ -593,7 +596,8 @@ def main():
                          "state from the start if its TICK is 0")
     ap.add_argument("--trace-int", action="store_true")
     ap.add_argument("--log-files", action="store_true", help="print each successful file open with the tick")
-    ap.add_argument("--loop-top", metavar="ADDR", help="linear address of a loop's first instruction; enables pass counting")
+    ap.add_argument("--loop-top", metavar="ADDR", help="linear address of a loop's first instruction; enables pass counting. "
+                    "A comma-separated list counts the arrivals at all of them as one sequence of passes")
     ap.add_argument("--tick-div", type=int, default=3, help="BIOS ticks advance once per this many completed passes")
     ap.add_argument("--snap-pass", action="append", default=[], metavar="N:FILE.raw",
                     help="save screen+palette after N completed passes of the --loop-top loop")
@@ -694,7 +698,7 @@ def main():
             mice[n] = (mx, my, mb)
             if emu.mouse is None:
                 emu.mouse = [0, 0, 0]
-        emu.watch_pass(int(a.loop_top, 16), a.tick_div, snaps, keys,
+        emu.watch_pass([int(x, 16) for x in a.loop_top.split(",")], a.tick_div, snaps, keys,
                        int(a.sync_var, 16) if a.sync_var else None, mice)
 
     emu.run(a.ticks, hooks)

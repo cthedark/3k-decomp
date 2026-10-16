@@ -66,7 +66,7 @@ The port uses **fixed durations**, never a CPU-speed or emulator cycle setting.
 | 1 | Decode a full-screen picture and show it with the right palette | **done 2026-10-14** |
 | 2 | `MARK.EXE` title: palette fade, logo pieces, input, Space/Enter/mouse choice | **done 2026-10-14** (see below) |
 | 3 | `STORY2.SL` intro: slide order, timing, voice, subtitles | **in progress** (2026-10-15): slides 0-6 (the whole intro) done and match the original (see below); voice-over and slide 0's sound built 2026-10-15, voice-over and subtitle sync confirmed by the operator by listening (see "Sound"); FM music built, not yet heard (see "Music") |
-| 4 | Chain the modes: title -> intro -> title, or title -> menu | **title <-> intro done 2026-10-15** (`--scene game`, see "Milestone 4"); the menu (`WALK0.SL`) is not built, so a key or click on the title ends the game; **menu built and playable 2026-10-15** (`--scene menu`, and `--scene game` after the title): frames, keyboard and mouse identical to the original (106 comparisons, "Milestone 4b" and "4c"); the opening animation is built ("Milestone 4d"); the closing transition, the four actions and the slot picker are not, so a choice ends the program |
+| 4 | Chain the modes: title -> intro -> title, or title -> menu | **title <-> intro done 2026-10-15** (`--scene game`, see "Milestone 4"); the menu (`WALK0.SL`) is not built, so a key or click on the title ends the game; **menu built and playable 2026-10-15** (`--scene menu`, and `--scene game` after the title): frames, keyboard and mouse identical to the original (106 comparisons, "Milestone 4b" and "4c"); the opening animation, the choice transition and the slot picker are built ("Milestones 4d-4f"); the four actions are not (they start WALK.SL or CAST.SL), so a choice ends the program |
 | 5 | Music (`MUC.ALL`, FM) | **done 2026-10-15 for the intro song** (operator confirmed by listening that the music plays along with the voice; the title plays it too since milestone 4, not yet listened to): ymfm OPL2 + CMF player, plays under slides 1-6 of `--scene intro` (see "Milestone 5"); rhythm mode (songs 0 and 3) deliberately deferred: build it when `CAST.SL` / `WALK.SL` are ported (operator decision 2026-10-15), checking it against a DOSBox-X recording of those programs |
 
 ### Milestone 1 evidence
@@ -623,4 +623,23 @@ logic: counter 0 before the loop, no extra roll. Passes 119 and later were wrong
 
 **Not built:** the four actions (they need `WALK.SL`, `CAST.SL` or the slot picker; a choice still ends
 the program after the transition and prints what the original would do), the slot picker.
+
+## Milestone 4f: the slot picker, built 2026-10-15
+
+`menu_picker_begin` / `menu_picker_pass` (`src/menu.c`): after "load a saved game" and its check-mark transition, a
+strip of 11 numbered cells replaces the label, with an icon under each slot whose `SAVEnn.000` exists in the data
+directory (probed with `assets_exists`) and a blinking marker on the selected cell. Left/Right, Space/Enter or the
+mouse pick a slot that has a save; the program prints the slot and ends (WALK.SL does not exist yet). As in the
+original there is no way out of the picker other than a pick or closing the window; with no saves at all it just
+waits.
+
+**Checked:** `tools/check_menu.sh` reports 640 of 640 comparisons identical to the original (553 before, plus 87 for the
+picker); unit tests in `tests/test_menu.c` (icons, held keys, ends, empty slots, mouse bands, the blink cycle);
+16 deliberate bugs in `tools/mutate_menu.sh`. Real-time runs under SDL's dummy drivers: Right x3, Enter picks slot 3;
+Enter on an empty slot stays.
+
+**Pace:** the same 35 passes per second as the menu (`TK_MENU_PASS_HZ`), so the marker blinks about 3 times a second.
+GUESS; nobody has watched it.
+
+**Not built:** loading the picked save (the three `saveNN.00x` files into the game state), which belongs with WALK.SL.
 

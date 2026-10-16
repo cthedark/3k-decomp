@@ -62,6 +62,15 @@ uint8_t *assets_read(const char *name, size_t *size)
     return buf;
 }
 
+int assets_exists(const char *name)
+{
+    FILE *f = open_variant(name, 0);
+    if (!f)
+        return 0;
+    fclose(f);
+    return 1;
+}
+
 int assets_read_at(const char *name, size_t offset, void *dst, size_t len)
 {
     FILE *f = open_variant(name, 0);

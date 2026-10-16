@@ -21,6 +21,9 @@ const char *assets_dir(void);
 /* Read a whole data file. Returns a malloc'ed buffer (free it) or NULL. */
 uint8_t *assets_read(const char *name, size_t *size);
 
+/* Whether a data file can be opened (the lookup of assets_read). */
+int assets_exists(const char *name);
+
 /* Read `len` bytes at `offset` of a data file into dst. Returns 0 on success. */
 int assets_read_at(const char *name, size_t offset, void *dst, size_t len);
 

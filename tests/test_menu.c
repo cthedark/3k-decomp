@@ -292,6 +292,101 @@ static void test_transition(void)
     }
 }
 
+/* Pixels of colour 0x54 in the 7 x 7 box of slot i's icon (the strip is label 1: screen y 70, icons at row 17). */
+static int icon_pixels(const screen_t *s, int i)
+{
+    int n = 0;
+    for (int y = 70 + 17; y < 70 + 24; y++)
+        for (int x = 102 + 11 * i; x < 102 + 11 * i + 7; x++)
+            n += s->pix[y * SCREEN_W + x] == 0x54;
+    return n;
+}
+
+static void test_picker(void)
+{
+    printf("slot picker\n");
+    static screen_t s;
+    menu_t *m = menu_create(&s);
+    if (!m) {
+        skipped++;
+        return;
+    }
+    const unsigned present = 0x69b;   /* slots 0, 1, 3, 4, 7, 9, 10 */
+    menu_picker_begin(m, present);
+    CHECK(menu_picker_slot(m) == 0);
+    CHECK(menu_picker_pass(m, &s, 0x9c, NULL) == MENU_NONE);
+    int icons_ok = 1;
+    for (int i = 0; i < MENU_SLOTS; i++)
+        if ((icon_pixels(&s, i) > 0) != ((present >> i) & 1))
+            icons_ok = 0;
+    CHECK(icons_ok);   /* an icon under exactly the slots that have a save */
+
+    /* Held keys: a make code counts once after a break code. Left at the first cell and Right at the last stay. */
+    menu_picker_pass(m, &s, 0x4b, NULL);   /* the latch was closed by the break above? no: open, so Left is taken */
+    CHECK(menu_picker_slot(m) == 0);
+    menu_picker_pass(m, &s, 0xcb, NULL);
+    menu_picker_pass(m, &s, 0x4d, NULL);
+    CHECK(menu_picker_slot(m) == 1);
+    for (int i = 0; i < 4; i++)
+        menu_picker_pass(m, &s, 0x4d, NULL);   /* held: nothing more */
+    CHECK(menu_picker_slot(m) == 1);
+    for (int k = 0; k < 12; k++) {
+        menu_picker_pass(m, &s, 0xcd, NULL);
+        menu_picker_pass(m, &s, 0x4d, NULL);
+    }
+    CHECK(menu_picker_slot(m) == 10);
+
+    /* Pick: only a slot with a save. Slot 10 has one; slot 8 has none. */
+    menu_picker_pass(m, &s, 0x9c, NULL);
+    CHECK(menu_picker_pass(m, &s, 0x1c, NULL) == 10);
+    menu_picker_pass(m, &s, 0x9c, NULL);
+    menu_picker_pass(m, &s, 0x4b, NULL);   /* 9 */
+    menu_picker_pass(m, &s, 0xcb, NULL);
+    menu_picker_pass(m, &s, 0x4b, NULL);   /* 8 */
+    CHECK(menu_picker_slot(m) == 8);
+    menu_picker_pass(m, &s, 0xcb, NULL);
+    CHECK(menu_picker_pass(m, &s, 0x39, NULL) == MENU_NONE);   /* Space on an empty slot does nothing */
+
+    /* The mouse: over the cells (x 100..220, y 70..95) a cell is selected; a button picks it if it has a save. */
+    menu_mouse mo = {100 + 11 * 3 + 5, 80, 0};
+    menu_picker_pass(m, &s, 0xcb, &mo);
+    CHECK(menu_picker_slot(m) == 3);
+    mo.x = 99;   /* one pixel left of the cells: ignored, with a button too */
+    mo.buttons = 1;
+    CHECK(menu_picker_pass(m, &s, 0xcb, &mo) == MENU_NONE && menu_picker_slot(m) == 3);
+    mo.x = 100 + 11 * 2;   /* slot 2 has no save */
+    CHECK(menu_picker_pass(m, &s, 0xcb, &mo) == MENU_NONE && menu_picker_slot(m) == 2);
+    mo.x = 100 + 11 * 4;   /* slot 4 has one */
+    CHECK(menu_picker_pass(m, &s, 0xcb, &mo) == 4);
+    mo.y = 96;             /* below the cells */
+    mo.x = 100 + 11 * 7;
+    CHECK(menu_picker_pass(m, &s, 0xcb, &mo) == MENU_NONE && menu_picker_slot(m) == 4);
+    menu_free(m);
+
+    /* The marker blinks: the counter runs 1..10, 0, 1.. and the marker shows while it is below 5, so the
+     * first cycle is 4 passes on and 6 off, and from then on 5 on and 6 off. */
+    m = menu_create(&s);
+    menu_picker_begin(m, 0);
+    int on_count = 0, cycle_ok = 1;
+    int shape[33];
+    for (int i = 0; i < 33; i++) {
+        menu_picker_pass(m, &s, 0x9c, NULL);
+        int w = 0;   /* pixels of colour 0x11 in the selected cell (row 9..15, x 102..108) */
+        for (int y = 70 + 9; y < 70 + 16; y++)
+            for (int x = 102; x < 109; x++)
+                w += s.pix[y * SCREEN_W + x] == 0x11;
+        shape[i] = w > 0;
+        on_count += shape[i];
+    }
+    for (int i = 11; i < 22; i++)
+        if (shape[i] != shape[i + 11])
+            cycle_ok = 0;
+    CHECK(cycle_ok);
+    CHECK(on_count == 4 + 5 + 5 + 1);   /* passes 1-4; 11-15; 22-26; 33 */
+    CHECK(shape[0] && shape[3] && !shape[4] && !shape[9] && shape[10] && shape[14] && !shape[15]);
+    menu_free(m);
+}
+
 static void test_resize(void)
 {
     printf("nearest-neighbour resize\n");
@@ -384,6 +479,7 @@ int main(int argc, char **argv)
     test_resize();
     test_opening();
     test_transition();
+    test_picker();
     printf("%s: %d failure(s), %d skipped\n", failures ? "FAILED" : "ok", failures, skipped);
     return failures ? 1 : 0;
 }

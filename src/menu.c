@@ -19,6 +19,11 @@ enum {
     COUNTER_TURN = 0x78, COUNTER_MAX = 0xc8,                    /* roll left below, up from here; wraps after */
     HIGHLIGHT_FROM = 0x17, HIGHLIGHT_TO = 0x10,                 /* the selected label turns white */
     CURSOR_BYTES = 382, CURSOR_AT = 0x3255,                     /* the arrow, read raw from RPG.LCP */
+    STRIP_AT = 0x3a1e, STRIP_PACKED = 0x8fd, STRIP_PIXELS = 122 * 26,   /* the picker's cells (RPG.LCP) */
+    MARKER_BYTES = 53,                                          /* follows the packed strip in the file */
+    STRIP_IN_LABELS = 0xe50,                                    /* where it goes in the label strip: label 1 */
+    ICON_AT = 0x166c, ICON_STEP = 11, SELECT_AT = 0x129c,       /* offsets in the label strip (header counted) */
+    EXISTS_PROBE = 0x44a,                                       /* from the selected cell to a pixel of its icon */
     MOUSE_X_MIN = 0x40, MOUSE_X_MAX = 0xed, MOUSE_Y_MIN = 0x10, MOUSE_Y_MAX = 0xa2,
     HOVER_X_ABOVE = 0x64, HOVER_X_BELOW = 0xdc,                 /* x must lie strictly between */
     SC_ENTER = 0x1c, SC_SPACE = 0x39, SC_UP = 0x48, SC_DOWN = 0x50
@@ -41,9 +46,23 @@ struct menu {
     int highlight;
     int key_latch;                        /* [bp-0x32]: a break code has been seen */
     int confirm_step;                     /* [bp-0x3e] during the transition after a choice */
+    uint8_t *strip;                       /* the picker's 11 cells: 122 x 26 pixels, no header */
+    uint8_t *marker;                      /* 7 x 7 sprite: the icon of a slot with a save (53 bytes) */
+    uint8_t *marker_sel;                  /* the same with colour 0x54 turned into 0x11: the blinking marker */
+    int slot;                             /* [bp-0x2c] in the picker: the selected cell, 0..10 */
+    unsigned blink;                       /* [bp-8]: 0..10, the marker shows while below 5 */
     size_t mark_at;                       /* [bp-0x20]: where the check mark is drawn in the label strip */
     int arrow_at;                         /* [bp-0x30]: where the arrow is drawn in the panel */
 };
+
+/* 0x10bd8 .. 0x10c1f: save the top row, scroll up one row, put the row at the bottom. */
+static void roll_up(menu_t *m)
+{
+    uint8_t row0[PANEL_W];
+    memcpy(row0, m->backdrop + 4, PANEL_W);
+    gfx_scroll_up(m->backdrop, 1);
+    memcpy(m->backdrop + 4 + (size_t)(PANEL_H - 1) * PANEL_W, row0, PANEL_W);
+}
 
 /* Put a panel (sprite) on the screen at (64, 16): the original's 0x13026(0x1440, panel). */
 static void present_panel(screen_t *scr, const uint8_t *panel)
@@ -386,6 +405,20 @@ menu_t *menu_create(screen_t *scr)
         return NULL;
     }
 
+    /* The picker's strip and marker: one block of RPG.LCP, LCZ-coded cells then 53 raw bytes. */
+    m->strip = load_block("RPG.LCP", STRIP_AT, STRIP_PACKED, STRIP_PIXELS);
+    m->marker = malloc(MARKER_BYTES + 8);
+    m->marker_sel = malloc(MARKER_BYTES + 8);
+    if (!m->strip || !m->marker || !m->marker_sel ||
+        assets_read_at("RPG.LCP", STRIP_AT + STRIP_PACKED, m->marker, MARKER_BYTES) != 0 ||
+        sprite_w(m->marker) != 7 || sprite_h(m->marker) != 7) {
+        fprintf(stderr, "menu: cannot read the slot picker's pictures from RPG.LCP\n");
+        menu_free(m);
+        return NULL;
+    }
+    memcpy(m->marker_sel, m->marker, MARKER_BYTES);
+    menu_recolour(m->marker_sel, MARKER_BYTES, 0x54, 0x11);   /* 0x112f9: the whole 53 bytes, header too */
+
     /* The original sets the counter to 0 and jumps to the loop's test (0x10b89), whose first act is to count:
      * the first pass runs with counter 1. */
     m->counter = 0;
@@ -401,6 +434,9 @@ void menu_free(menu_t *m)
         free(m->backdrop);
         free(m->labels);
         free(m->cursor);
+        free(m->strip);
+        free(m->marker);
+        free(m->marker_sel);
     }
     free(m);
 }
@@ -423,15 +459,10 @@ menu_result menu_pass_input(menu_t *m, screen_t *scr, unsigned port60, const men
         m->counter = 0;
     m->passes++;
 
-    if (m->counter < COUNTER_TURN) {
+    if (m->counter < COUNTER_TURN)
         gfx_rotate_rows_left(m->backdrop);   /* 0x1328b: one pixel left, the first pixel wraps */
-    } else {
-        /* 0x10bd8 .. 0x10c1f: save the top row, scroll up one row, put the row at the bottom. */
-        uint8_t row0[PANEL_W];
-        memcpy(row0, m->backdrop + 4, PANEL_W);
-        gfx_scroll_up(m->backdrop, 1);
-        memcpy(m->backdrop + 4 + (size_t)(PANEL_H - 1) * PANEL_W, row0, PANEL_W);
-    }
+    else
+        roll_up(m);
 
     /* 0x10c22 ..: the panel is a copy of the backdrop; the labels are a copy of the strip with the
      * selected one recoloured, laid over the panel with colour 0 transparent. */
@@ -535,3 +566,86 @@ menu_result menu_pass(menu_t *m, screen_t *scr)
 {
     return menu_pass_input(m, scr, 0x80, NULL);   /* a break code on the port: the latch is open, no key */
 }
+
+/* ---- the slot picker ----------------------------------------------------------------------- */
+
+static size_t picker_cell(const menu_t *m) { return (size_t)SELECT_AT + (size_t)ICON_STEP * m->slot; }
+
+void menu_picker_begin(menu_t *m, unsigned present)
+{
+    /* 0x111f1 ..: the cells replace the top 26 rows of the chosen label in the strip, which also wipes the
+     * check mark. Then, for each slot that has a save, the icon (opaque, 7 x 7, stride 122). */
+    memcpy(m->labels + STRIP_IN_LABELS, m->strip, STRIP_PIXELS);
+    for (int i = 0; i < MENU_SLOTS; i++) {
+        if (!(present & (1u << i)))
+            continue;
+        size_t at = (size_t)ICON_AT + (size_t)ICON_STEP * i;
+        for (int r = 0; r < 7; r++)
+            memcpy(m->labels + at + (size_t)r * LABEL_W, m->marker + 4 + (size_t)r * 7, 7);
+    }
+    m->slot = 0;
+    /* [bp-8] is set to 0 at 0x107b6, just before the jump over the unused code (checked against the
+     * original: the marker is on for the first four passes, not five). */
+    m->blink = 0;
+}
+
+int menu_picker_slot(const menu_t *m) { return m->slot; }
+
+int menu_picker_pass(menu_t *m, screen_t *scr, unsigned port60, const menu_mouse *mouse)
+{
+    roll_up(m);   /* 0x1131c .. 0x11363: always the vertical roll in here */
+
+    uint8_t panel[SPRITE_BYTES(PANEL_W, PANEL_H)];
+    uint8_t labels[SPRITE_BYTES(LABEL_W, 4 * LABEL_H)];
+    memcpy(panel, m->backdrop, sizeof panel);
+    memcpy(labels, m->labels, sizeof labels);
+
+    /* 0x11394: the selection marker blinks, shown while the counter is below 5 of its 11 values. */
+    if (++m->blink > 10)
+        m->blink = 0;
+    if (m->blink < 5) {
+        size_t at = picker_cell(m);
+        for (int r = 0; r < 7; r++)
+            memcpy(labels + at + (size_t)r * LABEL_W, m->marker_sel + 4 + (size_t)r * 7, 7);
+    }
+    gfx_blit_masked(panel + 4 + (size_t)LABEL_Y * PANEL_W + LABEL_X, PANEL_W, labels);
+
+    /* 0x113f2 ..: the keyboard, with the same latch as the menu's. */
+    unsigned key = port60 & 0xff;
+    if (key > 0x7f)
+        m->key_latch = 1;
+    if (!m->key_latch)
+        key = 0x82;
+
+    /* 0x11431 ..: the mouse. The arrow goes on the panel; over the cells (x 100..220, y 70..95) the cell under
+     * it is selected, and a button acts as Space. */
+    if (mouse) {
+        int x = mouse->x, y = mouse->y;
+        if (x < MOUSE_X_MIN) x = MOUSE_X_MIN;
+        if (x > MOUSE_X_MAX) x = MOUSE_X_MAX;
+        if (y < MOUSE_Y_MIN) y = MOUSE_Y_MIN;
+        if (y > MOUSE_Y_MAX) y = MOUSE_Y_MAX;
+        gfx_blit_masked(panel + 4 + (size_t)(y - PANEL_Y) * PANEL_W + (x - PANEL_X), PANEL_W, m->cursor);
+        if (y > 0x45 && y < 0x60 && x > 0x63 && x < 0xdd) {
+            m->slot = (x - 0x64) / ICON_STEP;
+            if (mouse->buttons & 0xff)
+                key = SC_SPACE;
+        }
+    }
+
+    if (key < 0x80) {
+        m->key_latch = 0;
+        if (key == SC_SPACE || key == SC_ENTER) {
+            /* 0x11549: a pixel of the slot's icon tells whether the save exists (colour 0x54). */
+            if (m->labels[picker_cell(m) + EXISTS_PROBE] == 0x54)
+                return m->slot;
+        }
+        if (key == 0x4b && m->slot > 0)
+            m->slot--;
+        if (key == 0x4d && m->slot < MENU_SLOTS - 1)
+            m->slot++;
+    }
+    present_panel(scr, panel);
+    return MENU_NONE;
+}
+

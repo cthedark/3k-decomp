@@ -87,6 +87,18 @@ enum { MENU_CONFIRM_STEPS = 33 };
 void menu_confirm_begin(menu_t *m);
 int menu_confirm_step(menu_t *m, screen_t *scr);
 
+/* The slot picker (WALK0.SL 0x111a1 .. 0x115bf), shown when "load a saved game" is chosen, after the
+ * transition. The load label is replaced by a strip of 11 numbered cells; an icon under each cell whose
+ * save exists (SAVE00.000 .. SAVE10.000, `present` has bit i set for slot i); a marker on the selected
+ * cell that blinks (5 passes on, 6 off). Left/Right move it, Space, Enter or a click pick it, but only on a
+ * slot that exists (there is no way out otherwise: the original has no Escape here). Each pass rolls the
+ * backdrop one row up, always. The keyboard latch is the menu's: the Space or Enter that chose the item
+ * must be released first. Returns the slot picked (0..10) or MENU_NONE; a picking pass shows nothing. */
+enum { MENU_SLOTS = 11 };
+void menu_picker_begin(menu_t *m, unsigned present);
+int menu_picker_pass(menu_t *m, screen_t *scr, unsigned port60, const menu_mouse *mouse);
+int menu_picker_slot(const menu_t *m);   /* the selected cell, 0..10 */
+
 /* Reset the keyboard latch, as when the menu starts: no break code seen yet. */
 void menu_input_reset(menu_t *m);
 

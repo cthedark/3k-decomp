@@ -163,5 +163,67 @@ transition uproll "--key-pass 4:0x9c --key-pass 130:0x1c" "--menu-key 4:0x9c --m
 transition wrap "--key-pass 4:0x9c --key-pass 204:0x1c" "--menu-key 4:0x9c --menu-key 204:0x1c"
 transition mouse "--mouse-pass 0:150:140:0 --mouse-pass 20:150:140:1" "--menu-mouse 0:150:140:0 --menu-mouse 20:150:140:1"
 
+# ---- the slot picker (item 1). The main menu chooses item 1 at pass 12; the oracle then counts the picker's
+# passes on from there (two loop tops), so the picker's pass k is the oracle's pass k + 13.
+P1=12
+PMO="--key-pass 4:0x9c --key-pass 8:0x50 --key-pass 9:0x9c --key-pass 12:0x1c"
+PMP="--menu-key 4:0x9c --menu-key 8:0x50 --menu-key 9:0x9c --menu-key 12:0x1c"
+picker_opts() {   # keys "k:code ...", mice "k:x:y:b ..." -> sets PO (oracle) and PP (port)
+    PO="$PMO"; PP="$PMP"
+    for kv in $1; do k=${kv%%:*}; c=${kv#*:}; PO="$PO --key-pass $((k + P1 + 1)):$c"; PP="$PP --picker-key $k:$c"; done
+    for mv in $2; do k=${mv%%:*}; r=${mv#*:}; PO="$PO --mouse-pass $((k + P1 + 1)):$r"; PP="$PP --picker-mouse $k:$r"; done
+}
+picker_frames() {   # name, keys, mice, passes to compare
+    tag=pick_$1; picker_opts "$2" "$3"; shift 3
+    oargs=""; pargs=""
+    for k in "$@"; do
+        oargs="$oargs --snap-pass $((k + P1 + 1)):$OUT/o_${tag}_$k.raw"
+        pargs="$pargs --picker-dump $k:$OUT/c_${tag}_$k.raw"
+    done
+    perl -e 'alarm 250; exec @ARGV' -- "$PY" tools/dosemu.py "$EXE" --data original_bin --ticks 1500 \
+        --instr-per-tick 500000 --loop-top 0x10b91,0x11304 --tick-div 3 $PO $oargs > "$OUT/oracle_$tag.log" 2>&1
+    build/3k_headless --scene menu --data original_bin $PP --step-dump 400:$OUT/dummy4.raw $pargs > "$OUT/port_$tag.log" 2>&1
+    compare "$tag" "$@"
+}
+picker_pick() {   # name, keys, mice: the pass and the slot of the pick (or none) must agree
+    name=$1; picker_opts "$2" "$3"; total=$((total + 1))
+    perl -e 'alarm 200; exec @ARGV' -- "$PY" tools/dosemu.py "$EXE" --data original_bin --ticks 1500 \
+        --instr-per-tick 500000 --loop-top 0x10b91,0x11304 --tick-div 3 --hit-pass 0x115c2 --log-files $PO \
+        > "$OUT/oracle_pk_$name.log" 2>&1
+    n=$(grep 'reached 0x115c2' "$OUT/oracle_pk_$name.log" | head -1 | sed 's/.*after \([0-9]*\) completed.*/\1/')
+    if [ -n "$n" ]; then
+        s=$(awk '/reached 0x115c2/{f=1;next} f && /open save[0-9][0-9]\.000/{print $4; exit}' "$OUT/oracle_pk_$name.log" | sed 's/save\([0-9][0-9]\)\.000/\1/')
+        o="pass $((n - P1 - 1)), slot $((10#${s:-99}))"
+    else
+        o="no pick"
+    fi
+    build/3k_headless --scene menu --data original_bin $PP --step-dump 400:$OUT/dummy4.raw --picker-dump 150:$OUT/dummy5.raw \
+        > "$OUT/port_pk_$name.log" 2>&1
+    p=$(grep picked "$OUT/port_pk_$name.log" | sed 's/picked slot \([0-9]*\) after \([0-9]*\) completed.*/pass \2, slot \1/')
+    [ -n "$p" ] || p="no pick"
+    if [ "$o" != "$p" ]; then fail=$((fail + 1)); echo "DIFFERENT pick '$name': original $o, port $p"; fi
+}
+# the blink and the first passes, then Left/Right with the latch (a held key is ignored; both ends), then the mouse
+picker_frames blink "" "" 0 1 2 3 4 5 6 7 8 9 10 11 12 20 30 40 41 42
+picker_frames keys "3:0x9c 5:0x4b 6:0xcb 8:0x4d 9:0xcd 11:0x4d 12:0xcd 14:0x4d 15:0xcd 17:0x4d 19:0x4d 20:0xcd 22:0x4b 23:0xcb 25:0x4d 26:0xcd 28:0x4d 29:0xcd 31:0x4d 32:0xcd 34:0x4d 35:0xcd 37:0x4d 38:0xcd 40:0x4d 41:0xcd 43:0x4d 44:0xcd 46:0x4d 47:0xcd 49:0x4d 50:0xcd" "" \
+    2 4 6 7 9 10 12 13 15 16 18 21 23 24 26 27 29 30 32 33 35 36 38 39 41 42 44 45 47 48 50 51 52 55
+M=""; k=1
+for pos in 100:80 110:80 111:80 120:80 121:80 150:80 160:80 219:80 220:80 221:80 99:80 150:69 150:70 150:95 150:96 150:97 150:60 300:190 64:16 150:80; do M="$M $k:$pos:0"; k=$((k + 2)); done
+picker_frames mouse "" "$M" $(seq 2 2 42)
+picker_pick enter_slot0 "3:0x9c 5:0x1c" ""
+picker_pick space_slot0 "3:0x9c 5:0x39" ""
+picker_pick enter_without_break "5:0x1c" ""
+picker_pick right3_enter "3:0x9c 5:0x4d 6:0xcd 8:0x4d 9:0xcd 11:0x4d 12:0xcd 14:0x1c" ""
+picker_pick enter_on_empty "3:0x9c 5:0x4d 6:0xcd 8:0x4d 9:0xcd 11:0x1c 12:0x9c 13:0x4b" ""
+picker_pick right_to_the_end "3:0x9c 5:0x4d 6:0xcd 8:0x4d 9:0xcd 11:0x4d 12:0xcd 14:0x4d 15:0xcd 17:0x4d 18:0xcd 20:0x4d 21:0xcd 23:0x4d 24:0xcd 26:0x4d 27:0xcd 29:0x4d 30:0xcd 32:0x4d 33:0xcd 35:0x4d 36:0xcd 38:0x39" ""
+picker_pick click_cell9 "" "1:100:80:0 3:200:80:0 5:200:80:1"
+picker_pick click_cell10 "" "1:100:80:0 3:219:80:1"
+picker_pick click_empty2_then_3 "" "1:125:80:0 3:125:80:1 5:125:80:0 7:136:80:1"
+picker_pick click_empty8 "" "1:195:80:1"
+picker_pick click_left_of_cells "" "1:100:80:0 3:99:80:1"
+picker_pick click_below_cells "" "1:100:80:0 3:150:96:1"
+picker_pick button_held_at_start "" "0:150:80:1"
+picker_pick key_then_mouse_away "3:0x9c 5:0x4d 6:0xcd 9:0x1c" "7:300:190:0"
+
 echo "menu check: $((total - fail)) of $total comparisons identical to the original"
 [ "$fail" -eq 0 ]

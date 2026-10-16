@@ -56,6 +56,18 @@ static struct { int pass; unsigned code; } g_menu_keys[MAX_SCRIPT];
 static int g_menu_nkeys;
 static struct { int pass; int x, y; unsigned buttons; } g_menu_mice[MAX_SCRIPT];
 static int g_menu_nmice;
+/* The slot picker in the stepped menu, after the transition of item 1: --picker-key N:CODE and
+ * --picker-mouse N:X:Y:BUTTONS are applied before picker pass N + 1 (N counted from the picker's first pass),
+ * --picker-dump N:FILE writes the screen after N picker passes, --picker-slots MASK says which saves
+ * exist (default: look for SAVE00.000 .. SAVE10.000 in the data directory). */
+static struct { int pass; unsigned code; } g_pick_keys[MAX_SCRIPT];
+static int g_pick_nkeys;
+static struct { int pass; int x, y; unsigned buttons; } g_pick_mice[MAX_SCRIPT];
+static int g_pick_nmice;
+static int g_pick_n[MAX_DUMPS];
+static const char *g_pick_file[MAX_DUMPS];
+static int g_pick_count;
+static int g_pick_mask = -1;
 static int g_no_audio;        /* --no-audio */
 static int g_no_music;        /* --no-music */
 static unsigned g_music_gain = 100;   /* --music-gain PERCENT */
@@ -183,6 +195,19 @@ static title_result play_title(screen_t *scr)
 /* The menu, stepped and headless: --step-dump N:FILE writes the screen (raw: 64,000 pixels then the
  * 768-byte palette) after N passes of the menu loop, N = 0 being before the first. The reference is
  * the oracle's screen at its N-th arrival at the end of the loop (tools/check_menu.sh). */
+/* Bit i set if SAVEii.000 exists in the data directory: the original probes these files to draw the icons. */
+static unsigned saves_present(void)
+{
+    unsigned mask = 0;
+    for (int i = 0; i < MENU_SLOTS; i++) {
+        char name[16];
+        snprintf(name, sizeof name, "save%02d.000", i);
+        if (assets_exists(name))
+            mask |= 1u << i;
+    }
+    return mask;
+}
+
 static int run_menu_opening_stepped(screen_t *scr)
 {
     menu_t *m = menu_create(scr);
@@ -240,7 +265,7 @@ static int run_menu_stepped(screen_t *scr, int ndump, const int *dump_pass, char
             menu_result r = menu_pass_input(m, scr, port60, have_mouse ? &mouse : NULL);
             if (r != MENU_NONE) {
                 printf("confirmed item %d after %d completed pass(es)\n", r, done);
-                if (g_conf_count > 0) {
+                if (g_conf_count > 0 || (r == MENU_LOAD && g_pick_count > 0)) {
                     menu_confirm_begin(m);
                     for (int step = 1; step <= MENU_CONFIRM_STEPS; step++) {
                         menu_confirm_step(m, scr);
@@ -252,6 +277,39 @@ static int run_menu_stepped(screen_t *scr, int ndump, const int *dump_pass, char
                             }
                     }
                     printf("transition: %d steps\n", MENU_CONFIRM_STEPS);
+                }
+                if (r == MENU_LOAD && g_pick_count > 0) {
+                    unsigned mask = g_pick_mask >= 0 ? (unsigned)g_pick_mask : saves_present();
+                    menu_picker_begin(m, mask);
+                    int plast = 0;
+                    for (int i = 0; i < g_pick_count; i++)
+                        if (g_pick_n[i] > plast)
+                            plast = g_pick_n[i];
+                    for (int pdone = 0; pdone <= plast; pdone++) {
+                        for (int i = 0; i < g_pick_count; i++)
+                            if (g_pick_n[i] == pdone && write_raw(scr, g_pick_file[i]) != 0) {
+                                fprintf(stderr, "cannot write %s\n", g_pick_file[i]);
+                                menu_free(m);
+                                return 1;
+                            }
+                        if (pdone == plast)
+                            break;
+                        for (int i = 0; i < g_pick_nkeys; i++)
+                            if (g_pick_keys[i].pass == pdone)
+                                port60 = g_pick_keys[i].code;
+                        for (int i = 0; i < g_pick_nmice; i++)
+                            if (g_pick_mice[i].pass == pdone) {
+                                mouse.x = g_pick_mice[i].x;
+                                mouse.y = g_pick_mice[i].y;
+                                mouse.buttons = g_pick_mice[i].buttons;
+                                have_mouse = 1;
+                            }
+                        int slot = menu_picker_pass(m, scr, port60, have_mouse ? &mouse : NULL);
+                        if (slot != MENU_NONE) {
+                            printf("picked slot %d after %d completed picker pass(es)\n", slot, pdone);
+                            break;
+                        }
+                    }
                 }
                 break;
             }
@@ -552,7 +610,7 @@ static void song_stop(music_t *m)
  * this returns at the confirmation. The original's mouse driver reports positions in a virtual
  * range it may have doubled; here the pointer maps 1:1 to screen pixels (docs/port.md). The song is
  * the menu's own (WALK0.SL reads MUC.ALL at 0x2bad9). */
-static menu_result play_menu(screen_t *scr)
+static menu_result play_menu(screen_t *scr, int *slot)
 {
     menu_t *m = menu_create(scr);
     if (!m)
@@ -622,6 +680,31 @@ static menu_result play_menu(screen_t *scr)
             next = next_due(next, now, TK_MENU_CONFIRM_HZ);
             more = menu_confirm_step(m, scr);
             platform_present(scr);
+        }
+        /* "Load a saved game": the slot picker, until a slot with a save is picked (it has no way out). */
+        if (!quit && r == MENU_LOAD) {
+            menu_picker_begin(m, saves_present());
+            int picked = MENU_NONE;
+            next = platform_ticks_ms();
+            while (picked == MENU_NONE) {
+                if (!platform_poll()) {
+                    quit = 1;
+                    break;
+                }
+                uint32_t now = platform_ticks_ms();
+                if ((int32_t)(now - next) < 0) {
+                    platform_sleep_ms(1);
+                    continue;
+                }
+                next = next_due(next, now, TK_MENU_PASS_HZ);
+                menu_mouse mouse;
+                int have_mouse = platform_mouse(&mouse.x, &mouse.y, &mouse.buttons);
+                picked = menu_picker_pass(m, scr, platform_port60(), have_mouse ? &mouse : NULL);
+                if (picked == MENU_NONE)
+                    platform_present(scr);
+            }
+            if (slot)
+                *slot = picked;
         }
         /* let the last frame show for a moment before the next program takes over */
         for (uint32_t t0 = platform_ticks_ms(); !quit && platform_ticks_ms() - t0 < 300 && platform_poll();)
@@ -703,11 +786,14 @@ static int run_game(screen_t *scr, int scale, int faithful)
         }
         if (r == TITLE_TO_MENU) {
             printf("game: menu\n");
-            menu_result c = play_menu(scr);
+            int slot = MENU_NONE;
+            menu_result c = play_menu(scr, &slot);
             if (c == MENU_NONE) {
                 rc = platform_poll() ? 1 : 0;   /* window closed (or the menu could not start) */
                 break;
             }
+            if (slot != MENU_NONE)
+                printf("game: slot %d picked\n", slot);
             printf("game: the menu chose %s; that part is not built yet, stopping\n", menu_item_name(c));
             break;
         }
@@ -759,6 +845,38 @@ int main(int argc, char **argv)
             *colon = 0;
             dump_pass[ndump] = atoi(arg);
             dump_file[ndump++] = colon + 1;
+        } else if (!strcmp(argv[i], "--picker-dump") && i + 1 < argc && g_pick_count < MAX_DUMPS) {
+            char *arg = argv[++i];
+            char *colon = strchr(arg, ':');
+            if (!colon) {
+                fprintf(stderr, "--picker-dump wants N:FILE\n");
+                return 2;
+            }
+            *colon = 0;
+            g_pick_n[g_pick_count] = atoi(arg);
+            g_pick_file[g_pick_count++] = colon + 1;
+        } else if (!strcmp(argv[i], "--picker-slots") && i + 1 < argc)
+            g_pick_mask = (int)strtol(argv[++i], NULL, 0);
+        else if (!strcmp(argv[i], "--picker-key") && i + 1 < argc && g_pick_nkeys < MAX_SCRIPT) {
+            int n;
+            unsigned code;
+            if (sscanf(argv[++i], "%d:%i", &n, &code) != 2) {
+                fprintf(stderr, "--picker-key wants N:CODE\n");
+                return 2;
+            }
+            g_pick_keys[g_pick_nkeys].pass = n;
+            g_pick_keys[g_pick_nkeys++].code = code;
+        } else if (!strcmp(argv[i], "--picker-mouse") && i + 1 < argc && g_pick_nmice < MAX_SCRIPT) {
+            int n, x, y;
+            unsigned b;
+            if (sscanf(argv[++i], "%d:%i:%i:%i", &n, &x, &y, &b) != 4) {
+                fprintf(stderr, "--picker-mouse wants N:X:Y:BUTTONS\n");
+                return 2;
+            }
+            g_pick_mice[g_pick_nmice].pass = n;
+            g_pick_mice[g_pick_nmice].x = x;
+            g_pick_mice[g_pick_nmice].y = y;
+            g_pick_mice[g_pick_nmice++].buttons = b;
         } else if (!strcmp(argv[i], "--confirm-dump") && i + 1 < argc && g_conf_count < MAX_DUMPS) {
             char *arg = argv[++i];
             char *colon = strchr(arg, ':');
@@ -903,8 +1021,11 @@ int main(int argc, char **argv)
             return run_menu_stepped(&screen, ndump, dump_pass, dump_file);
         if (init_platform(scale) != 0)
             return 1;
-        menu_result r = play_menu(&screen);
+        int slot = MENU_NONE;
+        menu_result r = play_menu(&screen, &slot);
         printf("menu: %s\n", r == MENU_NONE ? "closed without a choice" : menu_item_name(r));
+        if (slot != MENU_NONE)
+            printf("menu: slot %d picked\n", slot);
         shutdown_platform();
         return 0;
     }

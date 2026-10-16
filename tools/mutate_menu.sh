@@ -46,7 +46,7 @@ try "labels one pixel to the right"                      's/LABEL_X = 100 - PANE
 try "the CPU label has no shadow"                        's/^    gfx_stamp(frame + DIGITS_AT + DIGITS_SHADOW.*$/    (void)0;/'
 try "the colour ramp starts at 0xf1"                     's/(uint8_t)(0xf0 + k)/(uint8_t)(0xf1 + k)/'
 try "the speed class is ignored"                         's/(size_t)speed_class \* 64 + 0x80/(size_t)2 * 64 + 0x80/'
-try "the vertical roll does not wrap the top row"        's/^        memcpy(m->backdrop + 4 + (size_t)(PANEL_H - 1) \* PANEL_W, row0, PANEL_W);$/        (void)row0;/'
+try "the vertical roll does not wrap the top row"        's/^    memcpy(m->backdrop + 4 + (size_t)(PANEL_H - 1) \* PANEL_W, row0, PANEL_W);$/    (void)row0;/'
 
 # ---- input mutations: judged by the input scenarios of check_menu.sh (needs its o_keys_* / o_mouse_* files)
 tryin() {   # name, sed expression
@@ -161,5 +161,66 @@ tryconf "the arrow steps down by 0xc0"                   's/m->arrow_at += 0xc1;
 tryconf "the arrow steps up by 0xc0"                     's/m->arrow_at -= 0xbf;/m->arrow_at -= 0xc0;/'
 tryconf "the arrow is not drawn"                         's/^    gfx_blit_masked(panel + 4 + m->arrow_at, PANEL_W, m->cursor);.*$/    (void)0;/'
 tryconf "the backdrop does not roll"                     's/^    gfx_rotate_rows_left(m->backdrop);   \/\* 0x1328b: always the horizontal roll here \*\//    (void)0;/'
+
+# ---- slot-picker mutations: judged by the picker frames and picks check_menu.sh records (o_pick_*)
+trypick() {   # name, sed expression
+    name=$1; expr=$2
+    sed "$expr" src/menu.c > "$D/menu.c"
+    if cmp -s src/menu.c "$D/menu.c"; then echo "MUTATION DID NOT APPLY: $name"; missed=$((missed + 1)); return; fi
+    # shellcheck disable=SC2086
+    if ! cc -std=c99 -O1 -Isrc $CORE "$D/menu.c" tests/platform_null.c src/main.c $OBJ -o "$D/3k_mut" -lc++ 2> "$D/cc.log"; then
+        echo "MUTATION DID NOT COMPILE: $name"; missed=$((missed + 1)); return
+    fi
+    caught=0
+    MP4="--menu-key 4:0x9c --menu-key 8:0x50 --menu-key 9:0x9c --menu-key 12:0x1c"
+    # frames: three scenarios, a few passes of each
+    KEYS=""; for kv in 3:0x9c 5:0x4b 6:0xcb 8:0x4d 9:0xcd 11:0x4d 12:0xcd 14:0x4d 15:0xcd 17:0x4d 19:0x4d 20:0xcd 22:0x4b 23:0xcb 25:0x4d 26:0xcd 28:0x4d 29:0xcd 31:0x4d 32:0xcd 34:0x4d 35:0xcd 37:0x4d 38:0xcd 40:0x4d 41:0xcd 43:0x4d 44:0xcd 46:0x4d 47:0xcd 49:0x4d 50:0xcd; do KEYS="$KEYS --picker-key $kv"; done
+    MICE=""; k=1; for pos in 100:80 110:80 111:80 120:80 121:80 150:80 160:80 219:80 220:80 221:80 99:80 150:69 150:70 150:95 150:96 150:97 150:60 300:190 64:16 150:80; do MICE="$MICE --picker-mouse $k:$pos:0"; k=$((k + 2)); done
+    for sc in "blink||0 1 2 3 4 5 6 7 8 9 10 11 12 20 30 40 41 42" "keys|$KEYS|2 6 9 13 18 23 27 33 39 44 48 52 55" "mouse|$MICE|2 6 10 14 16 20 24 26 30 34 38 42"; do
+        tag=${sc%%|*}; rest=${sc#*|}; opts=${rest%%|*}; passes=${rest#*|}
+        rm -f "$D"/q_*.raw
+        args=""; for n in $passes; do args="$args --picker-dump $n:$D/q_$n.raw"; done
+        # shellcheck disable=SC2086
+        lim "$D/3k_mut" --scene menu --data original_bin $MP4 $opts --step-dump 400:$D/x.raw $args > /dev/null 2>&1
+        for n in $passes; do
+            [ "$(python3 tools/compare_raw.py "$D/q_$n.raw" work/check_menu/o_pick_${tag}_$n.raw 2>&1)" = identical ] || caught=1
+        done
+    done
+    # picks: (name|port options|what the original did)
+    for pk in "--picker-key 3:0x9c --picker-key 5:0x1c|pass 5, slot 0" \
+              "--picker-key 5:0x1c|no pick" \
+              "--picker-key 3:0x9c --picker-key 5:0x4d --picker-key 6:0xcd --picker-key 8:0x4d --picker-key 9:0xcd --picker-key 11:0x4d --picker-key 12:0xcd --picker-key 14:0x1c|pass 14, slot 3" \
+              "--picker-key 3:0x9c --picker-key 5:0x4d --picker-key 6:0xcd --picker-key 8:0x4d --picker-key 9:0xcd --picker-key 11:0x1c --picker-key 12:0x9c --picker-key 13:0x4b|no pick" \
+              "--picker-mouse 1:125:80:0 --picker-mouse 3:125:80:1 --picker-mouse 5:125:80:0 --picker-mouse 7:136:80:1|pass 7, slot 3" \
+              "--picker-mouse 1:195:80:1|no pick" \
+              "--picker-mouse 1:100:80:0 --picker-mouse 3:99:80:1|no pick" \
+              "--picker-mouse 1:100:80:0 --picker-mouse 3:150:96:1|no pick" \
+              "--picker-mouse 0:150:80:1|pass 0, slot 4"; do
+        po=${pk%%|*}; want=${pk#*|}
+        # shellcheck disable=SC2086
+        got=$(lim "$D/3k_mut" --scene menu --data original_bin $MP4 $po --step-dump 400:$D/x.raw --picker-dump 150:$D/y.raw 2>&1 | grep picked | sed 's/picked slot \([0-9]*\) after \([0-9]*\) completed.*/pass \2, slot \1/')
+        [ -n "$got" ] || got="no pick"
+        [ "$got" = "$want" ] || caught=1
+    done
+    if [ "$caught" -eq 1 ]; then echo "caught: $name"; else echo "NOT CAUGHT: $name"; missed=$((missed + 1)); fi
+}
+[ -f work/check_menu/o_pick_blink_0.raw ] || { echo "run tools/check_menu.sh first (it records the picker frames)"; exit 2; }
+trypick "the marker shows for 4 counter values, not 5"    's/if (m->blink < 5) {/if (m->blink < 4) {/'
+trypick "the blink cycle is 12 passes"                    's/if (++m->blink > 10)/if (++m->blink > 11)/'
+trypick "the blink counter starts at 1"                   's/^    m->blink = 0;$/    m->blink = 1;/'
+trypick "icons for the slots WITHOUT a save"              's/if (!(present \& (1u << i)))/if (present \& (1u << i))/'
+trypick "icons one pixel to the right"                    's/ICON_AT = 0x166c/ICON_AT = 0x166d/'
+trypick "the cells one pixel to the right"                's/STRIP_IN_LABELS = 0xe50/STRIP_IN_LABELS = 0xe51/'
+trypick "the marker one row lower"                        's/SELECT_AT = 0x129c/SELECT_AT = 0x1316/'
+# (One pixel further along the icon's row is still colour 0x54, so that would not show; three is the 0x1d.)
+trypick "the save test looks at another pixel"            's/EXISTS_PROBE = 0x44a/EXISTS_PROBE = 0x44d/'
+trypick "Left does not stop at the first cell"            's/key == 0x4b \&\& m->slot > 0/key == 0x4b \&\& m->slot >= 0/'
+trypick "Right does not stop at the last cell"            's/m->slot < MENU_SLOTS - 1)/m->slot < MENU_SLOTS)/'
+trypick "the hover band starts one row early"             's/y > 0x45 \&\& y < 0x60/y >= 0x45 \&\& y < 0x60/'
+trypick "the hover band ends one row late"                's/y > 0x45 \&\& y < 0x60/y > 0x45 \&\& y <= 0x60/'
+trypick "the hover column starts one pixel early"         's/x > 0x63 \&\& x < 0xdd/x >= 0x63 \&\& x < 0xdd/'
+trypick "the cells are 10 pixels wide for the mouse"      's/m->slot = (x - 0x64) \/ ICON_STEP;/m->slot = (x - 0x64) \/ 10;/'
+trypick "a click does not pick"                           's/^                key = SC_SPACE;$/                (void)0;/'
+trypick "the picker rolls the backdrop left"              's/^    roll_up(m);   \/\* 0x1131c/    gfx_rotate_rows_left(m->backdrop); \/* 0x1131c/'
 echo "mutations not caught: $missed"
 exit "$missed"
