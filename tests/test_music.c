@@ -2,10 +2,11 @@
  * Tests for the CMF music player (src/music.c) and the OPL2 wrapper (src/opl.c).
  *
  * Independent references used here:
- *  - the standard AdLib value for A4 (440 Hz): f-number 0x244, block 4, i.e. register 0xA0 = 0x44
- *    and 0xB0 = 0x32 with the key on;
- *  - a pitch measured on the rendered audio itself (zero crossings of a near-sine patch), which
- *    ties the f-number formula to the chip's real output rate;
+ *  - register writes the ORIGINAL's FM driver made, recorded in the oracle emulator (tools/dosemu.py --opl-log, see
+ *    docs/findings.md): the values in the rhythm, pitch and allocation tests are copied from those logs. The whole of
+ *    every song is compared with the original in tools/check_music.sh (25 of 25 identical); here only small cases;
+ *  - the standard AdLib frequency formula, f = fnum * 49716 / 2^(20 - block), against a pitch measured on the
+ *    rendered audio itself (zero crossings of a near-sine patch);
  *  - the note counts of tools/cmf_survey.py / cmf_behaviour.py for the intro song (2,402 notes,
  *    none overlapping, none unmatched).
  * No game content is stored here; tests that need MUC.ALL are skipped when it is missing.
@@ -60,16 +61,17 @@ static const uint8_t k_sine_patch[16] = {
     0x00,         /* FM, no feedback */
 };
 
+enum { TRACE_MAX = 512 };
 typedef struct {
-    uint64_t when[64];
-    uint8_t reg[64], val[64];
+    uint64_t when[TRACE_MAX];
+    uint8_t reg[TRACE_MAX], val[TRACE_MAX];
     unsigned n;
 } trace_t;
 
 static void trace_cb(void *user, uint64_t sample, uint8_t reg, uint8_t value)
 {
     trace_t *t = user;
-    if (t->n < 64) {
+    if (t->n < TRACE_MAX) {
         t->when[t->n] = sample;
         t->reg[t->n] = reg;
         t->val[t->n] = value;
@@ -81,7 +83,7 @@ static void trace_cb(void *user, uint64_t sample, uint8_t reg, uint8_t value)
 static unsigned writes_of(const trace_t *t, uint8_t reg, uint8_t *vals, unsigned max)
 {
     unsigned k = 0;
-    for (unsigned i = 0; i < t->n && i < 64; i++)
+    for (unsigned i = 0; i < t->n && i < TRACE_MAX; i++)
         if (t->reg[i] == reg && k < max)
             vals[k++] = t->val[i];
     return k;
@@ -116,7 +118,7 @@ static void test_registers(void)
     music_render(m, buf, 60000);   /* past tick 96 = sample 49,716 */
 
     uint8_t v[8];
-    /* The patch lands on channel 0's operators (modulator 0x00, carrier 0x03). */
+    /* The patch lands on the operators of voice 0 (modulator 0x00, carrier 0x03), when the note needs it. */
     CHECK(writes_of(&tr, 0x20, v, 8) == 1 && v[0] == 0x21);
     CHECK(writes_of(&tr, 0x23, v, 8) == 1 && v[0] == 0x21);
     CHECK(writes_of(&tr, 0x40, v, 8) == 1 && v[0] == 0x3f);
@@ -124,19 +126,21 @@ static void test_registers(void)
     CHECK(writes_of(&tr, 0x83, v, 8) == 1 && v[0] == 0x0f);
     CHECK(writes_of(&tr, 0xe0, v, 8) == 1 && v[0] == 0x00);
     CHECK(writes_of(&tr, 0xc0, v, 8) == 1 && v[0] == 0x00);
-    /* The carrier level is written twice: by the patch load (0x00), then by the note-on, where
-     * velocity 100 gives 63 - 50 = 13, the key-scale bits of the patch (0) kept. */
+    /* The carrier's level is written once, by the note-on, not by the patch load (the driver's register log
+     * shows no 0x43 at a load). Velocity 100, patch level 0: 63 - (63 * (0x80 | 100) >> 8) = 63 - 56 = 7. */
     unsigned n43 = writes_of(&tr, 0x43, v, 8);
-    CHECK(n43 == 2);
-    CHECK(n43 == 2 && v[0] == 0x00 && v[1] == 0x0d);
-    /* A4: the standard AdLib value is f-number 0x244, block 4. */
-    CHECK(writes_of(&tr, 0xa0, v, 8) == 1 && v[0] == 0x44);
+    CHECK(n43 == 1);
+    CHECK(n43 == 1 && v[0] == 0x07);
+    /* A4 is f-number 0x241 (577), block 4: the driver's table, not the 0x244 of equal temperament. A note-off
+     * writes both pitch registers again, without the key-on bit. */
+    unsigned na = writes_of(&tr, 0xa0, v, 8);
+    CHECK(na == 2 && v[0] == 0x41 && v[1] == 0x41);
     unsigned nb = writes_of(&tr, 0xb0, v, 8);
     CHECK(nb == 2);
     CHECK(nb == 2 && v[0] == 0x32);   /* key on  | block 4 << 2 | fnum high 2 */
     CHECK(nb == 2 && v[1] == 0x12);   /* key off, same pitch bits */
     /* The note-off is at tick 96 = 96 * 49,716 / 96 samples. */
-    for (unsigned i = 0; i < tr.n && i < 64; i++)
+    for (unsigned i = 0; i < tr.n && i < TRACE_MAX; i++)
         if (tr.reg[i] == 0xb0 && tr.val[i] == 0x12)
             CHECK(tr.when[i] == 49716);
     music_free(m);
@@ -147,8 +151,9 @@ static void test_velocity_and_keyscale(void)
     printf("velocity -> carrier level, key-scale kept\n");
     uint8_t patch[16];
     memcpy(patch, k_sine_patch, 16);
-    patch[3] = 0x80 | 0x2a;   /* key-scale 2 and a patch level that must be replaced */
-    const uint8_t track[] = {0x00, 0xc0, 0x00, 0x00, 0x90, 60, 76, 0x00, 0x90, 62, 1, 0x00, 0xff, 0x2f, 0x00};
+    patch[3] = 0x80 | 0x2a;   /* key-scale 2 and patch level 42 */
+    /* note 60 velocity 76, released, then note 62 velocity 1 on the same channel: the voice is reused, no reload */
+    const uint8_t track[] = {0x00, 0xc0, 0x00, 0x00, 0x90, 60, 76, 0x01, 0x80, 60, 0, 0x00, 0x90, 62, 1, 0x60, 0xff, 0x2f, 0x00};
     trace_t tr;
     music_t *m = player(patch, 1, track, sizeof track, &tr);
     CHECK(m != NULL);
@@ -158,19 +163,21 @@ static void test_velocity_and_keyscale(void)
     music_render(m, buf, 1000);
     uint8_t v[8];
     unsigned n = writes_of(&tr, 0x43, v, 8);
-    CHECK(n == 3);
-    CHECK(n == 3 && v[0] == (0x80 | 0x2a));        /* the patch load: its own level */
-    CHECK(n == 3 && v[1] == (0x80 | (63 - 38)));   /* velocity 76 -> 63 - 38 = 25 */
-    CHECK(n == 3 && v[2] == (0x80 | 63));          /* velocity 1  -> 63 - 0 = 63, almost silent */
+    CHECK(n == 2);
+    /* level = 63 - ((63 - 42) * (0x80 | velocity) >> 8), key-scale bits kept:
+     * velocity 76: 21 * 204 >> 8 = 16 -> 47;  velocity 1: 21 * 129 >> 8 = 10 -> 53 */
+    CHECK(n == 2 && v[0] == (0x80 | 47));
+    CHECK(n == 2 && v[1] == (0x80 | 53));
+    CHECK(writes_of(&tr, 0x20, v, 8) == 1);   /* the patch was loaded once: the second note reused the voice */
     music_free(m);
 }
 
 static void test_off_matching(void)
 {
-    printf("a note-off only releases the note the channel is playing\n");
-    /* on 60; on 62 (releases 60 first); off 60 (stale: must be ignored); off 62. */
-    const uint8_t track[] = {0x00, 0xc0, 0x00, 0x00, 0x90, 60, 100, 0x01, 0x90, 62, 100,
-                             0x01, 0x80, 60, 0, 0x01, 0x80, 62, 0, 0x30, 0xff, 0x2f, 0x00};
+    printf("a note-off only releases the note a voice of that channel holds\n");
+    /* on 60; off 61 (nothing holds it: must do nothing); off 60 at tick 2. */
+    const uint8_t track[] = {0x00, 0xc0, 0x00, 0x00, 0x90, 60, 100, 0x01, 0x80, 61, 0,
+                             0x01, 0x80, 60, 0, 0x30, 0xff, 0x2f, 0x00};
     trace_t tr;
     music_t *m = player(k_sine_patch, 1, track, sizeof track, &tr);
     CHECK(m != NULL);
@@ -180,17 +187,32 @@ static void test_off_matching(void)
     music_render(m, buf, 3000);
     uint8_t v[16];
     unsigned n = writes_of(&tr, 0xb0, v, 16);
-    /* key-on(60), key-off(60 by the new note), key-on(62), key-off(62): the stale off writes none. */
-    CHECK(n == 4);
-    CHECK(n == 4 && (v[0] & 0x20) && !(v[1] & 0x20) && (v[2] & 0x20) && !(v[3] & 0x20));
-    /* The count alone cannot tell a stale off that is ignored from one that releases the new note
-     * early (the real off would then be the skipped one). The last key-off must come at the real
-     * off, tick 3, not at the stale one, tick 2. */
+    CHECK(n == 2);   /* key-on and one key-off */
+    CHECK(n == 2 && (v[0] & 0x20) && !(v[1] & 0x20));
+    /* The count alone cannot tell the stale off from the real one: the key-off must come at tick 2. */
     unsigned last = 0;
-    for (unsigned i = 0; i < tr.n && i < 64; i++)
+    for (unsigned i = 0; i < tr.n && i < TRACE_MAX; i++)
         if (tr.reg[i] == 0xb0)
             last = i;
-    CHECK(tr.when[last] == 3ull * 49716 / 96);
+    CHECK(tr.when[last] == 2ull * 49716 / 96);
+    music_free(m);
+
+    /* A second channel playing the same note number is a different note: the off of channel 1 leaves channel 0's. */
+    const uint8_t two[] = {0x00, 0xc0, 0x00, 0x00, 0xc1, 0x00, 0x00, 0x90, 60, 100, 0x00, 0x91, 60, 100,
+                           0x01, 0x81, 60, 0, 0x30, 0xff, 0x2f, 0x00};
+    m = player(k_sine_patch, 1, two, sizeof two, &tr);
+    CHECK(m != NULL);
+    if (!m)
+        return;
+    music_render(m, buf, 3000);
+    unsigned off0 = 0, off1 = 0;   /* key-offs of voice 0 (channel 0) and voice 1 (channel 1) */
+    for (unsigned i = 0; i < tr.n && i < TRACE_MAX; i++) {
+        if (tr.reg[i] == 0xb0 && !(tr.val[i] & 0x20))
+            off0++;
+        if (tr.reg[i] == 0xb1 && !(tr.val[i] & 0x20))
+            off1++;
+    }
+    CHECK(off0 == 0 && off1 == 1);
     music_free(m);
 }
 
@@ -213,11 +235,12 @@ static void test_velocity_zero_is_off(void)
 
 static void test_ignored(void)
 {
-    printf("events the player does not act on are counted\n");
-    /* program 0; a note on channel 12 (no OPL channel in melody mode); a pitch bend on channel 0;
-     * controller 0x10 on channel 0; then a note on channel 0 that must still play. */
-    const uint8_t track[] = {0x00, 0xc0, 0x00, 0x00, 0x9c, 60, 100, 0x00, 0xe0, 0x00, 0x40,
-                             0x00, 0xb0, 0x10, 5, 0x00, 0x90, 60, 100, 0x00, 0xff, 0x2f, 0x00};
+    printf("events the driver does not act on are counted\n");
+    /* program 0; a pitch bend; controllers 0x10, 0x63 and 0x68 (the driver handles only 0x66 and 0x67); then a
+     * note on channel 0 that must still play. */
+    const uint8_t track[] = {0x00, 0xc0, 0x00, 0x00, 0xe0, 0x00, 0x40, 0x00, 0xb0, 0x10, 5, 0x00, 0xb0, 0x63, 3,
+                             0x00, 0xb0, 0x68, 127, 0x00, 0xb0, 0x66, 9,   /* 0x66 is the song marker: not counted */
+                             0x00, 0x90, 60, 100, 0x60, 0xff, 0x2f, 0x00};
     trace_t tr;
     music_t *m = player(k_sine_patch, 1, track, sizeof track, &tr);
     CHECK(m != NULL);
@@ -225,9 +248,10 @@ static void test_ignored(void)
         return;
     static int16_t buf[1000];
     music_render(m, buf, 1000);
-    CHECK(music_ignored_events(m) == 3);
+    CHECK(music_ignored_events(m) == 4);
     uint8_t v[8];
-    CHECK(writes_of(&tr, 0xb0, v, 8) == 1);   /* only the channel-0 note keyed on */
+    CHECK(writes_of(&tr, 0xb0, v, 8) == 1);   /* the note keyed on */
+    CHECK(writes_of(&tr, 0xa0, v, 8) == 1 && v[0] == 0x57);   /* and the transposition controller did nothing: note 60 */
     music_free(m);
 }
 
@@ -254,8 +278,11 @@ static double measure_hz(const int16_t *a, size_t n, unsigned rate)
 static void test_pitch(void)
 {
     printf("rendered pitch\n");
-    static const struct { uint8_t note; double hz; } cases[] = {
-        {57, 220.0}, {69, 440.0}, {72, 523.2511}, {81, 880.0}, {45, 110.0}, {93, 1760.0},
+    /* The driver's table: twelve f-numbers and the block one octave below the MIDI number. The frequency is the
+     * standard AdLib formula f = fnum * 49716 / 2^(20 - block); it is within 0.6% below equal temperament. */
+    static const struct { uint8_t note; unsigned fnum, block; double et; } cases[] = {
+        {57, 577, 3, 220.0}, {69, 577, 4, 440.0}, {72, 343, 5, 523.2511}, {81, 577, 5, 880.0},
+        {45, 577, 2, 110.0}, {93, 577, 6, 1760.0},
     };
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
         const uint8_t track[] = {0x00, 0xc0, 0x00, 0x00, 0x90, cases[i].note, 127, 0x00, 0xff, 0x2f, 0x00};
@@ -271,35 +298,61 @@ static void test_pitch(void)
         }
         music_render(m, buf, n);
         double hz = measure_hz(buf, n, music_rate());
-        double err = fabs(hz - cases[i].hz) / cases[i].hz;
-        if (err > 0.005)
-            printf("  note %u: measured %.3f Hz, want %.3f\n", cases[i].note, hz, cases[i].hz);
-        CHECK(err < 0.005);
+        double want = cases[i].fnum * (double)music_rate() / (double)(1u << (20 - cases[i].block));
+        if (fabs(hz - want) / want > 0.005)
+            printf("  note %u: measured %.3f Hz, want %.3f\n", cases[i].note, hz, want);
+        CHECK(fabs(hz - want) / want < 0.005);
+        CHECK(fabs(want - cases[i].et) / cases[i].et < 0.006);   /* sanity: about the right note */
         free(buf);
+        music_free(m);
+    }
+}
+
+/* The pitch registers the driver wrote, from its log: (note, 0xA0, 0xB0 without key-on). */
+static void test_pitch_registers(void)
+{
+    printf("pitch registers (the driver's table)\n");
+    static const struct { uint8_t note, a0, b0; } cases[] = {
+        {48, 0x57, 0x0d}, {51, 0x98, 0x0d}, {15, 0x98, 0x01}, {50, 0x81, 0x0d},   /* seen on the rhythm voices */
+        {63, 0x98, 0x11}, {64, 0xb0, 0x11}, {69, 0x41, 0x12}, {88, 0xb0, 0x19},   /* seen on melodic voices */
+        {0, 0x57, 0x01}, {11, 0x87, 0x02}, {12, 0x57, 0x01}, {23, 0x87, 0x02}, {24, 0x57, 0x05},   /* the low end: block 0 */
+        {107, 0x87, 0x1e}, {108, 0x57, 0x1d}, {119, 0x87, 0x1e}, {127, 0x87, 0x1e},               /* the top: block 7 */
+        /* (these two rows are the driver's note table, CAST.SL data 0xc7, not a log) */
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        const uint8_t track[] = {0x00, 0xc0, 0x00, 0x00, 0x90, cases[i].note, 100, 0x00, 0xff, 0x2f, 0x00};
+        trace_t tr;
+        music_t *m = player(k_sine_patch, 1, track, sizeof track, &tr);
+        CHECK(m != NULL);
+        if (!m)
+            return;
+        static int16_t buf[100];
+        music_render(m, buf, 100);
+        uint8_t a[4], b[4];
+        unsigned na = writes_of(&tr, 0xa0, a, 4), nb = writes_of(&tr, 0xb0, b, 4);
+        CHECK(na == 1 && nb == 1);
+        if (na == 1 && nb == 1 && (a[0] != cases[i].a0 || b[0] != (0x20 | cases[i].b0)))
+            printf("  note %u: A0=%02x B0=%02x, want %02x %02x\n", cases[i].note, a[0], b[0], cases[i].a0, 0x20 | cases[i].b0);
+        CHECK(na == 1 && nb == 1 && a[0] == cases[i].a0 && b[0] == (0x20 | cases[i].b0));
         music_free(m);
     }
 }
 
 static void test_transpose(void)
 {
-    printf("transpose controller (1/128 semitone)\n");
-    /* Controller 0x68 = 127 raises by 127/128 semitone: ~ +5.8%. */
+    printf("the driver ignores the transpose controller\n");
+    /* Controller 0x68 (the port once treated it as a transposition) changes nothing: A4 stays at f-number 0x241. */
     const uint8_t track[] = {0x00, 0xc0, 0x00, 0x00, 0xb0, 0x68, 127, 0x00, 0x90, 69, 127, 0x00, 0xff, 0x2f, 0x00};
-    music_t *m = player(k_sine_patch, 1, track, sizeof track, NULL);
+    trace_t tr;
+    music_t *m = player(k_sine_patch, 1, track, sizeof track, &tr);
     CHECK(m != NULL);
     if (!m)
         return;
-    size_t n = music_rate();
-    int16_t *buf = malloc(n * sizeof *buf);
-    if (!buf) {
-        music_free(m);
-        return;
-    }
-    music_render(m, buf, n);
-    double want = 440.0 * pow(2.0, 127.0 / 128.0 / 12.0);
-    double hz = measure_hz(buf, n, music_rate());
-    CHECK(fabs(hz - want) / want < 0.005);
-    free(buf);
+    static int16_t buf[200];
+    music_render(m, buf, 200);
+    uint8_t v[4];
+    CHECK(writes_of(&tr, 0xa0, v, 4) == 1 && v[0] == 0x41);
+    CHECK(music_ignored_events(m) == 1);
     music_free(m);
 }
 
@@ -367,6 +420,247 @@ static void test_zero_length(void)
         if (buf[i] > peak)
             peak = buf[i];
     CHECK(peak > 1000);   /* the note is still sounding in the second call */
+    music_free(m);
+}
+
+
+/* ---------- levels, from the driver's log ---------- */
+
+static void test_levels(void)
+{
+    printf("output levels (points seen in the driver's log)\n");
+    /* (velocity, patch carrier level, level the driver wrote). 127/0 -> 1, 101/0 -> 7, 95/0 -> 9, 116/3 -> 6,
+     * 127/5 -> 6 are from the logs of songs 0 and 22; the others follow the same rule. */
+    static const struct { uint8_t vel, patch, want; } cases[] = {
+        {127, 0, 1}, {101, 0, 7}, {95, 0, 9}, {116, 3, 6}, {127, 5, 6},
+        {1, 0, 63 - (63 * 129 >> 8)}, {127, 63, 63}, {64, 63, 63}, {1, 63, 63},   /* patch level 63: always silent */
+    };
+    for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        uint8_t patch[16];
+        memcpy(patch, k_sine_patch, 16);
+        patch[3] = cases[i].patch;
+        const uint8_t track[] = {0x00, 0xc0, 0x00, 0x00, 0x90, 60, cases[i].vel, 0x00, 0xff, 0x2f, 0x00};
+        trace_t tr;
+        music_t *m = player(patch, 1, track, sizeof track, &tr);
+        CHECK(m != NULL);
+        if (!m)
+            return;
+        static int16_t buf[100];
+        music_render(m, buf, 100);
+        uint8_t v[4];
+        unsigned n = writes_of(&tr, 0x43, v, 4);
+        if (n != 1 || v[0] != cases[i].want)
+            printf("  velocity %u, patch level %u: wrote %u, want %u\n", cases[i].vel, cases[i].patch, n ? v[0] : 0, cases[i].want);
+        CHECK(n == 1 && v[0] == cases[i].want);
+        music_free(m);
+    }
+}
+
+/* ---------- rhythm mode, from the driver's log ---------- */
+
+static void test_rhythm(void)
+{
+    printf("rhythm mode (the writes of the driver for song 0)\n");
+    /* The three drum patches of song 0: bass drum, tom-tom, hi-hat. */
+    static const uint8_t patches[3 * 16] = {
+        0x32, 0x11, 0x44, 0x00, 0xf8, 0xf5, 0xff, 0x7f, 0x00, 0x00, 0x0e, 0, 0, 0, 0, 0,
+        0x04, 0x00, 0x00, 0x00, 0xf7, 0xd6, 0xb5, 0x4f, 0x00, 0x00, 0x00, 0, 0, 0, 0, 0,
+        0x31, 0x31, 0x9c, 0x80, 0xf1, 0xf7, 0xf9, 0xe6, 0x00, 0x00, 0x0e, 0, 0, 0, 0, 0,
+    };
+    const uint8_t track[] = {
+        0x00, 0xb0, 0x67, 0x01,                      /* rhythm mode */
+        0x00, 0xcb, 0x00, 0x00, 0xcd, 0x01, 0x00, 0xcf, 0x02,   /* channels 11, 13, 15 take patches 0, 1, 2 */
+        0x00, 0x9b, 48, 95,                          /* bass drum, note 48 */
+        0x10, 0x9b, 48, 0,                           /* off */
+        0x10, 0x9d, 50, 95,                          /* tom-tom, note 50 */
+        0x00, 0x9f, 15, 95,                          /* hi-hat, note 15, the same tick */
+        0x05, 0x9d, 50, 0,
+        0x00, 0x9f, 15, 0,
+        0x60, 0xff, 0x2f, 0x00,   /* the song ends a second later: the render stops before it */
+    };
+    static const uint8_t want[][2] = {
+        {0xbd, 0xe0},
+        /* bass drum patch: both operators of voice 6 */
+        {0x30, 0x32}, {0x33, 0x11}, {0x50, 0x44}, {0x70, 0xf8}, {0x73, 0xf5}, {0x90, 0xff}, {0x93, 0x7f},
+        {0xf0, 0x00}, {0xf3, 0x00}, {0xc6, 0x0e},
+        /* tom-tom: the modulator of voice 8; hi-hat: the modulator of voice 7 */
+        {0x32, 0x04}, {0x72, 0xf7}, {0x92, 0xb5}, {0xf2, 0x00}, {0xc8, 0x00},
+        {0x31, 0x31}, {0x71, 0xf1}, {0x91, 0xf9}, {0xf1, 0x00}, {0xc7, 0x0e},
+        /* bass drum on, off */
+        {0x53, 0x09}, {0xa6, 0x57}, {0xb6, 0x0d}, {0xbd, 0xf0},
+        {0xbd, 0xe0},
+        /* tom-tom on, hi-hat on (the key-on bits add up), tom-tom off, hi-hat off */
+        {0x52, 0x09}, {0xa8, 0x81}, {0xb8, 0x0d}, {0xbd, 0xe4},
+        {0x51, 0xa1}, {0xa7, 0x98}, {0xb7, 0x01}, {0xbd, 0xe5},
+        {0xbd, 0xe1},
+        {0xbd, 0xe0},
+    };
+    trace_t tr;
+    music_t *m = player(patches, 3, track, sizeof track, &tr);
+    CHECK(m != NULL);
+    if (!m)
+        return;
+    static int16_t buf[40000];
+    music_render(m, buf, 40000);   /* 37 ticks of events = 19,200 samples; the song ends at tick 133 */
+    const unsigned nwant = sizeof want / sizeof want[0];
+    CHECK(tr.n == nwant);
+    unsigned bad = 0;
+    for (unsigned i = 0; i < nwant && i < tr.n; i++)
+        if (tr.reg[i] != want[i][0] || tr.val[i] != want[i][1]) {
+            if (bad++ < 4)
+                printf("  write %u: %02x=%02x, want %02x=%02x\n", i, tr.reg[i], tr.val[i], want[i][0], want[i][1]);
+        }
+    CHECK(bad == 0);
+    CHECK(music_ignored_events(m) == 0);
+    music_free(m);
+
+    /* A snare and a cymbal use the modulator bytes of their patch on one operator each (0x14 and 0x15); their
+     * bits are 0x08 and 0x02. Seen in the logs of song 3 (tools/check_music.sh compares it whole); here the shape. */
+    const uint8_t sc[] = {
+        0x00, 0xb0, 0x67, 0x01, 0x00, 0xcc, 0x01, 0x00, 0xce, 0x01,
+        0x00, 0x9c, 40, 100, 0x01, 0x9c, 40, 0, 0x00, 0x9e, 40, 100, 0x01, 0x9e, 40, 0, 0x60, 0xff, 0x2f, 0x00,
+    };
+    m = player(patches, 3, sc, sizeof sc, &tr);
+    CHECK(m != NULL);
+    if (!m)
+        return;
+    music_render(m, buf, 40000);
+    uint8_t v[16];
+    unsigned nbd = writes_of(&tr, 0xbd, v, 16);
+    CHECK(nbd == 5);   /* mode, snare on, snare off, cymbal on, cymbal off */
+    CHECK(nbd == 5 && v[0] == 0xe0 && v[1] == 0xe8 && v[2] == 0xe0 && v[3] == 0xe2 && v[4] == 0xe0);
+    CHECK(writes_of(&tr, 0x34, v, 4) == 1 && v[0] == 0x04);   /* snare: operator 0x14, patch 1's first byte */
+    CHECK(writes_of(&tr, 0x35, v, 4) == 1 && v[0] == 0x04);   /* cymbal: operator 0x15 */
+    CHECK(writes_of(&tr, 0x54, v, 4) == 1);                   /* the snare's level, written at each note */
+    CHECK(writes_of(&tr, 0x55, v, 4) == 1);
+    /* pitch: the snare shares voice 7 with the hi-hat, the cymbal voice 8 with the tom-tom; note 40 = f-number
+     * 0x1b0 (432) block 2: A0 = 0xb0, B0 = 0x09 without the key bit */
+    CHECK(writes_of(&tr, 0xa7, v, 4) == 1 && v[0] == 0xb0);
+    CHECK(writes_of(&tr, 0xb7, v, 4) == 1 && v[0] == 0x09);
+    CHECK(writes_of(&tr, 0xa8, v, 4) == 1 && v[0] == 0xb0);
+    CHECK(writes_of(&tr, 0xb8, v, 4) == 1 && v[0] == 0x09);
+    CHECK(writes_of(&tr, 0xa6, v, 4) == 0);                   /* the bass drum's voice stays quiet */
+    music_free(m);
+}
+
+/* In rhythm mode only voices 0..5 are melodic: a seventh held note cuts the oldest instead of using a drum voice. */
+static void test_rhythm_voices(void)
+{
+    printf("rhythm mode leaves six melodic voices\n");
+    uint8_t track[4 + 3 + 7 * 4 + 4];
+    unsigned k = 0;
+    track[k++] = 0x00; track[k++] = 0xb0; track[k++] = 0x67; track[k++] = 0x01;
+    track[k++] = 0x00; track[k++] = 0xc0; track[k++] = 0x00;
+    for (unsigned ch = 0; ch < 7; ch++) {
+        track[k++] = ch ? 0x01 : 0x00;
+        track[k++] = (uint8_t)(0x90 | ch);
+        track[k++] = (uint8_t)(60 + ch);
+        track[k++] = 100;
+    }
+    track[k++] = 0x60; track[k++] = 0xff; track[k++] = 0x2f; track[k++] = 0x00;
+    trace_t tr;
+    music_t *m = player(k_sine_patch, 1, track, k, &tr);
+    CHECK(m != NULL);
+    if (!m)
+        return;
+    static int16_t buf[6000];
+    music_render(m, buf, 4000);   /* seven notes, a tick (518 samples) apart */
+    uint8_t v[8];
+    CHECK(writes_of(&tr, 0xb6, v, 8) == 0);   /* voice 6 belongs to the bass drum: no melodic note used it */
+    unsigned nb0 = writes_of(&tr, 0xb0, v, 8);
+    CHECK(nb0 == 3 && (v[0] & 0x20) && !(v[1] & 0x20) && (v[2] & 0x20));   /* voice 0 was cut for the seventh note */
+    music_free(m);
+}
+
+/* ---------- voices, from the driver's code ---------- */
+
+static void test_voices(void)
+{
+    printf("voice allocation\n");
+    /* ch1 first (gets voice 0, not voice 1), then ch0 (voice 1); both released; ch1 again reuses its voice
+     * without a reload; a new channel takes the next free voice. */
+    const uint8_t track[] = {
+        0x00, 0xc1, 0x00, 0x00, 0xc0, 0x00, 0x00, 0xc2, 0x00,
+        0x00, 0x91, 60, 100,
+        0x01, 0x90, 62, 100,
+        0x01, 0x81, 60, 0, 0x00, 0x80, 62, 0,
+        0x01, 0x91, 60, 100,
+        0x01, 0x92, 64, 100,
+        0x60, 0xff, 0x2f, 0x00,
+    };
+    trace_t tr;
+    music_t *m = player(k_sine_patch, 1, track, sizeof track, &tr);
+    CHECK(m != NULL);
+    if (!m)
+        return;
+    static int16_t buf[6000];
+    music_render(m, buf, 3000);
+    uint8_t v[8];
+    CHECK(writes_of(&tr, 0x20, v, 8) == 1);   /* voice 0 loaded once: the second note on channel 1 reused it */
+    CHECK(writes_of(&tr, 0x21, v, 8) == 1);   /* voice 1 (channel 0) */
+    CHECK(writes_of(&tr, 0x22, v, 8) == 1);   /* voice 2 (channel 2) */
+    unsigned on0 = 0, on1 = 0, on2 = 0;
+    for (unsigned i = 0; i < tr.n && i < TRACE_MAX; i++) {
+        if (tr.reg[i] == 0xb0 && (tr.val[i] & 0x20)) on0++;
+        if (tr.reg[i] == 0xb1 && (tr.val[i] & 0x20)) on1++;
+        if (tr.reg[i] == 0xb2 && (tr.val[i] & 0x20)) on2++;
+    }
+    CHECK(on0 == 2 && on1 == 1 && on2 == 1);
+    music_free(m);
+
+    printf("a program change reloads held voices, and frees released ones\n");
+    uint8_t two[32];
+    memcpy(two, k_sine_patch, 16);
+    memcpy(two + 16, k_sine_patch, 16);
+    two[16] = 0x31;   /* patch 1 differs in its first byte */
+    const uint8_t held[] = {0x00, 0xc0, 0x00, 0x00, 0x90, 60, 100, 0x01, 0xc0, 0x01, 0x01, 0x80, 60, 0, 0x60, 0xff, 0x2f, 0x00};
+    m = player(two, 2, held, sizeof held, &tr);
+    CHECK(m != NULL);
+    if (!m)
+        return;
+    music_render(m, buf, 3000);
+    unsigned n = writes_of(&tr, 0x20, v, 8);
+    CHECK(n == 2 && v[0] == 0x21 && v[1] == 0x31);   /* reloaded at once, while the note is held */
+    music_free(m);
+
+    const uint8_t freed[] = {0x00, 0xc0, 0x00, 0x00, 0x90, 60, 100, 0x01, 0x80, 60, 0, 0x01, 0xc0, 0x01,
+                             0x01, 0x90, 62, 100, 0x60, 0xff, 0x2f, 0x00};
+    m = player(two, 2, freed, sizeof freed, &tr);
+    CHECK(m != NULL);
+    if (!m)
+        return;
+    music_render(m, buf, 3000);
+    n = writes_of(&tr, 0x20, v, 8);
+    CHECK(n == 2 && v[0] == 0x21 && v[1] == 0x31);   /* the released voice was forgotten: the next note loads the new patch */
+    music_free(m);
+
+    printf("the oldest voice is cut when all nine are held\n");
+    uint8_t steal[4 + 10 * 4 + 4];
+    unsigned k = 0;
+    steal[k++] = 0x00; steal[k++] = 0xc0; steal[k++] = 0x00;
+    k = 0;
+    uint8_t big[3 + 10 * 4 + 4];
+    big[k++] = 0x00; big[k++] = 0xc0; big[k++] = 0x00;
+    for (unsigned ch = 0; ch < 10; ch++) {   /* ten channels, one note each, a tick apart, none released */
+        big[k++] = ch ? 0x01 : 0x00;
+        big[k++] = (uint8_t)(0x90 | ch);
+        big[k++] = (uint8_t)(60 + ch);
+        big[k++] = 100;
+    }
+    big[k++] = 0x60; big[k++] = 0xff; big[k++] = 0x2f; big[k++] = 0x00;
+    (void)steal;
+    m = player(k_sine_patch, 1, big, k, &tr);
+    CHECK(m != NULL);
+    if (!m)
+        return;
+    music_render(m, buf, 6000);   /* ten notes, a tick (518 samples) apart */
+    /* Channel 9 found no free voice: voice 0, the oldest, was keyed off (pitch registers without the key bit) and
+     * took the new note. Its channel 9 differs from the old owner, so the patch was loaded again (two loads). */
+    unsigned nb0 = writes_of(&tr, 0xb0, v, 8);
+    CHECK(nb0 == 3);
+    CHECK(nb0 == 3 && (v[0] & 0x20) && !(v[1] & 0x20) && (v[2] & 0x20));
+    CHECK(writes_of(&tr, 0x20, v, 8) == 2);
+    CHECK(music_ignored_events(m) == 0);
     music_free(m);
 }
 
@@ -487,6 +781,11 @@ int main(int argc, char **argv)
     test_velocity_zero_is_off();
     test_ignored();
     test_pitch();
+    test_pitch_registers();
+    test_levels();
+    test_rhythm();
+    test_rhythm_voices();
+    test_voices();
     test_transpose();
     test_loop();
     test_zero_length();

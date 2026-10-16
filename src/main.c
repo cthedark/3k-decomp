@@ -828,8 +828,8 @@ static int credits_start_screen(screen_t *scr)
 
 /* The credits in real time (CAST.SL), on an already initialised platform, over what is on `scr` now (the menu's
  * last frame, whose palette they keep). Returns 0 when they ended (by time or by Space or Enter, after which the
- * original starts the menu again), 1 if the window was closed, -1 if they could not start. There is no sound yet:
- * the original plays song 0 of MUC.ALL, which uses the OPL rhythm mode that the music player does not have. */
+ * original starts the menu again), 1 if the window was closed, -1 if they could not start. Song 0 of MUC.ALL plays
+ * under them, as in the original (it uses the OPL rhythm mode). */
 static int play_credits(screen_t *scr)
 {
     credits_t *c = credits_create(scr);
@@ -857,6 +857,9 @@ static int play_credits(screen_t *scr)
         }
     }
     uint32_t next = platform_ticks_ms();
+    /* The song starts when the loop does (CAST.SL starts it after reading the files, before the loop) and stops when
+     * the credits end. It is silent where there is no sound device or with --no-music. */
+    music_t *song = quit ? NULL : song_start_at("credits", MUSIC_CREDITS_OFFSET, MUSIC_CREDITS_LENGTH);
     credits_status st = CREDITS_RUNNING;
     while (!quit && st == CREDITS_RUNNING && platform_poll()) {
         uint32_t now = platform_ticks_ms();
@@ -871,6 +874,7 @@ static int play_credits(screen_t *scr)
     }
     if (st == CREDITS_RUNNING)   /* the loop above left because platform_poll said quit */
         quit = 1;
+    song_stop(song);
     credits_free(c);
     return quit ? 1 : 0;
 }

@@ -1,10 +1,11 @@
 /*
  * Render the intro song to a WAV file, to listen to it without the game.
  *
- *   build/music_dump DATA_DIR OUT.WAV [SECONDS]
+ *   build/music_dump DATA_DIR OUT.WAV [SECONDS [OFFSET LENGTH]]
  *
  * 16-bit mono at the OPL chip's own rate (49,716 Hz). SECONDS defaults to one pass of the song
- * (132 s).
+ * (132 s). OFFSET and LENGTH (decimal or 0x hex) select another song of MUC.ALL; the default is the intro's. The
+ * credits' song, which uses the rhythm mode, is 2 8996.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,7 +19,7 @@ static void put32(FILE *f, unsigned long v) { put16(f, (unsigned)(v & 0xffff)); 
 int main(int argc, char **argv)
 {
     if (argc < 3) {
-        fprintf(stderr, "usage: %s DATA_DIR OUT.WAV [SECONDS]\n", argv[0]);
+        fprintf(stderr, "usage: %s DATA_DIR OUT.WAV [SECONDS [OFFSET LENGTH]]\n", argv[0]);
         return 2;
     }
     assets_set_dir(argv[1]);
@@ -27,7 +28,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "SECONDS must be between 0 and 3600\n");
         return 2;
     }
-    music_t *m = music_load_intro();
+    music_t *m = argc > 5 ? music_load_at(strtoul(argv[4], NULL, 0), strtoul(argv[5], NULL, 0)) : music_load_intro();
     if (!m)
         return 1;
     unsigned rate = music_rate();

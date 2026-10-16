@@ -1792,3 +1792,91 @@ question) is not read yet. Pass count, keys and exit: see the entry above.
   the drawing, so a key pressed in a pass ends the loop after that pass has drawn; Space at pass 1790 is never seen.
 - All of this was compared with the oracle in `tools/check_credits.sh` (46 of 46) and the port runs the same
   numbers; see `port.md`, "Milestone 6".
+
+### The original's FM driver, seen from its OPL register writes (2026-10-16)
+
+New tools: `dosemu.py --opl-log FILE` (an AdLib whose detection succeeds: status port `0x388` answers `0x00` after a
+timer reset and `0xc0` after timer 1 is started; every write to `0x388`/`0x389` is logged as `interrupt register
+value`; the PIT reload written to `0x40` sets how many timer interrupts a BIOS tick delivers, `65536/reload`),
+`build/music_regs` (the same log for the port's player, from `tests/music_regs.c`), `tools/compare_opl.py` (aligns the two
+on the first note and diffs tick by tick), `tools/cmf_drum_regs.py` (the driver's writes at the rhythm events of a song).
+
+- **The driver's clock is the song's:** it sets the PIT to reload 12,428 = 96.0 Hz (`1193182/12428`); with the model of one
+  interrupt slice per 1/96 s, the driver's writes for the rhythm channels of song 0 fall on exactly the song ticks of the
+  events in the file (98, 114, 131, 136, 147, 153, 164, 175, ...: the first 26 events checked). So **the tempo of the
+  port (96 ticks per second) is the original's**, now seen on the driver itself and not only on a recording.
+- **CAST.SL plays song 0 of MUC.ALL (CHECKED):** its PIT reload and register writes are those of the song's patches
+  (instrument 6 `32 11 44 00 f8 f5 ff 7f` for the bass drum, 7 for the tom, 8 for the hi-hat); the driver is the same
+  code as MARK's ("FM-Music Functions, Copyright (c) Creative Technology Pte Ltd, 1990" at `0x134a0`).
+- **Rhythm mode, as the driver does it (SEEN in the log, song 0):**
+  - At the first note it writes `0xbd = 0xe0` (rhythm bit 0x20, with the two depth bits 0xc0 kept).
+  - MIDI channel 11 (bass drum) loads both operators of OPL voice 6 (`0x30/0x33`, `0x50`, `0x70/0x73`, `0x90/0x93`,
+    `0xf0/0xf3`, `0xc6`; the carrier's level `0x53` comes with each note); channel 13 (tom-tom) only the modulator of voice 8
+    (`0x32 0x72 0x92 0xf2`, `0xc8`); channel 15 (hi-hat) only the modulator of voice 7 (`0x31 0x71 0x91 0xf1`, `0xc7`): these
+    are the standard rhythm operators (BD: 0x10+0x13, SD: 0x14, TT: 0x12, CY: 0x15, HH: 0x11). All of this is written once,
+    at song tick 0 (where the song's program changes are; not checked that nothing reloads it later).
+  - A note-on writes the operator's output level (`0x53`, `0x52`, `0x51`), the pitch of the voice (`0xa6/0xb6` for the bass drum,
+    `0xa8/0xb8` for the tom, `0xa7/0xb7` for the hi-hat; `0xb6` etc. WITHOUT the key-on bit) and then `0xbd` with the drum's bit
+    set: bass drum 0x10 (`0xf0`), tom 0x04, hi-hat 0x01 (`0xe5` when both sound). A note-off clears that bit (`0xe0`, `0xe1`).
+    Snare (0x08) and cymbal (0x02) are not used by song 0.
+  - The pitch of a drum follows the note like a melodic one (note 51 is 3 semitones above note 48 on the bass drum:
+    f-number `0x198` against `0x157`, same block 3; note 15 has the same f-number as 51, three blocks lower).
+- **Where the port's melodic player differs from the driver (SEEN, MARK's intro song, aligned on the first note):**
+  - **Voices:** the driver does not map MIDI channel n to OPL voice n. At song tick 27 it releases voices 0 and 3
+    where the port releases 0 and 8, and it loads the whole instrument onto a voice at each note-on (`0x29 0x2c 0x49
+    0x69 0x6c 0x89 0x8c 0xe9 0xec 0xc4` before `0xa4/0xb4`). It allocates voices dynamically. NOT yet understood: its rule.
+  - **Pitch:** its f-numbers are slightly lower than the port's computed ones (577 against 580, 343 against 345 for C3), about
+    9-10 cents flat. It uses a table; the port computes `440 * 2^((n-69)/12)` and rounds.
+  - **Levels:** its output level for a velocity is not the port's `63 - vel/2`. For velocity 95 the log shows level 9 on a
+    patch with level 0 and 33 on a patch with level 28, which fits `63 - (63 - patch) * 54 / 63`: the velocity is scaled to 54
+    first (how 95 gives 54 is NOT known; one point). In the same notes the port writes other values.
+  - These make the port's music differ in detail from the original's while having the same notes, tempo and instruments.
+    Of the 837 ticks compared after the first note, 83 differ in at least one register (mostly `0xa0..` and `0x40..`).
+
+
+### The original's FM driver, read and checked (2026-10-16)
+
+Supersedes the list "Where the port's melodic player differs from the driver" in the entry above, and the choices the
+first player made from the public CMF description. Addresses are `CAST.SL`'s (linear, load segment 0x1000); the data
+segment is at file offset 0x4fd0 + 0x400.
+
+- **Register write (0x135ad):** AH = register, AL = value, OUT to the base port (0x388 for an AdLib) then +1, with a busy
+  delay loop after each (counts in data words 8 and 10).
+- **Pitch (0x138cc ..):** `di = note + [0x16]` (a transposition, 0 unless set; no song sets it), clamped at 0, `& 0x7f`; `al = table[di]`
+  (128 bytes at data 0xc7); block = `(al & 0x70) >> 2` merged into the high byte; f-number = the word table at 0x147
+  indexed by `al & 0xf`. The note table is `block<<4 | pitch class` with block = max(0, note/12 - 1) up to note 107,
+  block 7 and pitch classes repeating for 108-119, and the constant `0x7b` for 120-127. The twelve words are
+  `0x157 0x16b 0x181 0x198 0x1b0 0x1ca 0x1e5 0x202 0x220 0x241 0x263 0x287`. Written as `0xa0+v` (low), `0xb0+v` (high | 0x20 for a
+  key-on; without it for a drum). All 13 notes seen in the first logs fit it, then every note of 25 songs.
+- **Level (0x138a5 ..):** the loader (0x1364f) stores `0x3f - (p[3] & 0x3f)` in data 0x34+v and `p[3] & 0xc0` in 0x3f+v
+  (`p[2]` instead for the single-operator rhythm instruments, bl >= 7 in rhythm mode). A note-on computes `ah = (that * (0x80 | velocity)) >> 8`
+  (`mul`, high byte), writes `(0x3f - ah) | ksl` to `0x43 + modulator offset`. Fits 127/0 to 1, 101/0 to 7, 95/0 to 9,
+  116/3 to 6, 127/5 to 6, 95/28 to 33 (`0x21`). Velocity 0 is a note-off (0x13866).
+- **Voices (0x13708):** 9 voices (6 in rhythm mode), a tag byte each (data 0x1e): 0xff free, the channel when held, `0x80 | channel` when
+  released. Scans for the channel's released voice, then 0xff, then any tag > 0x7f, then steals the oldest (timestamp table at 0x60,
+  clock word 0x14): it writes that voice's pitch registers without the key bit and continues. A note-on that finds
+  the voice's old owner `!=` this channel loads the channel's patch (program number at data 0x9b + channel). Note-off (0x137fa) scans
+  the note table (0x29) for the first voice with that note whose tag is exactly the channel, marks it released and writes
+  `0xa0+v`, `0xb0+v` from the stored pitch word. Program change (0x139ea): stores the program; for a drum channel in rhythm mode loads
+  the drum now; otherwise frees the channel's released voices (tag 0xff) and reloads its held ones.
+- **Rhythm (0x13917, 0x139bb):** controller 0x67 calls the reset (0x135f3: clears the 16 program bytes, sets the tags to 0xff, writes
+  default patches to all voices) and sets `[0x99]` (the value written to `0xbd`: `0xc0`, or `0xe0` in rhythm mode) and the voice count 9 or
+  6. Tables at data 0x8a (operators `10 14 12 15 11`), 0x8f (bits `10 08 04 02 01`), 0x94 (voices `06 07 08 08 07`) for MIDI channels 11-15.
+  The drum loader writes (bass drum) both operators or (the others) one operator from the patch's modulator bytes; the level register
+  is not written at load.
+- **Loader quirk (SEEN in the log, not explained by the code I read):** a patch load never writes the register of the operator whose
+  level the note-on will set (the carrier `0x43+...`, or the single rhythm operator's `0x40+...`), although the code around
+  `0x13699` looks as if it did. The register log is complete (every call of `0x135ad` is in it, in order, 0 missing; index and
+  data writes strictly alternate), and the port reproduces the log.
+- **Controllers (0x139a7):** only `0x66` and `0x67` are dispatched; `0x66` points at a `ret`.
+- **Default instrument (0x137ba):** the init writes the 11 bytes of a built-in patch to each voice, but its last write goes to register
+  `mo + voice` instead of `0xc0 + voice` (so registers `0x00 0x02 0x04 0x0b 0x0d 0x0f 0x16 0x18 0x1a` get `0x08`): a bug of the original,
+  harmless on the chip, not reproduced.
+- **The songs:** all 25 start with controller `0x67` (value 0 or 1) at tick 0; 22 of them change a channel's program later;
+  none has an additive-connection patch (the first player wrote the modulator's level for those), none has overlapping notes on a channel,
+  none uses pitch bend, 0x63 or 0x68/0x69; the most voices held at once is 9.
+- **Checked:** 25 of 25 songs, every tick after the first, identical (`tools/check_music.sh`). The driver's stop routine (after the last
+  event) writes `0x83=0x13` nine times and `0xbd`; accepted as a suffix of the last tick only.
+- **Tooling note:** `dosemu.py --opl-log` clocks the writes by timer interrupts actually delivered (`irq_delivered`), not by the slices it
+  runs: an early version counted slices, which differed by 2 in 2,063 (interrupts masked during start-up); the song-0 comparison
+  done with it was unaffected, and everything after was recorded with the fixed clock.

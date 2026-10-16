@@ -63,6 +63,10 @@ $(BUILD)/test_music: $(CORE_SRC) tests/test_music.c src/*.h $(OPL_OBJ) | $(BUILD
 $(BUILD)/music_dump: $(CORE_SRC) tests/music_dump.c src/*.h $(OPL_OBJ) | $(BUILD)
 	$(CC) $(CFLAGS) -Isrc $(CORE_SRC) tests/music_dump.c $(OPL_OBJ) -o $@ $(CXXLIB)
 
+# The register writes the music player makes for a song, for comparing with the original's (tests/music_regs.c).
+$(BUILD)/music_regs: $(CORE_SRC) tests/music_regs.c src/*.h $(OPL_OBJ) | $(BUILD)
+	$(CC) $(CFLAGS) -Isrc $(CORE_SRC) tests/music_regs.c $(OPL_OBJ) -o $@ $(CXXLIB)
+
 $(BUILD)/test_menu: $(CORE_SRC) tests/test_menu.c src/*.h $(OPL_OBJ) | $(BUILD)
 	$(CC) $(CFLAGS) -Isrc $(CORE_SRC) tests/test_menu.c $(OPL_OBJ) -o $@ $(CXXLIB)
 

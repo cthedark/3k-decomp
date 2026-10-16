@@ -67,8 +67,8 @@ The port uses **fixed durations**, never a CPU-speed or emulator cycle setting.
 | 2 | `MARK.EXE` title: palette fade, logo pieces, input, Space/Enter/mouse choice | **done 2026-10-14** (see below) |
 | 3 | `STORY2.SL` intro: slide order, timing, voice, subtitles | **in progress** (2026-10-15): slides 0-6 (the whole intro) done and match the original (see below); voice-over and slide 0's sound built 2026-10-15, voice-over and subtitle sync confirmed by the operator by listening (see "Sound"); FM music built, not yet heard (see "Music") |
 | 4 | Chain the modes: title -> intro -> title, or title -> menu | **title <-> intro done 2026-10-15** (`--scene game`, see "Milestone 4"); the menu (`WALK0.SL`) is not built, so a key or click on the title ends the game; **menu built and playable 2026-10-15** (`--scene menu`, and `--scene game` after the title): frames, keyboard and mouse identical to the original (106 comparisons, "Milestone 4b" and "4c"); the opening animation, the choice transition and the slot picker are built ("Milestones 4d-4f"); the four actions are not (they start WALK.SL or CAST.SL), so a choice ends the program |
-| 6 | Credits (`CAST.SL`), from the menu's third item | **built 2026-10-16** (`--scene credits`, and from the menu in `--scene game`): wipe, loop, keys and end identical to the original in 46 comparisons; pace confirmed by the operator; silent (song 0 needs the OPL rhythm mode, see "Milestone 6") |
-| 5 | Music (`MUC.ALL`, FM) | **done 2026-10-15 for the intro song** (operator confirmed by listening that the music plays along with the voice; the title plays it too since milestone 4, not yet listened to): ymfm OPL2 + CMF player, plays under slides 1-6 of `--scene intro` (see "Milestone 5"); rhythm mode (songs 0 and 3) deliberately deferred: build it when `CAST.SL` / `WALK.SL` are ported (operator decision 2026-10-15), checking it against a DOSBox-X recording of those programs |
+| 6 | Credits (`CAST.SL`), from the menu's third item | **built 2026-10-16** (`--scene credits`, and from the menu in `--scene game`): wipe, loop, keys and end identical to the original in 46 comparisons; pace confirmed by the operator; song 0 plays under it (rhythm mode, "Milestone 5b") |
+| 5 | Music (`MUC.ALL`, FM) | **done 2026-10-15 for the intro song** (operator confirmed by listening that the music plays along with the voice; the title plays it too since milestone 4, not yet listened to): ymfm OPL2 + CMF player, plays under slides 1-6 of `--scene intro` (see "Milestone 5"); rhythm mode (songs 0 and 3) deliberately deferred: build it when `CAST.SL` / `WALK.SL` are ported (operator decision 2026-10-15), checking it against a DOSBox-X recording of those programs; **rebuilt 2026-10-16 on the original driver's rules, rhythm mode included: 25 of 25 songs write exactly the registers the driver writes, tick by tick ("Milestone 5b")** |
 
 ### Milestone 1 evidence
 - `make test`: 0 failures, also clean under `-fsanitize=address,undefined`.
@@ -378,9 +378,10 @@ What it does, from the original's code (`findings.md`, "the sound path of STORY2
 
 ## Milestone 5: music (`MUC.ALL`), built 2026-10-15
 
-**Status: built and tested; the operator listened on 2026-10-15 and confirmed that the music plays along with the voice during the slides. Only that was reported: instrument fidelity, loudness balance and the loop point were not commented on, so they are not confirmed.** The note-to-register mapping follows
-the public CMF description (ModdingWiki, "CMF Format"), not the original driver, whose handlers
-were not read. Whether it sounds like the original is for the operator's ears.
+**Status: built and tested; the operator listened on 2026-10-15 and confirmed that the music plays along with the voice during the slides. Only that was reported: instrument fidelity, loudness balance and the loop point were not commented on, so they are not confirmed.** **SUPERSEDED 2026-10-16 (see "Milestone 5b" below):** what the operator
+listened to followed the public CMF description (ModdingWiki, "CMF Format"). The player now follows the original's
+driver and is compared with it register by register; the list of ASSUMED choices below is kept as the history of what
+was replaced.
 
 **Chip: ymfm** (BSD-3-Clause, `third_party/ymfm/`, unmodified files, commit `81aec25`, see
 `PINNED.txt` there; the licence text is `third_party/ymfm/LICENSE`). Chosen by the operator over
@@ -398,7 +399,7 @@ so it renders at 49,716 Hz. The Makefile builds ymfm into `build/opl/`.
   when a test hung for 30 minutes (stack sample: `music_render` calling `cmf_next` forever).
   `test_zero_length` and the Makefile's 5-minute limit on every test binary guard it now.
 
-**ASSUMED, to be judged by ear** (each is marked ASSUMED in `src/music.c`):
+**ASSUMED when this milestone was built (all replaced by the driver's own rules in Milestone 5b):**
 - MIDI channel n plays on OPL channel n (melody mode; this song uses channels 0-8 only).
 - Velocity v sets the carrier output level to 63 - v/2, keeping the patch's key-scale bits. The song
   uses velocity 127 on eight channels and 76-88 on channel 8 (`tools/cmf_behaviour.py`).
@@ -440,6 +441,82 @@ chip emulators.
 **Not checked:** how it sounds to the operator beyond "plays along with the voice"; the original
 driver's register writes (could be logged in the oracle emulator if the sound is off); the volume balance between music and voice (`--music-gain`
 exists for that); whether the original restarts the song at exactly the end or after a delay.
+
+## Milestone 5b: the player follows the original's FM driver, 2026-10-16
+
+**Why:** the operator asked for rhythm mode (needed by the credits' song) and for the pitch table and volume rule to match
+the original. The first version of the player followed the public CMF description (Milestone 5); its choices were
+guesses. The original's FM driver is linked into every program that plays music ("FM-Music Functions, Copyright (c)
+Creative Technology Pte Ltd, 1990", `CAST.SL 0x134a0`), and its register writes can be recorded in the oracle emulator.
+
+**Method:** `tools/dosemu.py --opl-log` models an AdLib and logs every register write with the driver's own clock (timer
+interrupts delivered; the driver programs the timer to 96 Hz, the songs' tick rate). `tools/capture_song_opl.py N`
+runs `CAST.SL` on a copy of the data in which song N sits where `CAST.SL` reads its song, so ANY of the 25 songs can be
+played through the real driver. `build/music_regs` prints the port's writes for the same song, and
+`tools/compare_opl.py` compares them per song tick. `tools/check_music.sh` does all 25.
+
+**Result: 25 of 25 songs identical.** For every song tick after the first, the port's writes are the driver's, the same
+registers with the same values in the same order (127,008 song ticks, 22 minutes of music and 23,389 notes in all). At song tick
+0 every write the port makes is in the driver's list, in order; the driver also does its own reset there (default
+patches for all voices, writes to `0x00..0x1a` that no chip uses), which the port does not reproduce. After the last
+event the driver's stop routine writes `0x83=0x13` nine times and clears `0xbd`; that is accepted as a suffix on the
+last tick only. Songs 0 and 3 use rhythm mode; song 3 also uses the snare and the cymbal.
+
+**What the driver does, and the port now does** (`src/music.c`; details and addresses in findings.md):
+- **Pitch:** twelve f-numbers `343 363 385 408 432 458 485 514 544 577 611 647` and the block one octave below the MIDI
+  number (note 24 is block 1; below 24 it is 0; it stops at 7; notes above 119 repeat note 127). A4 is f-number 577, 9 cents
+  flat of equal temperament. The assumed formula gave 580.
+- **Volume:** `level = 0x3f - (((0x3f - patch level) * (0x80 | velocity)) >> 8)`, key-scale bits kept, written to the
+  carrier at each note-on. The first player used `63 - velocity/2`, which IGNORED the patch's own level: every note at
+  velocity 127 played at the loudest setting. The driver scales within the patch's range, so a patch with a high level
+  (a quiet instrument) stays quiet. Over the velocities and patch levels the 25 songs use, the two rules differ by
+  7.3 steps on average and by up to 30 (velocity 127 on a patch of level 29: old 0, new 30), one step being 0.75 dB.
+- **Voices:** nine, or six in rhythm mode. A note takes the voice its channel released last, else the lowest free one, else
+  one another channel released, else the oldest is cut. A patch is loaded when a voice's last owner was another channel,
+  so patches load at note-on, not at the program change; a program change reloads the voices the channel holds and frees
+  the ones it released. The old mapping "channel n on voice n" was wrong and produced different voice numbers (not
+  audibly different, since every note loaded its own patch).
+- **Patch load:** modulator and carrier bytes in the usual order, but the register of the SOUNDING operator's level is not
+  written (the note-on writes it).
+- **Rhythm mode** (controller `0x67`, value non-zero, at tick 0): `0xbd = 0xe0`. MIDI channels 11-15 are bass drum (both
+  operators of voice 6, level in `0x53`, bit `0x10`), snare (operator `0x14`, voice 7, bit `0x08`), tom-tom (`0x12`, voice 8,
+  `0x04`), cymbal (`0x15`, voice 8, `0x02`) and hi-hat (`0x11`, voice 7, `0x01`). Everything except the bass drum uses ONE
+  operator, loaded from the patch's MODULATOR bytes with its modulator level. A note writes the operator's level, the voice's
+  pitch (no key-on bit) and `0xbd` with the drum's bit set; a note-off clears the bit.
+- **Controllers:** only `0x67` (rhythm) is acted on; `0x66` is a marker; `0x63` (AM/vibrato depth) and `0x68/0x69`
+  (transposition) of the first version were inventions of the public description and are ignored, like every other. No song
+  uses them.
+- **Restart:** at the song's end all notes are released (melodic and drums) and the song starts again; its first events reset the
+  driver's state as the original's do.
+
+**What is deliberately not reproduced:** the driver's reset writes at song tick 0 (default patches, writes to unused
+registers), and its stop routine's writes after the last event. Neither affects the sound: every voice is loaded
+before its first note. NOT checked: how the audio itself compares (the registers are identical, and the chip is ymfm in both
+the comparison and the port, but the original's chip was a real YM3812; that was never a variable). The old "instrument
+timbre" doubt is therefore reduced to the chip emulator.
+
+**Changes you may hear (not yet heard by anyone):**
+- **Loudness balance between instruments**, the biggest change. Instruments whose patch has a high level are now quieter next to
+  the others (by up to 22 dB for some combinations of velocity and patch in the songs; the mean over all the combinations they
+  use is 5.5 dB, which says little about what is heard). Measured on the intro song's first 60 s: overall RMS -20.1 dBFS with the
+  old player, -21.8 dBFS with the new (1.7 dB quieter), peak 14,528 to 12,480. This is what the driver does, but it is not what
+  the operator heard on 2026-10-15, and the music against the voice-over may need `--music-gain` again. An A/B for listening:
+  `work/opl/ab/intro_OLD_player.wav` (the player of commit `f371352`) and `intro_NEW_player.wav` (git-ignored; made with
+  `build/music_dump original_bin OUT.wav 60` and the old `music.c` compiled with `tests/music_dump.c`).
+- **Pitch:** about 9 cents flat everywhere (A4 is 437.7 Hz, not 440).
+- **Credits:** they now have their song, with drums.
+- Unchanged: tempo, notes, instruments' timbre, and the timing against the voice-over (which is what the operator confirmed).
+
+**Checks:**
+- `tools/check_music.sh`: 25 of 25 songs identical to the driver's writes (captures in `work/opl/songs`).
+- `tests/test_music.c` (rewritten): expected values copied from the driver's logs (the rhythm sequence for bass drum, tom-tom
+  and hi-hat; level points 127/0 to 1, 101/0 to 7, 95/0 to 9, 116/3 to 6; the pitch registers of 17 notes, including both ends
+  of the table), voice reuse, the program-change rules, voice cutting, the six voices in rhythm mode, snare and cymbal, and
+  the real intro song (2,402 key-ons and key-offs, no ignored events, bit-identical for any chunk size).
+- `tools/mutate_music.sh`: 32 deliberate bugs, all caught (one by the hang guard).
+- AddressSanitizer + UBSan: `test_music` clean; the sanitizer build of `music_regs` writes the same registers for songs 0, 3 and 22.
+- Real time under SDL's dummy drivers: the credits with sound run 52 s and end; Space at 5 s and closing the window at 4 s stop
+  the song cleanly; the chain title, menu, credits, menu works; the intro runs.
 
 ## Milestone 4: chaining title and intro, 2026-10-15
 
@@ -677,10 +754,13 @@ title -> menu -> credits -> menu through `--scene game`.
 CPU's. The wipe runs at 100 steps per second (`TK_CREDITS_WIPE_HZ`, 2 s) and the loop at 35 passes per second
 (`TK_CREDITS_PASS_HZ`, the text moves 35 rows per second, 51 s for the whole credits). Still the port's own choice, not a measurement of the original.
 
-**Not built: sound.** The original starts song 0 of `MUC.ALL` (20,000 bytes read from the start of song 0) when the sound
-start-up succeeds, and stops it at the end. Song 0 uses the OPL rhythm mode, which the music player does not have
-(deferred on purpose, see "Milestone 5"), so the credits are silent. Not read: the sound start-up `0x10c1e`, the
-song start `0x10c58` and the poll `0x10d1a` that each pass makes.
+**Sound (2026-10-16):** song 0 of `MUC.ALL` plays under the credits, as in the original (`CAST.SL` reads 20,000 bytes
+at offset 2 and starts the song after loading its files, before the loop; the song is the first 8,996 bytes of them).
+It starts when the loop does and stops when the credits end, by time, by key or by closing the window. It is the
+first song that uses the OPL rhythm mode (see "Milestone 5b"). `--no-music` and `--music-gain` apply. Nobody has listened
+to it yet. Not read: the sound start-up `0x10c1e`, the song start `0x10c58` and the poll `0x10d1a`, which each pass makes;
+the port starts the song at the loop's first pass and does not model the poll (the original restarts a song that has
+ended, as the intro's poll does; the credits last 51 s here and the song 88 s, so it never ends under them).
 
 **Open:** the old picture the wipe rolls away is the menu's last frame; if the menu closes its window before, the
 credits start from whatever `scr` holds. Mouse: the original reads none here, so the port ignores it.

@@ -2,21 +2,21 @@
  * CMF music player: turns a parsed CMF song (cmf.h) into OPL2 register writes and renders the
  * chip's output with ymfm (opl.h).
  *
- * WHAT THIS FOLLOWS: the public CMF semantics (ModdingWiki, "CMF Format"), NOT the original
- * driver's code, which has not been read. Where the public description is silent the choice made
- * here is marked ASSUMED in music.c and listed in docs/port.md, to be judged by ear:
- *   - MIDI channel n (0..8) plays on OPL channel n; events on channels 9..15 are ignored and
- *     counted (music_ignored_events).
- *   - Program change loads the 11 operator bytes of that patch into the channel.
- *   - Note-on velocity v sets the carrier's output level to 63 - v/2 (0 is loudest), keeping the
- *     patch's key-scale bits; the modulator keeps the patch's level.
- *   - A note-off only acts if it is for the note the channel is playing; a note-on on a channel
- *     that is sounding releases the old note first.
- *   - Pitch bend is ignored, as in the original CMF player. Controllers 0x63 (AM/vibrato depth,
- *     default both on), 0x68/0x69 (transpose in 1/128 semitone) are handled. Controller 0x67
- *     (rhythm mode) is not: a non-zero value is reported once and ignored.
- *   - Programs the song does not define use no patch (the original has 16 built-in defaults; the
- *     intro song defines everything it uses).
+ * WHAT THIS FOLLOWS: the original's FM driver, as read from its code (CAST.SL 0x13500 ..) and checked against the
+ * register writes it makes in the oracle emulator (tools/dosemu.py --opl-log, tools/compare_opl.py). Not the public
+ * CMF description: the two differ in the pitch table, the volume rule and the voice handling.
+ *   - Voices: a note on MIDI channel n does NOT play on OPL voice n. A voice is chosen at each note-on: one the
+ *     channel released earlier, else a free one, else one another channel released, else the oldest is cut. The
+ *     channel's patch is loaded into the voice when its last owner was another channel (so a patch is loaded at
+ *     note-on, not at the program change); a program change reloads the voices the channel holds.
+ *   - Pitch: a table of twelve f-numbers (343 .. 647) and the block one octave below the MIDI number: A4 is
+ *     f-number 577, block 4, about 9 cents flat of equal temperament.
+ *   - Volume: the carrier's output level is 0x3f - ((0x3f - patch level) * (0x80 | velocity) >> 8), key-scale bits
+ *     of the patch kept; the modulator keeps the patch's level.
+ *   - Rhythm mode: controller 0x67 (value non-zero) at the start of a song. MIDI channels 11..15 are then bass
+ *     drum, snare, tom-tom, cymbal and hi-hat; only six melodic voices remain. See music.c.
+ *   - Controllers other than 0x66 (a marker) and 0x67, pitch bend and pressure are ignored, and counted.
+ *   - A note-off releases the voice that holds that note for that channel; a stale one does nothing.
  *
  * TIMING: the song runs at the header's ticks per second (96 for these songs), converted to
  * samples of the chip's own rate with integer arithmetic, so playback is exact and does not
@@ -38,6 +38,11 @@
 /* The menu's song (WALK0.SL 0x10b0d: seek 2:0xbad9, read 0x1c92 bytes; also one of WALK.SL's reads). */
 #define MUSIC_MENU_OFFSET 0x2bad9u
 #define MUSIC_MENU_LENGTH 0x1c92u
+
+/* The credits' song: song 0 of MUC.ALL (CAST.SL 0x10b0d reads 20,000 bytes from offset 2; the song itself is the first
+ * 8,996 of them). It is the first song that uses rhythm mode. */
+#define MUSIC_CREDITS_OFFSET 2u
+#define MUSIC_CREDITS_LENGTH 8996u
 
 typedef struct music music_t;
 
@@ -67,8 +72,8 @@ void music_set_gain(music_t *m, unsigned percent);
 /* Number of times the song has started again after reaching its end. */
 unsigned music_loops(const music_t *m);
 
-/* Events the player does not act on: pitch bends, events on channels 9..15, controllers other
- * than the ones listed above, and a note or program event it cannot place. */
+/* Events the player does not act on: pitch bends, pressure, controllers other than 0x66 and 0x67, and a program
+ * the song does not define. */
 unsigned music_ignored_events(const music_t *m);
 
 /* Test hook: called for every chip register write with the sample position (since the start of

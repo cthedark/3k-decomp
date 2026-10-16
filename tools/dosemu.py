@@ -53,6 +53,22 @@ class Emu:
         self.instr_per_tick = instr_per_tick
         self.trace_int = trace_int
         self.vga_log = None     # set to {} by --log-vga: (port, size, value) -> [first tick, count]
+        # An AdLib / OPL2 as the programs probe and drive it (--opl-log): ports 0x388 (index, status) and 0x389
+        # (data). `opl_log` is a list of (driver tick, register, value); the "driver tick" counts the timer
+        # interrupts delivered, at the rate the program sets in the PIT (the FM driver reprograms it to the song's
+        # clock), not BIOS ticks.
+        self.opl_log = None
+        self.opl_idx = 0
+        self.opl_last_port = 0
+        self.opl_broken = 0      # index/data writes that do not alternate (an interrupt between the two OUTs)
+        self.opl_status = 0
+        self.pit_reload = None
+        self.pit_history = []
+        self.pit_phase = 0
+        self.pit_lo = 0
+        self.irq_count = 0       # timer slices run
+        self.irq_delivered = 0   # timer interrupts the program actually received (IF was set): the driver's own clock
+        self.irq_frac = 0.0
         self.log_files = False
         self.ticks = 0
         self.mode = 3
@@ -337,6 +353,8 @@ class Emu:
             return self.key
         if port in (0x3C9,):
             return 0
+        if port == 0x388 and self.opl_log is not None:
+            return self.opl_status
         self.note_unknown(f"in {port:04x}")
         return 0
 
@@ -350,6 +368,34 @@ class Emu:
             if self.dac_sub == 3:
                 self.dac_sub = 0
                 self.dac_index = (self.dac_index + 1) & 0xFF
+        elif port == 0x388 and self.opl_log is not None:
+            if self.opl_last_port == 0x388:
+                self.opl_broken += 1       # an index written twice in a row: a data write is missing
+            self.opl_last_port = 0x388
+            self.opl_idx = value & 0xFF
+        elif port == 0x389 and self.opl_log is not None:
+            if self.opl_last_port != 0x388:
+                self.opl_broken += 1       # a data write with no index before it
+            self.opl_last_port = 0x389
+            v = value & 0xFF
+            if self.opl_idx == 4:          # the timer control register: what the card detection looks at
+                if v & 0x80:
+                    self.opl_status = 0    # reset the flags
+                elif v & 0x01:
+                    self.opl_status = 0xC0 # timer 1 started: it "overflows" at once
+            self.opl_log.append((self.irq_delivered, self.opl_idx, v))
+        elif port == 0x43 and self.opl_log is not None:
+            if (value >> 6) & 3 == 0:      # a command for channel 0: the next two bytes on 0x40 are the reload
+                self.pit_phase = 0
+        elif port == 0x40 and self.opl_log is not None:
+            if self.pit_phase == 0:
+                self.pit_lo = value & 0xFF
+                self.pit_phase = 1
+            else:
+                r = self.pit_lo | ((value & 0xFF) << 8)
+                self.pit_reload = r or 65536
+                self.pit_phase = 0
+                self.pit_history.append((self.ticks, self.irq_count, self.pit_reload))
         elif port in (0x3D8, 0x61, 0x20, 0x3C0, 0x3C4, 0x3C5, 0x3CE, 0x3CF, 0x3D4, 0x3D5):
             if self.vga_log is not None:
                 key = (port, size, value)
@@ -376,6 +422,7 @@ class Emu:
         flags = self.r(UC_X86_REG_EFLAGS) & 0xFFFF
         cs, ip = self.r(UC_X86_REG_CS), self.r(UC_X86_REG_IP)
         sp = (sp - 6) & 0xFFFF
+        self.irq_delivered += 1
         u.mem_write(ss * 16 + sp, struct.pack("<HHH", ip, cs, flags))
         self.w(UC_X86_REG_SP, sp)
         self.uc.reg_write(UC_X86_REG_EFLAGS, self.r(UC_X86_REG_EFLAGS) & ~0x200)
@@ -554,6 +601,22 @@ class Emu:
         for addr, items in by_addr.items():
             self.uc.hook_add(UC_HOOK_CODE, mk(addr, items), None, addr, addr)
 
+    def watch_regs(self, addr, limit, outpath):
+        """Log AX, BX, CX, DX and the interrupt count at each arrival at `addr` (for a routine that takes its
+        arguments in registers, such as the FM driver's register write at CAST.SL 0x135ad: AH = register, AL = value)."""
+        from unicorn import UC_HOOK_CODE
+        f = open(outpath, "w")
+        n = [0]
+
+        def cb(uc, address, size, user):
+            if n[0] >= limit:
+                return
+            n[0] += 1
+            f.write("%d %04x %04x %04x %04x\n" % (self.irq_count, self.r(UC_X86_REG_AX), self.r(UC_X86_REG_BX),
+                                                  self.r(UC_X86_REG_CX), self.r(UC_X86_REG_DX)))
+            f.flush()
+        self.uc.hook_add(UC_HOOK_CODE, cb, None, addr, addr)
+
     def watch_calls(self, addrs, nwords, limit, outpath):
         """Log each arrival at the given function entry addresses (far calls: the return address
         takes 4 bytes, so the arguments start at ss:sp+4) with NWORDS argument words, in order, to
@@ -589,14 +652,29 @@ class Emu:
         while self.stop_reason is None and self.ticks <= max_ticks:
             for fn in hooks.get(self.ticks, []):
                 fn(self)
-            if self.ticks > 0 and (self.r(UC_X86_REG_EFLAGS) & 0x200):
-                self.deliver_irq8()
-            cs = self.r(UC_X86_REG_CS)
-            ip = self.r(UC_X86_REG_IP)
-            try:
-                u.emu_start(cs * 16 + ip, 0xFFFFF, count=self.instr_per_tick)
-            except UcError as e:
-                self.stop_reason = f"CPU error: {e} at {self.r(UC_X86_REG_CS):04x}:{self.r(UC_X86_REG_IP):04x}"
+            # One timer interrupt per BIOS tick, or, when the program has set the timer to a faster rate and
+            # --opl-log is on, as many as that rate gives in a tick (65536 / reload), spread over the tick.
+            n = 1
+            if self.opl_log is not None and self.pit_reload and self.pit_reload < 65536:
+                self.irq_frac += 65536.0 / self.pit_reload
+                n = max(1, int(self.irq_frac))
+                self.irq_frac -= int(self.irq_frac)
+            failed = False
+            for _ in range(n):
+                if self.ticks > 0 and (self.r(UC_X86_REG_EFLAGS) & 0x200):
+                    self.deliver_irq8()
+                cs = self.r(UC_X86_REG_CS)
+                ip = self.r(UC_X86_REG_IP)
+                try:
+                    u.emu_start(cs * 16 + ip, 0xFFFFF, count=max(1, self.instr_per_tick // n))
+                except UcError as e:
+                    self.stop_reason = f"CPU error: {e} at {self.r(UC_X86_REG_CS):04x}:{self.r(UC_X86_REG_IP):04x}"
+                    failed = True
+                    break
+                self.irq_count += 1
+                if self.stop_reason is not None:
+                    break
+            if failed:
                 break
             total += self.instr_per_tick
             self.ticks += 1
@@ -643,6 +721,8 @@ def main():
     ap.add_argument("--dump-hit", action="append", default=[], metavar="ADDR:N:BPOFF:LEN:FILE",
                     help="at the N-th (0-based) arrival at ADDR (hex) write LEN bytes from the far pointer stored "
                          "at [bp+BPOFF] to FILE (like --dump-local, for a later arrival)")
+    ap.add_argument("--trace-regs", metavar="ADDR:LIMIT:FILE",
+                    help="log AX BX CX DX (and the interrupt count) at each arrival at ADDR, at most LIMIT times")
     ap.add_argument("--hit-pass-stop", action="store_true",
                     help="with --hit-pass: end the run at the first arrival (e.g. when the program leaves its loop)")
     ap.add_argument("--hit-pass", metavar="ADDR[,ADDR...]",
@@ -650,6 +730,10 @@ def main():
     ap.add_argument("--log-vga", action="store_true",
                     help="at the end print each distinct write to the VGA sequencer, graphics controller, "
                          "CRTC and mode ports (port, width, value) with its first tick and count")
+    ap.add_argument("--opl-log", metavar="FILE",
+                    help="model an AdLib (the detection succeeds) and write every register write as "
+                         "'driver_tick register value' lines to FILE; timer interrupts are delivered at the rate the "
+                         "program sets in the PIT, 65536/reload per BIOS tick, and the driver tick counts them")
     ap.add_argument("--screen-from", metavar="FILE.raw",
                     help="start with the 64,000 screen bytes taken from the start of FILE (a raw snapshot of an "
                          "earlier program): a program started by exec finds the screen its parent left")
@@ -680,6 +764,8 @@ def main():
     emu = Emu(a.exe, work, a.instr_per_tick, a.trace_int)
     if a.log_vga:
         emu.vga_log = {}
+    if a.opl_log:
+        emu.opl_log = []
     if a.palette_from:
         with open(a.palette_from, "rb") as f:
             emu.pal[:] = f.read()[-768:]
@@ -720,6 +806,9 @@ def main():
     if a.trace_calls:
         al, nw, lim, path = a.trace_calls.split(":", 3)
         emu.watch_calls([int(x, 16) for x in al.split(",")], int(nw), int(lim), path)
+    if a.trace_regs:
+        ad, lim, path = a.trace_regs.split(":", 2)
+        emu.watch_regs(int(ad, 16), int(lim), path)
     if a.dump_hit:
         specs = []
         for x in a.dump_hit:
@@ -768,6 +857,9 @@ def main():
     print(f"cpu at stop: cs:ip={r(UC_X86_REG_CS):04x}:{r(UC_X86_REG_IP):04x} (linear {r(UC_X86_REG_CS) * 16 + r(UC_X86_REG_IP):#x})"
           f" ax={r(UC_X86_REG_AX):04x} bx={r(UC_X86_REG_BX):04x} cx={r(UC_X86_REG_CX):04x} dx={r(UC_X86_REG_DX):04x}"
           f" si={r(UC_X86_REG_SI):04x} di={r(UC_X86_REG_DI):04x} ds={r(UC_X86_REG_DS):04x} es={r(UC_X86_REG_ES):04x}")
+    if a.opl_log:
+        Path(a.opl_log).write_text("".join(f"{t} {r:02x} {v:02x}\n" for t, r, v in emu.opl_log))
+        print(f"opl: {len(emu.opl_log)} register writes -> {a.opl_log}; PIT reload {emu.pit_reload}, {emu.irq_count} timer slices, {emu.irq_delivered} interrupts delivered; PIT history (tick, slice, reload): {emu.pit_history[:8]}; writes out of index/data order: {emu.opl_broken}")
     if emu.vga_log:
         print("VGA port writes (port size value: first tick, count):")
         for (p, sz, v), (t, n) in sorted(emu.vga_log.items(), key=lambda kv: kv[1][0]):
