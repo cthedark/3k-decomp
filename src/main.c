@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "assets.h"
 #include "audio.h"
@@ -37,6 +38,7 @@
 #include "screen.h"
 #include "timing.h"
 #include "title.h"
+#include "walk.h"
 
 #define MAX_DUMPS 512
 
@@ -78,12 +80,15 @@ static const char *g_cwipe_file[MAX_DUMPS];
 static int g_cwipe_count;
 static struct { int pass; unsigned code; } g_credits_keys[MAX_SCRIPT];
 static int g_credits_nkeys;
+static struct { int pass; unsigned code; } g_walk_keys[MAX_SCRIPT];   /* --walk-key N:CODE (headless runs) */
+static int g_walk_nkeys;
 static const char *g_screen_from;
 static int g_stepped;          /* --stepped: the credits headless even with no dump and no key (only the end is reported) */
 static int g_no_audio;        /* --no-audio */
 static int g_no_music;        /* --no-music */
 static unsigned g_music_gain = 100;   /* --music-gain PERCENT */
 static int g_music_replay = 1; /* slide 0's clip plays again after it ends, as in the original; --slide0-once turns it off */
+static long g_walk_clock = 0;  /* --walk-clock N|real: the BIOS tick count when WALK.SL starts; -1 = the time of day */
 
 /* The window, and the sound output if there is one. Scenes load their sound when they are created,
  * so this must come first. */
@@ -879,6 +884,119 @@ static int play_credits(screen_t *scr)
     return quit ? 1 : 0;
 }
 
+/* The screen WALK.SL starts over when nothing was handed over: the menu's first frame (GMAIN with the CPU label and
+ * the interface palette); --screen-from FILE takes a screen dump instead. Only the window and the interface are
+ * drawn over it, so this is enough to show the first screen. */
+static int walk_start_screen(screen_t *scr)
+{
+    if (g_screen_from)
+        return read_raw(scr, g_screen_from);
+    menu_t *m = menu_create(scr);
+    if (!m)
+        return -1;
+    menu_free(m);
+    return 0;
+}
+
+/* The BIOS tick count WALK.SL starts with: --walk-clock N, or the time of day (ticks since midnight) with
+ * --walk-clock real. The default is 0, which is what the oracle's runs start with: rain from the first moment
+ * (the clock decides the weather, see walk_rain_stride). */
+static uint32_t walk_clock0(void)
+{
+    if (g_walk_clock >= 0)
+        return (uint32_t)g_walk_clock;
+    time_t t = time(NULL);
+    struct tm lt;
+    if (!localtime_r(&t, &lt))
+        return 0;
+    unsigned long long secs = (unsigned long long)lt.tm_hour * 3600u + (unsigned)lt.tm_min * 60u + (unsigned)lt.tm_sec;
+    return (uint32_t)(secs * TK_BIOS_TICKS_PER_SEC_NUM / TK_BIOS_TICKS_PER_SEC_DEN);
+}
+
+/* WALK.SL's world (walk.h) over what is on `scr` now (the menu's last frame, whose palette it keeps): the first
+ * screen, then one pass of the idle main loop per tick of TK_WALK_PASS_HZ, until the window is closed. Nothing
+ * reads a key or the mouse yet and nothing is played. Returns 1 when the window was closed, -1 if the screen could
+ * not be made. */
+static int play_walk(screen_t *scr)
+{
+    walk_t *w = walk_create();
+    if (!w)
+        return -1;
+    const uint32_t clock0 = walk_clock0();
+    if (walk_begin(w, scr, clock0 & 0xFFFF, clock0) != 0) {
+        walk_free(w);
+        return -1;
+    }
+    platform_show_pointer(1);
+    const uint32_t start = platform_ticks_ms();
+    uint32_t next = start;
+    int event_reported = 0;
+    platform_present(scr);
+    while (platform_poll()) {
+        uint32_t now = platform_ticks_ms();
+        if ((int32_t)(now - next) < 0) {
+            platform_sleep_ms(1);
+            continue;
+        }
+        next = next_due(next, now, TK_WALK_PASS_HZ);
+        uint32_t ticks = clock0 + (uint32_t)((unsigned long long)(now - start) * TK_BIOS_TICKS_PER_SEC_NUM /
+                                             TK_BIOS_TICKS_PER_SEC_DEN / 1000u);
+        int got = walk_pass(w, scr, ticks, platform_port60());
+        if ((got & WALK_PASS_VILLAGER_EVENT) && !event_reported) {
+            fprintf(stderr, "walk: a villager reached the case where the original starts an event (not built)\n");
+            event_reported = 1;
+        }
+        if ((got & WALK_PASS_UNBUILT) && walk_unbuilt(w))
+            fprintf(stderr, "walk: not built: %s\n", walk_unbuilt(w));
+        platform_present(scr);
+    }
+    walk_free(w);
+    return 1;
+}
+
+/* The world headless: --step-dump N:FILE writes the screen after pass N (raw: 64,000 pixels then the 768-byte
+ * palette); pass 0 is the first screen. The clock is --walk-clock + pass / 3, which is how tools/walk_idle_trace.py
+ * drives the original in the oracle. The reference is the original's screens (tools/check_walk.sh). */
+static int run_walk_stepped(screen_t *scr, int ndump, const int *dump_pass, const char *ppm, char **dump_file)
+{
+    if (walk_start_screen(scr) != 0)
+        return 1;
+    walk_t *w = walk_create();
+    const uint32_t clock0 = walk_clock0();
+    if (!w || walk_begin(w, scr, 0, clock0) != 0) {
+        walk_free(w);
+        return 1;
+    }
+    int last = 0;
+    for (int i = 0; i < ndump; i++)
+        if (dump_pass[i] > last)
+            last = dump_pass[i];
+    int rc = 0;
+    for (int n = 0; n <= last && rc == 0; n++) {
+        if (n > 0) {
+            unsigned port60 = 0;   /* the value set at the latest pass number <= n holds */
+            int best = -1;
+            for (int i = 0; i < g_walk_nkeys; i++)
+                if (g_walk_keys[i].pass <= n && g_walk_keys[i].pass >= best) {
+                    best = g_walk_keys[i].pass;
+                    port60 = g_walk_keys[i].code;
+                }
+            int got = walk_pass(w, scr, clock0 + (uint32_t)n / 3, port60);
+            if ((got & WALK_PASS_UNBUILT) && walk_unbuilt(w))
+                fprintf(stderr, "walk: pass %d: not built: %s\n", n, walk_unbuilt(w));
+        }
+        for (int i = 0; i < ndump; i++)
+            if (dump_pass[i] == n && write_raw(scr, dump_file[i]) != 0) {
+                fprintf(stderr, "cannot write %s\n", dump_file[i]);
+                rc = 1;
+            }
+    }
+    walk_free(w);
+    if (rc == 0 && ppm && screen_write_ppm(scr, ppm) != 0)
+        rc = 1;
+    return rc;
+}
+
 /* Slide 0, then the slides after it, in real time, on an already initialised platform. Returns
  * 0, or 1 if a scene could not be created. It also returns early (0) when the window is closed. */
 static int play_intro(screen_t *scr, int faithful, int last)
@@ -954,6 +1072,12 @@ static int run_game(screen_t *scr, int scale, int faithful)
                         break;
                     }
                     continue;
+                }
+                if (c == MENU_NEW_GAME) {   /* WALK.SL: only its first screen is built */
+                    printf("game: new game (WALK.SL's first screen; nothing runs after it yet)\n");
+                    int q = play_walk(scr);
+                    rc = q < 0 ? 1 : 0;
+                    break;
                 }
                 if (slot != MENU_NONE)
                     printf("game: slot %d picked\n", slot);
@@ -1112,8 +1236,25 @@ int main(int argc, char **argv)
             }
             g_credits_keys[g_credits_nkeys].pass = n;
             g_credits_keys[g_credits_nkeys++].code = code;
+        } else if (!strcmp(argv[i], "--walk-key") && i + 1 < argc && g_walk_nkeys < MAX_SCRIPT) {
+            int n;
+            unsigned code;
+            if (sscanf(argv[++i], "%d:%i", &n, &code) != 2) {
+                fprintf(stderr, "--walk-key wants N:CODE\n");
+                return 2;
+            }
+            g_walk_keys[g_walk_nkeys].pass = n;
+            g_walk_keys[g_walk_nkeys++].code = code;
         } else if (!strcmp(argv[i], "--screen-from") && i + 1 < argc)
             g_screen_from = argv[++i];
+        else if (!strcmp(argv[i], "--walk-clock") && i + 1 < argc) {
+            ++i;
+            g_walk_clock = !strcmp(argv[i], "real") ? -1 : strtol(argv[i], NULL, 0);
+            if (g_walk_clock < -1) {
+                fprintf(stderr, "--walk-clock wants a BIOS tick count or 'real'\n");
+                return 2;
+            }
+        }
         else if (!strcmp(argv[i], "--stepped"))
             g_stepped = 1;
         else if (!strcmp(argv[i], "--music-gain") && i + 1 < argc) {
@@ -1159,7 +1300,7 @@ int main(int argc, char **argv)
             dump1_file[ndump1++] = c2 + 1;
         } else {
             fprintf(stderr,
-                    "usage: %s [--data DIR] [--scale N] [--scene title|gmain|intro0|intro1|intro2|intro3|intro4|intro5|intro6|intro|game|menu|credits] [--ppm FILE]\n"
+                    "usage: %s [--data DIR] [--scale N] [--scene title|gmain|intro0|intro1|intro2|intro3|intro4|intro5|intro6|intro|game|menu|credits|walk] [--ppm FILE]\n"
                     "          [--step-dump N:FILE]... [--press-pass N]... [--tick-div N]\n"
                     "          [--dump anim|sub|out|end|final:N:FILE]... [--faithful-keys] [--rand-state HEX]\n"
                     "          [--no-audio] [--no-music] [--music-gain PERCENT] [--slide0-once]\n",
@@ -1211,6 +1352,18 @@ int main(int argc, char **argv)
         if (rc == 0)
             rc = play_credits(&screen);
         printf("credits: %s\n", rc == 0 ? "ended" : rc > 0 ? "closed" : "could not start");
+        shutdown_platform();
+        return rc < 0 ? 1 : 0;
+    }
+    if (!strcmp(scene, "walk")) {
+        if (ndump > 0 || ppm)
+            return run_walk_stepped(&screen, ndump, dump_pass, ppm, dump_file);
+        if (init_platform(scale) != 0)
+            return 1;
+        int rc = walk_start_screen(&screen);
+        if (rc == 0)
+            rc = play_walk(&screen);
+        printf("walk: %s\n", rc == 1 ? "closed" : "could not start");
         shutdown_platform();
         return rc < 0 ? 1 : 0;
     }

@@ -495,7 +495,7 @@ before its first note. NOT checked: how the audio itself compares (the registers
 the comparison and the port, but the original's chip was a real YM3812; that was never a variable). The old "instrument
 timbre" doubt is therefore reduced to the chip emulator.
 
-**Changes you may hear (not yet heard by anyone):**
+**Changes you may hear (the operator listened on 2026-10-16 and confirmed that the loudness balance feels good and that the credits play the music nicely; pitch and the other points were not commented on):**
 - **Loudness balance between instruments**, the biggest change. Instruments whose patch has a high level are now quieter next to
   the others (by up to 22 dB for some combinations of velocity and patch in the songs; the mean over all the combinations they
   use is 5.5 dB, which says little about what is heard). Measured on the intro song's first 60 s: overall RMS -20.1 dBFS with the
@@ -764,3 +764,129 @@ ended, as the intro's poll does; the credits last 51 s here and the song 88 s, s
 
 **Open:** the old picture the wipe rolls away is the menu's last frame; if the menu closes its window before, the
 credits start from whatever `scr` holds. Mouse: the original reads none here, so the port ignores it.
+
+## Milestone 7a: WALK.SL's first screen and scene loader (C), built 2026-10-17
+
+`src/walkscene.[ch]` is the start-up loader (what `tools/walk_scene.py` models: scene number, maps, tiles, object sprites, sprite
+banks, the 50 scene records) and `src/walk.[ch]` draws the first screen: the 224 x 200 world buffer (ground, villagers / party /
+hero in y order, object sprites, rain), its middle 192 x 168 copied to screen (64, 16), the sixteen button labels from the
+`NUMBER.LCZ` font (each drawn three times for the engraved look) and the two pieces at the bottom right. Both are plain C with no
+clock, no input and no SDL, like `menu.c` and `credits.c`.
+
+- **Run it:** `build/3k --scene walk --data original_bin` shows the first screen until the window is closed. `--scene game` now
+  goes title -> menu -> (new game) -> this screen. Headless: `build/3k_headless --scene walk --step-dump N:FILE` (raw dump of the screen after pass N; 0 is the first
+  screen, see Milestone 7b for the later passes) or `--ppm FILE`. `--screen-from FILE` starts over a screen dump instead of the menu's first frame.
+- **What it was (superseded by 7b, where the world moves):** the game. Nothing moves, nothing is played (WALK.SL's own song is located by the loader but not started),
+  no input is read, and there is no hand-over of the menu's last frame (the port uses the menu's first frame; outside the window the
+  two are the same picture, which the check confirms: the first screen built over the menu's pass 3 and over its first frame is identical).
+- **New game:** the original writes `__1.NOW` and `MAN_INFO.NOW` from `__1.AL1`, `__1.AL2` and `MAN_INFO.ALL` first. The port does not;
+  it reads the two state files as they are in the data directory (the shipped ones are the state a new game writes, `findings.md` "WALK.SL").
+  Pointing it at a played game's state files shows that game's scene instead. **Load** is not wired (the saves are not read).
+- **Out-of-range data:** the original reads whatever memory follows; the port reads zeros for a tile or sprite number outside the data
+  (the buffers are padded), drops pixels outside the world buffer, and refuses to load a state in which a record writes outside its map
+  (nothing shipped does any of these).
+
+**Checked** (`tools/check_walk.sh`):
+- the first screen against the original's screen at BIOS tick 21, started over the port's own menu screen: **identical** (64,000 pixels
+  and the palette);
+- the loader's state (maps, tables, tiles, sprites, banks, list, trail) against the Python model for all 53 scene numbers on the
+  shipped files and 100 randomised state files: **130 identical, 23 refused by both**. The model is the one `walk_scene.py` checks against
+  the oracle, so this is a chain: C = model = original. The scene 0 buffers were compared with the original through the model only;
+- `tests/test_walk.c` (hand-worked flags, rain, positions and offsets, draw order, ground / objects including odd and negative view centres,
+  entities on a made-up scene, label sprites, scene 0's values, the first screen's extent, missing data). `make test` passes;
+- `tools/mutate_walk.py`: **113 deliberate bugs, all caught** (63 by the unit test, 19 by the first screen, 31 by the loader comparison).
+  Mutations that no input can show are left out (listed at the end of the file). My first run caught 103 of 114; the missed ones were the
+  odd-x and negative object columns, a tile number above 1023, the 25th tile column (outside the window copy), the villagers' bank switch and
+  the `0x61` sprites, the party's limit and its lack of a box, and some loader record rules. I added the tests and widened the comparison.
+  One of those new tests had my own arithmetic slip (a subtraction in hex), found because the test failed on correct code.
+- clean under AddressSanitizer and UBSan (unit test, first screen, loader comparison).
+
+**Not checked against the original** (read from the code, as in `findings.md`): odd view centres, other scenes' drawing (only their loader
+state is compared with the model), the `0x61` villager sprites, the second weather mode, the rain stride after the first frame, the
+hero's walk counter other than 0, the tick-by-tick palette changes from tick 23. The real-time chain from the menu to this screen was not
+run end to end (a scripted Space on the title goes to the intro here); `--scene walk` was run under SDL's dummy drivers.
+
+## Milestone 7b: WALK.SL's world in motion, frame 21 onward (C), built 2026-10-17
+
+`walk_pass` in `src/walk.[ch]` runs one pass of WALK.SL's main loop with nothing pressed (`findings.md` "WALK.SL step 6"): the animated
+ground tiles and objects step, the palette shimmers, the world is drawn and its window copied, the 20 villagers each take a step (and
+sometimes pick a direction with `rand()`), and the hero's walk frame counts. The weather follows the BIOS clock: rain with a growing then
+shrinking stride for the first 18.75 minutes of each 60, dry for the next 18.75, dark specks for the last 22.5. `walk_first_screen` is now
+`walk_begin` (interface, `walk_reset`, pass 0), so the first screen is the first pass.
+
+- **Run it:** `build/3k --scene walk --data original_bin` (also reached from `--scene game` through the menu's "new game"). It runs at
+  `TK_WALK_PASS_HZ` = 35 passes a second (a choice, `src/timing.h`: the original has no pacing; the operator found the animation right by eye, 2026-10-17) and a BIOS clock of 18.2065 ticks a second.
+  `--walk-clock N` sets the clock at the first pass (default 0, as in the oracle's runs: rain from the start; `--walk-clock real` takes the
+  time of day, which will usually be in the dry or the specks part of the hour). Close the window to stop.
+  Headless: `build/3k_headless --scene walk --step-dump N:FILE` writes the screen after pass N (clock = start + N / 3, the convention of the
+  oracle runs).
+- **What you will see move:** the pond's water tiles (23 animated ground entries), the palette shimmer of entries 1-14 and entry 15, rain
+  (strength changes every 1,024 ticks = 56 s), the hero changing frame every 6th pass **while standing still** (the original does the
+  same: the counter runs without any key), and nothing else on screen: the villagers of scene 0 are all outside the window at the start,
+  and the hero cannot be moved yet. Their steps are real (state compared with the original) but invisible until the view reaches them.
+- **Not built:** keys and mouse, the party loop (`0x120a3`), hero-villager contact (`0x2c0da`), the special return of `0x2bccd` (reported once
+  on stderr and otherwise ignored), weather mode 2, other scenes, WALK.SL's song, the ten actions.
+
+**Checked** (`tools/check_walk.sh`, about 75 s; `IDLE=0` skips the idle part):
+- the Python model (`tools/walk_idle.py check`) and the C port (`walk_idle.py cross`) against the original's passes in the oracle at seven
+  clock readings, 5,593 passes in all: the screen, the palette and the state the screen does not show (villager table, rand state, rain list,
+  specks list, palette buffer, both animation tables) **identical after every pass**. The clock readings give rain of strength 0, 4 and 9, rain
+  that stops at pass 768, a dry clock, specks that start at pass 768 and specks all along;
+- `tests/test_walk.c`: the new pieces on hand-worked values (rand, stride at each boundary, both animation tables, rotations and the
+  entry-15 ramp, specks and their wraps, the villager step in all four directions, limits, speed gate, odd positions, the 100th-place quirk, the
+  `0x61` timer, the direction choice) and a pass-level test that a pass steps the villagers in order and gives each decision the hero's
+  position. `make test` passes;
+- `tools/mutate_walk.py`: **192 deliberate bugs, all caught** (122 by the unit test, 18 by the first screen, 22 by the idle comparison, 29 by
+  the loader comparison, 1 by a hang). My first run (screen and palette only in the idle comparison, 40 state files for the loader) missed 13: three were
+  villager wiring that never shows on the screen (every villager of scene 0 is outside the window), so I added the hidden state to the
+  comparison (`walk_state_dump`) and a pass-level unit test; nine were missing unit cases (a limit at equality, distinct x / y limits, both
+  coordinates odd, an overshot speed counter, a tile past the last animation tile, a second object entry, the ramp's bottom, the direction
+  rule's x bound, and an entry after the animation list's end: my first test of that toggled a tile an even number of times and so saw
+  nothing); one was a loader mutation that needs the default 100 state files. The idle
+  traces are also used whole now, since the entry-15 ramp only turns after 896 passes. The mutation list covers the new code (about 80 lines).
+- clean under AddressSanitizer and UBSan (unit test; idle comparison at four clock readings).
+
+**Limits of what is checked:** only scene 0, only its villagers' idle behaviour (they stay outside the window, so the *drawing* of walking
+villagers rests on step 2's frames, not on these passes), and only 1,500 passes at most per clock reading. The animation tables have 23 + 2 live
+entries (the 30 / 40 entry limits come from the code). The specks write past the end of the 224 x 200 buffer in the original (into whatever
+follows); the port gives the buffer 0x400 more bytes. Weather mode 2 draws nothing. `walk_draw_world` is gone: the pass draws the layers itself.
+
+**A note from the mutation run:** the list of distinct words loops until it finds a new value. With a wrong rand multiplier (a deliberate
+bug) it never finishes; the run counted the hang as noticed. With the right generator it ends after 303 draws.
+
+## Milestone 7c: the hero walks (C), built 2026-10-17
+
+`walk_pass` now takes the keyboard port's value: `build/3k --scene walk --data original_bin` reads it from the window (`platform_port60`), so
+**the four arrow keys (and the keypad 8, 2, 4, 6) walk the hero** around scene 0. One step is a half tile (4 pixels) and one is made every third
+pass (35 passes a second, so about 12 steps a second); the whole picture scrolls with the hero, who stays at the same place on the screen, as in
+the original. Walls stop him and shake the window for two passes. The party's followers (none are drawn in scene 0) follow the trail.
+Headless: `--walk-key N:CODE` (repeatable; the value set at pass N holds from there) with `--step-dump N:FILE`.
+
+- **What happens at a scene record:** the pass after a step onto the position of one of the scene's 50 records does nothing else (as in the
+  original), and the record loop runs again on the live state. The house's door (x 38 and 39, y 44 and 45 in scene 0) is such a place; walking
+  sideways over it changes nothing you can see. **Walking up into the door (or down out of it) is not built:** the original takes the roof off
+  or puts it back, and changes the weather mode; the port says `walk: not built: a roof comes off or goes back (scene record 1)` on stderr
+  and the picture then differs from the original (rain stays on, the roof stays).
+- **Not built:** sliding round corners (the A key), the no-clip test mode, every other key, the mouse, the F-key actions, hero-villager contact,
+  the other record kinds named in `findings.md` "WALK.SL step 7". Any of these that is reached is reported once per pass on stderr.
+- **Pace:** the hero's speed is the loop's: 35 passes a second is the guess the operator found right for the idle world; whether a step every
+  third pass feels right in play is not known yet.
+
+**Checked** (`tools/check_walk.sh`, about 2.5 minutes; `IDLE=0` skips the idle and walking parts):
+- eight key scripts (five random, three yo-yoing around the door) of 900 to 1,100 passes at five clock readings, and the seven idle traces of
+  7.2: after every pass the screen, palette, villager table, party table, trail, rand state, lists and the hero's counters are **identical** to
+  the original's in the oracle, for the Python model and for the C port. Further scripts run during the work (21 sequences, about 18,000 passes
+  in all) agreed too;
+- `tests/test_walk.c` adds the footprint test cell by cell, the trail shift and the followers' entries, the record lookup (first match, the
+  low bit, kind 5 under odd coordinates), and runs on scene 0: a held Right key's positions pass by pass (including the pass the record hit
+  takes out), releases and the break code of another key, the four directions, the bump (state and rand), an unbuilt key and the unbuilt roof;
+- `tools/mutate_walk.py`: **249 deliberate bugs, all caught** (the 59 for the walking code and the 192 earlier). The first full run caught 243
+  of 250; the seven that survived were: the record loop's re-entry, which record kinds are reported, a boundary of the arrow-key range, the
+  repeat rule for the keys 1, 2 and A, the 0xe0 prefix, the shake's divisor (the unit test had no value at the edge of a bucket), and "the roof comes
+  out" (an unreachable branch until the roof toggle is built, so that mutation was dropped). I added unit tests for the first six (and the key
+  scripts now send the 0xe0 prefix and the break codes of other keys), and re-ran those mutations and the groups they belong to: all caught. The
+  full list was not run again in one go after that.
+- **A test bug the sanitizers found:** `walk_begin` reloads the scene, so a `walk_scene_t *` taken before it is dangling; my first version of the
+  walking test read freed memory and passed anyway. AddressSanitizer caught it; the test now takes the pointer again after each `walk_begin`
+  (and one test that changed a record before reloading had been testing nothing). The unit test, and the comparison for five of the key
+  scripts, are clean under AddressSanitizer and UBSan.

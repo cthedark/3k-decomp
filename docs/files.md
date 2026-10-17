@@ -11,7 +11,7 @@ evidence in `findings.md`; everything else is a guess or unknown.
 | `PLAY.BAT` | 29 | text | `cd\3k`, `mark`, `cd ..`. Starts the game through MARK. |
 | `MARK.EXE` | 15,388 | PKLITE (25,697 unpacked) | Entry point. Intro/title, FM music driver, filename table. |
 | `TV.EXE` | 8,150 | PKLITE (12,283 unpacked) | **One-time speed test** (code read 2026-10-14, see `code.md`): shows a TV-static screen, times it with the BIOS tick counter, writes a speed class 0..4 into byte 0 of `RPG.LCP`, then starts `MARK.EXE`. `MARK` runs it only if that byte is > 10; our copy has 2, so it never runs. |
-| `WALK.SL` | 126,865 | none | Overlay loaded when the game world starts (trace). Largest. |
+| `WALK.SL` | 126,865 | none | The game world (confirmed in the oracle, see findings.md "WALK.SL ... first survey"): a scrolling tile map in a 192 x 168 window with the interface frame around it. Largest. |
 | `CAST.SL` | 22,903 | none | Overlay. Not seen in the traces yet (maybe the credits). Role unknown. |
 | `WALK0.SL` | 17,631 | PKLITE (30,681) | Overlay loaded for the main menu (trace). |
 | `STORY2.SL` | 19,777 | PKLITE (36,575) | **The intro slideshow** (loaded as an overlay by MARK; confirmed in the trace). |

@@ -1880,3 +1880,409 @@ segment is at file offset 0x4fd0 + 0x400.
 - **Tooling note:** `dosemu.py --opl-log` clocks the writes by timer interrupts actually delivered (`irq_delivered`), not by the slices it
   runs: an early version counted slices, which differed by 2 in 2,063 (interrupts masked during start-up); the song-0 comparison
   done with it was unaffected, and everything after was recorded with the fixed clock.
+
+## WALK.SL (the game world): first survey, 2026-10-16
+
+Read-only. Nothing of `WALK.SL` is built. Evidence: the MZ header, a prologue scan of the disassembly (`work/walk/dis.txt`),
+the call list of `main` (`tools/calls16.py`), three oracle runs (`dosemu.py work/unpacked/WALK.SL.exe`, which is the file itself:
+it is not packed), and a sample of where the emulated CPU spends its time. The oracle was started with the menu's screen and
+palette (`--screen-from/--palette-from work/check_credits/start.raw`), as for `CAST.SL`.
+
+- **Size:** 126,865 bytes, image 119,185. Code `0x10000 .. 0x2c5xx`; entry `0x1e` in segment `0x176b`; asks DOS for all memory
+  (minalloc 0xffff paragraphs). 108 functions by prologue scan (the older note says 110). **`main` (`0x10000`) is 36,828 bytes
+  by itself; `0x1cbb6` is 12,624;** then 5,824, 4,728, 4,212, 3,404, 2,672. 16 functions are over 1 KB, 5 over 4 KB, the median is 108
+  bytes; the 20 largest hold 86 KB. About 1,760 far calls to 160 distinct targets. For scale: the four programs built so far
+  (`MARK` 24 KB, `STORY2.SL` 37, `WALK0.SL` 31, `CAST.SL` 23) are about 114 KB of code in all; `WALK.SL` alone is as much.
+- **Files it names (about 25 distinct):** `mes_txt.lcc` (98 KB, text), `number.lcz` (408 KB; opened 28 times in the first tick),
+  `muc.all` (music), `rpg.lcp` (the interface palette and tables, 15 uses), `snd_ef.1` (sound effects), `man_info.now` and `__1.now`
+  (92,750 bytes: the state that "new game" writes from `__1.al1`, `__1.al2`, `man_info.all`), `tab.tab`, `__2.all` (259 KB), `gtab.all`
+  (567 KB), `m_m.all` (160 KB), `mon.all` (489 KB, monsters?), `object.lcc`, `magict.lcc`, `mandata1.lcc`, `man_pic.lcc`,
+  `shop_pic.lcc` (105 KB), `spic.lcz` (91 KB), `boat.lcz`, `ani.lcp`; and the programs it starts: `mark.exe`, `ending.sl`. About 2.9 MB of data in all.
+  The role of each file is a GUESS from its name and size.
+- **Start-up (SEEN in `main`, `0x10000..0x10a54` and on):** carves roughly 60 buffers out of three large allocations, then loads in
+  stages: `mes_txt.lcc`, `number.lcz` (in pieces, into tables), the music, `rpg.lcp` (palette and tables of 0x300, 0x40, 0x100, 0x15e,
+  0x44, 0x140 bytes), `man_info.now`, `__1.now`, `tab.tab`, `__2.all`, `gtab.all`, `m_m.all`; a second `muc.all` read takes its offset
+  and length from variables (a song chosen at run time, see "Rhythm mode" above: song 3 can come from here).
+  In the oracle all of it is done by BIOS tick 6.
+- **What the screen shows (MEASURED):** from tick 6 the interface frame (the menu's F1-F10 buttons left and right) around a
+  192 x 168 window at screen (64, 16): a top-down tile map with houses, a fountain pond, a character, rain and animated water.
+  The window changes between snapshots with no input (animation). With the Down key held for 180 ticks the view scrolled
+  south; with Right held for 190 ticks it scrolled east to another place (a red roof). Only the window changed (pixels in
+  x 64..255, y 16..183 only; the frame is unchanged). The palette starts as the interface palette and changes in 6-11 entries.
+- **Drawing primitives (SEEN, hand-written assembly at `0x2b9xx .. 0x2c4xx`, where the CPU spends nearly all its time):** an 8 x 8 tile
+  copied into an off-screen buffer 224 pixels wide (`0x2c3c8`: `rep movsw` of 4 words, then 216 bytes on); a masked 8 x 8 blit
+  (`0x2c4cd`: `dest = (dest & mask) | pixels`, the mask at +0x40 in the sprite); and the window copy (`0x2b9f0`: 168 rows of 96
+  words from the buffer, source stride 224, to screen offset `0x1440` = row 16, column 64). So the picture is a 224-wide buffer
+  (28 tiles) of which a 192-wide window (24 tiles) is shown, which is how the scroll works.
+- **Input (SEEN):** the code compares scancodes: Esc 77 times, arrows 11-16 times each, Enter and Space 13 each, F1-F10 (0x3b-0x44)
+  about 40 times in all, and some letters. The operator's keyboard has no function keys, so the ten buttons have to be reachable by mouse.
+- **Not known:** the file formats of the map and tiles (which of `__1.now`, `__2.all`, `gtab.all`, `m_m.all` and `number.lcz` holds what), the
+  game's rules, what F1-F10 do (the labels are the characters 觀看, 取物 and so on), shops, fights (`mon.all`?), the save format
+  (`saveNN.000/.001/.002`), the clock/animation rates, and where `main`'s loop and the 12 KB function at `0x1cbb6` begin and end.
+
+### Size of a port (a judgement, not a measurement)
+
+Different in kind from the programs built so far, not just larger: those were scenes (a fixed script of pictures), checkable by
+comparing the screen after N passes. `WALK.SL` is an engine: its behaviour depends on 2.9 MB of data in formats not yet decoded and on a
+state (the 92 KB `__1.now`, the saves) that the oracle can load but that the port would have to understand. By code size alone it is
+as large as everything built so far, and the part that is rules and menus, not drawing, has not been looked at.
+A sensible order, each step checkable against the oracle the way the menu was: (1) decode the map, tile and sprite data
+and draw the first view, pixel-identical to the oracle at a fixed tick; (2) scrolling with the keys, including the animation of water and rain; (3) the
+interface around the window (the right-hand panel, the status line); (4) the ten actions one at a time, starting with the ones that need no new
+data. Steps 3 and 4 are open-ended.
+
+## WALK.SL step 1: the map layers and the window, 2026-10-16
+
+Method: `tools/walk_dump.py` (new) runs `WALK.SL` in the oracle with the menu's screen and palette, logs every DOS file read with
+its file offset and destination, logs calls to chosen entries, and dumps memory at the Nth arrival at a code address.
+`tools/walk_layers.py` (new) is a Python model of the two map layers. Linear addresses below are the oracle's; the allocator
+decides them, they are not in any file.
+
+**Drawing one frame is `0x19680`** (SEEN in the disassembly; it is called once per frame, I did not read its callers). In order:
+`0x2c05a` and `0x2be49` (not read), then
+1. **Ground** `0x2c362` (called at `0x1970b`): 25 x 23 tiles of 8 x 8 pixels into a 224-wide buffer.
+2. **Entities** (loop of 25 at `0x19729`): for each of 25 list entries, kind < 0x14 or >= 0x14 picks one of two record tables
+   (50-byte and 40-byte records); `0x2bbec` / `0x2bc7c` turn the record into a sprite offset; `0x26c04` blits a 16 x 16 sprite
+   with colour 0 transparent into the buffer (stride 0xe0). The hero is drawn here. NOT decoded: the record fields, the two
+   offset routines, where the sprites live.
+3. **Objects** `0x2c456` (called at `0x1996f`): the same grid over a byte map, masked 8 x 8 sprites.
+4. `0x2c658` and a copy of `0x5080` words (not read). Then the window copy `0x2b9ec` (below).
+
+**Ground layer (CONFIRMED against the oracle, 0 differing bytes of 44,800):**
+- Map: 128 words per row, 100 rows. Word = tile id. Tile = 64 bytes at `id << 6` (16-bit shift) in the tile bank.
+- The view is centred on (X, Y) in half-tile units: first map word is column `(X & ~1)/2 - 11`, row `Y/2 - 10`; first tile is drawn at
+  buffer (16, 16); odd X shifts the picture left by 4 pixels, odd Y up by 4 rows. At the first frame X = 0x24, Y = 0x2c (36, 44).
+  Odd X / odd Y were read from the code but NOT compared with the oracle (only the even case was seen).
+- A second variant of the same routine (flag argument non-zero: 14 x 13 tiles at buffer offset `0x3140`, map offset +0x50c) exists. NOT seen running.
+
+**Object layer (CONFIRMED, 0 differing bytes, using the buffer at the start of the call as the base):**
+- Byte map, 128 per row, at ground map + `0x92ea`; id 0xff = none. Sprite = 128 bytes at `id << 7`: 64 pixels, then 64 mask bytes
+  (`dest = (dest & mask) | pixel`). Same 25 x 23 grid and shift rules as the ground; map column is `(X - 0x16)/2` here.
+- The first comparison differed by 186 bytes: that was the hero (tiles 12-13 x 13-14), drawn between ground and objects. With the buffer
+  taken at the start of the objects call the difference is 0.
+
+**Window copy `0x2b9ec`** (CONFIRMED, 0 differing pixels): screen (64, 16), 192 x 168, from buffer (16, 16). So the buffer is
+28 tiles wide and the window is its middle 24 x 21 tiles.
+
+**Where the data comes from** (SEEN in the read log at ticks 9-10; the files are in `original_bin`):
+- Tiles: `GTAB.ALL` offset `0x11040`, 16,000 bytes (250 tiles), read straight into memory, no decoding.
+- Object sprites: `GTAB.ALL` offset `0x14ec0`, 15,872 bytes (124 sprites), read straight.
+- Ground map: `__2.ALL` offset 6, 3,681 bytes, run-length decoded (escape byte = first byte, `esc, count, value`, length word after the
+  escape; the same scheme as `.LCZ`), by `0x25eeb` into a 25,700-byte buffer. Skip the first 100 bytes (a header, not read), then two
+  planes of 12,800 bytes (low bytes, then high bytes); `0x2b86e` interleaves them into 12,800 words. The game read `__2.ALL` from offset 0,
+  0xe67 bytes. Why those numbers: NOT known (a size/offset table I have not found).
+- Object map (the layer at `0x76f00`): where its 885 non-empty cells come from is NOT known. It is NOT the `M_M.ALL` decode, which I
+  first assumed from the address: `M_M.ALL` offset `0x1a4a9` (6,304 bytes) is RLE-decoded into a different 10,240-byte layer at `0x74016`
+  (128 x 80 bytes, none of them 0xff, first row starts `00 .. d7 d4 d6 d9`; MEASURED that the two buffers share no byte value at the same
+  position). A routine at `0x27519` writes all 10,240 bytes of `0x76f00..0x79700` at tick 10 (a word fill or copy; the source/value is
+  not read, the buffer is 0xff afterwards except for the 885 cells), so the object ids are put there afterwards by code I have not read.
+  What the `0x74016` layer is for (collision? events? a roof layer?) is NOT known either.
+- The offsets `0x11040`, `0x14ec0`, `0x1a4a9` are fixed by the starting state (probably the area number in `__1.NOW` / `MAN_INFO.NOW`).
+  How they are computed (the loops around `0x10cf0..0x11200` that sum table entries to a file position) is NOT worked out.
+
+**How much of the picture this explains (MEASURED, one frame at tick ~21):** ground + objects reproduce 31,862 of 32,256 window pixels
+(98.8%). The other 394 are: the hero (about 170 pixels, tiles 10-11 x 11-12 of the window) and about 220 scattered single pixels in
+1-6-pixel groups per tile, which look like rain streaks (INFERRED from the pattern and the screenshot; the code that draws them is
+one of the writers at `0x2c1d1`-`0x2c218` that start at tick 21, not read).
+
+**Not done:** the entity list and its records (hero, villagers), the rain and water animation, the palette changes (6-11 entries),
+the source of X/Y and of the file offsets, `0x2c05a`, `0x2be49`, `0x2c658`, the C port. Nothing of WALK.SL is in C yet.
+
+## WALK.SL step 2: the entities (hero, party, villagers), 2026-10-17
+
+Method: `tools/walk_entities.py` (new) is a Python model of the entity pass. It was compared with the oracle's world buffer
+(the 224-pixel-wide one) at the moment the objects pass starts, in 11 frames: the first frame, and ten frames of a run that
+holds Right from tick 30 (so the hero walks east across the village). Every one has 0 differing bytes of 44,800. `walk_dump.py`
+now also prints the caller (`ret=`) for each `--call`, which is how the main loop's own copy of this code was found.
+
+**Two copies of the frame code (SEEN).** `0x19680` drew the first frame (it was called once in the 300 ticks I ran). Every later frame
+is drawn by the main loop itself, with the same calls (ground returns to `0x11e23`, positions to `0x11eac`/`0x11fe6`, objects
+to `0x12311`) and the same logic. The one difference found is the hero's walk counter: `0x19680` passes the literal 1, the
+main loop passes a local that counts 0, 1, 2, 3.
+
+**The 25 entities (CONFIRMED, 11 frames).** Entity numbers 0-19 are the villagers (50-byte records), 20-24 the party (40-byte records).
+- **Villagers** (`__1.NOW` bytes 0-1749, identical to memory): `[0]` x, `[1]` y in half tiles, `[2]` direction 0-3, `[0xa]` frame 0/1,
+  `[0xb]` sprite set 1-5. Set 0 or >= 6 is not drawn, and neither is x = 0 or y = 0. Records 13-19 are all zero in the shipped state.
+- **Party** (`MAN_INFO.NOW` bytes 0-519, with the positions overwritten by code at start-up; the file holds the last saved ones, 0x56,0x23):
+  `[0]` x, `[1]` y, `[2]` direction, `[3]` character number; >= 0x64 means not in the party. Only record 0 is in the party in this state
+  (number 0), so **the hero is party record 0**, and it is drawn at buffer (104, 96) in every frame.
+- **View centre.** X, Y in the header are simply the hero's x, y. That settles where the first frame's (36, 44) comes from: the code puts the hero there.
+  Why there, and why the file holds a different position, are not known.
+- **Draw order.** `0x2c05a` collects the 25 y values and `0x2be49` sorts them with 24 passes of adjacent compares that swap on strictly greater
+  (a stable bubble sort), so lower entities are drawn later and cover higher ones. The order matched the game's own list in all 11 frames.
+
+**Where each entity goes on the screen** (`0x2bbec`). Positions are in half tiles = 4 pixels. Add 4 to x and y; subtract the view's top-left
+(X - 0x16, Y - 0x14); the buffer offset is rows * 0x380 + columns * 4, i.e. 4 buffer rows of 224 per half tile. Villagers (flag 0) are
+skipped when outside a box 0x34 wide and 0x2e high around the view, edges inclusive; the party (flag 1) has no box test.
+The box edges were checked at the right edge (inside at 0, outside at -1), the bottom edge (both) and the left edge (both). The top edge was
+NOT reached in the run, so it comes from the code only.
+
+**Sprites.** 16 x 16, colour 0 transparent (`0x26c04`), so no mask.
+- **Villagers** (`0x2bc7c`): offset = (set - 1) * 0x800 + direction * 0x200 + frame * 0x100, in a 10,240-byte bank. That bank is the `M_M.ALL` decode
+  from offset `0x1a4a9` (CONFIRMED byte for byte). This is the layer I called "unknown purpose" on 2026-10-16: it is the villagers' sprites, not a map.
+  Offsets >= 0x2800 would read the second bank; the largest reachable is 0x2700, so that branch and the special direction 0x61 were not seen running.
+- **Party** (`0x2beca`): offset = character * 0xc00 + direction * 0x300 + pose * 0x100, in the `RPG.LCP` decode from `0x1ae37`
+  (CONFIRMED). The pose is the walk counter 0, 1, 2, 3 mapped to 0, 1, 2, 1. Directions seen: 1 (down, standing) and 3 (right, walking).
+  The pose changes every ~3.4 ticks even while the hero stands still (SEEN at ticks 20-27).
+
+**What the checks cover.** The first frame, and main-loop frames 50, 53, 68, 163, 170, 173, 175, 221, 400 and 440 of a 300-tick run (`walk_entities.py frames`
+lists them): hero directions 1 and 3, all four walk-counter values, 1 to 4 villagers drawn at a time, villager sets 1-4, a villager on
+the right, bottom and left edge of the box. I did not tabulate which villager directions occurred.
+`work/walk3/mut.py` (scratch, not kept) made 20 deliberate changes to the model and 17 were caught. The three that are NOT observable here:
+the party's character stride (only character 0 is on screen), the exact cut-off 0x64 (no record holds a value near it), and the box's top edge.
+Those three values come from the code only.
+
+**Not done**
+- **Rain** (the 0xa8-0xae pixels): it is NOT in the buffer at the start of the objects pass (that is why the model matches without it), so it
+  is drawn later. The writers at `0x2c1d1`-`0x2c218` (routine `0x2c1ae`) are the likely ones; not read.
+- **How the records change** each frame (walking, speeds, the party following): `0x2bccd` looks like the villagers' step (a walking area in `[3..6]`,
+  a speed period in `[8]`/`[9]`, the direction picked by `[2]`). It was read, not run or compared.
+- **Where the hero's walk counter and direction are set** from the keys, and the F1-F10 buttons.
+- **The source of the object map's 885 cells** and of the file offsets are still open (see step 1).
+- **Nothing is in C yet.**
+
+## WALK.SL step 3: the first screen, complete, 2026-10-17
+
+`tools/walk_first_frame.py check` rebuilds the screen WALK.SL shows after its first window copy (BIOS tick 21) and compares it with the
+oracle: **0 differing pixels of 64,000**. The tiles, object sprites, ground map, both sprite banks, both entity tables and the rain list are
+rebuilt from the game files and compared with the oracle's memory first (all identical). Inputs that still come from the oracle are listed at
+the end. Palette: the first change to any entry is at tick 23 (SEEN with a per-tick palette log), after the first window copy, so the first
+screen uses the palette the menu left.
+
+**The screen is made of four things, in this order (SEEN in the write log: which routine writes which pixels, and when):**
+1. **The menu's last screen** (stone frame, empty buttons, the "486" label), inherited. Taken from `work/check_credits/start.raw`.
+2. **Sixteen button labels, BIOS ticks 0-2** (`0x1035f`-`0x10440`). Left column F1-F8 at x = 17, y = 4 + 20k; right column at x = 282,
+   y = 60 + 20k (six labels); 是 at (273, 40) and 否 at (297, 40). Each label is drawn three times: its pixels in colour 0x8e two rows
+   down, in 0x8f one row down, then the label itself (the engraved look).
+3. **Bottom right, tick 9:** a 40 x 5 box of colour 0 at (273, 185) (`0x270e3`) and a 7 x 5 piece of `RPG.LCP` (offset `0x9b8`) at (289, 185).
+4. **The world window, ticks 11-21:** the world buffer (ground, entities, objects, rain) and its middle 192 x 168 pixels copied to (64, 16).
+
+**The label text.** `MES_TXT.LCC` offset `0x386` holds the Big5 string 交談觀看取物施法物品裝備使用地圖位置資料音樂音效儲存離開 (and more).
+The font is `NUMBER.LCZ`: 28-byte glyphs, 16 x 14, one bit per pixel, in 30-byte cells in Big5 order:
+offset = `0x3b20 + 30 * ((hi - 0xa4) * 157 + (lo - 0x40, or lo - 0x62 if lo >= 0xa1))` (the code at `0x24700`-`0x24760`; CONFIRMED: this
+gives the offsets of all 28 reads, in the labels I regenerated, and inverts to 是 and 否 for the last two). The game keeps a 292-entry cache of
+glyphs, which is why a repeated character (物) is read once.
+The label sprite is the glyphs side by side, header (width, height) = (16 n, 14). The renderer (`0x243ec`) colours glyph rows 0-4 with 0x89,
+5-9 with 0x8a, 10-13 with 0x88. Then, for two-character labels only, `0x103ab` runs `0x2741b` (replace colour 0x88 by a new colour over a byte range)
+three times: 0x88 -> 0x89 over data bytes [120, 270), -> 0x8a over [240, 390), -> 0x8b over [360, 510). Net effect: rows 10-11 and part of row 12
+become 0x8a, the rest of row 12 and row 13 become 0x8b, and the first six bytes of row 12 stay 0x8a because the second range reaches them first.
+The lone 是 and 否 are not recoloured (rows 10-13 stay 0x88). All 16 sprites regenerated this way match the oracle's byte for byte.
+
+**Rain (CONFIRMED, first frame and the move to the next frame).** Routine `0x2c1ae`, called from the main loop right after the objects pass:
+- **List:** 75 words at `0x67470`, filled once at tick 2 with the first 75 `rand()` values after `srand(0)`. The game's generator is the usual C one
+  (state = state * 0x343FD + 0x269EC3, result = state >> 16 & 0x7fff; first values 0x26, 0x1e27, 0x52f6, ...). Each word is a buffer offset.
+- **Drops:** entries 0-39 are short drops, 3 pixels (colours 0xae, 0xad, 0xac); entries 40-74 are long drops, 6 pixels (0xad ... 0xa8). Each
+  pixel is one row lower and one pixel to the right (offset + 0xe1). That is 330 pixels per frame.
+- **Moving on:** after drawing, a short drop moves by stride / 2 and a long one by stride, modulo 0xa100. At the first frames the stride is 0x384
+  (the one-frame-later list matches the oracle's: +450 and +900).
+- **Stride and weather:** the main loop reads the BIOS tick counter (0040:006c) through `0x25df2`. Below 0x5000 it draws rain with stride
+  0xe1 * n + 0x384, where n = ticks >> 10 (or 20 minus that when above 10); between 0x5000 and 0xa000 nothing; above 0xa000 it
+  calls `0x2c2c2` instead (150 + 150 bytes decremented by 2; not understood) and no rain. So the weather follows the real clock; at the start n = 0.
+  This was read from code and seen for the first frames only. The mode byte 2 of `0x2c1ae` (a 2-pixel and a 4-pixel drop, colours 0x10-0x16,
+  probably snow) was read and never seen.
+- **My earlier guess** (step 1) that the "scattered single pixels" were rain was right, and the 330 count is exactly 40 x 3 + 35 x 6.
+
+**Start-up state that changes the view.** The loader at `0x115c0`-`0x11b60` walks 15-byte records in `__1.NOW` (from byte 1000 on) and patches the
+maps. One of them changes the first view: record at `__1.NOW[1195:1210]` (x 30, y 15, kind 2) writes tile 0x19 over ground word 1935
+(it was 0xf5). I reproduce that one record only. The same loader writes the object map (at `0x11704`-`0x1171c`: object id = `rec[0xa]`, cell =
+`(rec[9] << 7) + rec[8]`), so it is very likely the source of the 885 object cells; not derived yet. The party's start positions (0x24, 0x2c) are
+written by code at start-up (step 2).
+
+**Controls.** `work/walk4/mut.py` (scratch) made 25 deliberate changes: 22 caught. Three are not visible in this frame: the rain wrap value
+(no drop has wrapped yet), and the first byte of recolour range 1 and of range 3 (the neighbouring ranges already cover them).
+Those values come from the code only.
+
+**Inputs that still come from the oracle:** the object map (885 cells), the menu's last screen, and the facts that the hero's walk counter is 0 and
+the rain stride is 0x384 in this frame.
+
+**Not done:** frames after the first (the palette cycling starts at tick 23; the weather clock; villager and hero movement; input), the
+object map's loader, `0x2c658` and the other routines between the world pass and the window, the F-key actions. Nothing is in C yet.
+
+## WALK.SL step 4: the start-up scene loader, 2026-10-17
+
+`tools/walk_scene.py` rebuilds what WALK.SL's start-up code (`0x10b00`-`0x11c17`) makes from the game files: the ground map, the **object map**, the tile
+set, the object sprites, sprite bank 1, both state tables, the 100-word list and the party trail. `check` runs the original in the oracle to the end of
+the record loop (`0x11c17`) and compares each buffer: **identical**. `scenes` does the same for all 53 scene numbers with the shipped state files:
+**53 of 53 identical**. `fuzz N SEED` randomises the state files and compares again: **84 of 84 identical** (120 variants at seed 7; 36 skipped, see below).
+`tools/mutate_scene.py` applies 36 deliberate bugs to a copy of the model: **36 of 36 caught** (about 12 minutes).
+`walk_first_frame.py check` now takes the object map and ground map from this loader and still gives 0 differing pixels of 64,000.
+All of this was SEEN in the oracle on the shipped files; everything below marked READ comes from the disassembly only.
+
+**Where the object map comes from (CONFIRMED).** It is not made by the records. The 12,800 bytes at `[25700:38500]` of the decoded `__2.ALL` block are
+copied (`0x27503`, word copy, seen in a write trace with `tools/walk_wtrace.py`: 5,120 word writes, one writer, tick 10) and are byte-identical to the
+oracle's object map. The records then patch it. Last step's "885 cells" are the 885 non-`0xff` bytes of that block plus the patches of the shipped state.
+
+**Which scene, and the files (CONFIRMED for scene 0 and all 53 scene numbers on the shipped data).**
+- **Scene number:** `MAN_INFO.NOW` byte 500 (the loader copies bytes 500-503 to 510-513; 512 = hero x, 513 = hero y / 2). `__1.NOW` holds one
+  1,750-byte block per scene (20 villager records of 50 bytes, then 50 scene records of 15 bytes).
+- **Map:** `TAB.TAB` is an index of 5-byte entries (offset = byte 2 << 16 + word 0, length = word at +3). Entry `5 * scene` locates the scene's block in
+  `__2.ALL`. The block starts with a 6-byte header (tile set, sprite-bank number, song, ?, weather mode, ?), then the run-length data (same code as
+  `.LCZ`). Decoded: `[0:100]` first half of a 100-word list, `[100:25700]` ground map (two planes), `[25700:38500]` object map, `[38500:38740]` and
+  `[38840:39080]` 240 bytes each (not understood), `[38740:38840]` second half of the list.
+- **Tiles and sprites:** entry `0x109 + 10 * tile set` in `TAB.TAB`: GTAB.ALL offset, tile length (word at +3), sprite length (word at +8). This is where
+  `0x11040`, `0x14ec0` and the read sizes come from, which was open at step 1. For scene 0: offsets `0x11040` / `0x14ec0`, lengths `0x3e80` / `0x3e00`.
+- **Bank 1:** `M_M.ALL`, entry `0x334 + 5 * n` of `TAB.TAB`, n = header byte 1 (minus 5 when above 0x13). Scene 0: `0x1a4a9`, `0x18a0`.
+- **Song:** `RPG.LCP` at `0x7add + 5 * header byte 2` holds an entry in the same form that locates the song in `MUC.ALL` (scene 0: `0x1e085`, `0x2593`).
+  The read is matched to the oracle's file log; the music itself is not part of this tool.
+- **Start position:** the party's five records and a 13-entry trail get (x, y, 1) with x = byte 512 and y = 2 * byte 513. So the first frame's (36, 44) is
+  `MAN_INFO.NOW` bytes 502-503 = (0x24, 0x16): **answered**, it is stored, as bytes 502-503 (bytes 0-1 of the file, 0x56 0x23, are the last saved position, which the loader overwrites).
+
+**The 50 scene records (READ from the code, CONFIRMED by the 53 scenes and the fuzz).** Kind = byte 2; `flag(i, b)` is bit b of `MAN_INFO.NOW[200 + i]`.
+Full rules are in the docstring of `walk_scene.py`. In short: kind 2 writes a word (object map) or two words (ground map) at a cell; kind 0xa and 0xc
+patch the ground map / object map when a flag is set; kind 0xb sets flags when a party member holds an item; kind 0xd patches the state table itself;
+kind 0xf adds ids to the 100-word list; kind 0x10 starts a cut scene. Before the loop, if `RPG.LCP[0]` (the CPU speed class) is below 2, every
+villager's byte 8 is reduced and byte 9 cleared.
+
+**Corrections made while building it (my mistakes, each found by the oracle comparison):**
+- I first took the six header bytes from the decoded data; they are the file's own bytes before the run-length data.
+- Kind 2 copies through a word-count routine, so it writes 2 bytes to the object map and 4 to the ground map, not 1 and 2.
+- In kind 0xb, a party member whose status byte is above 10 ends the search for that item, it does not skip to the next member.
+- The flag test (`0x2c158`) shifts by `bit + 1`; the shift count is masked to 5 bits, and a count of 0 leaves the carry flag as the preceding compare left it.
+  The model reproduces this; whether real DOS-era hardware (8086) would differ is not something I tested (the oracle is a 386+ emulator).
+
+**What the checks do not cover.**
+- **Out-of-range writes (32 of 120 fuzz variants):** a record can point past its map. The original then writes into whatever follows; the model
+  raises and the variant is skipped. Nothing in the shipped data does this.
+- **Cut-scene records (kind 0x10) and the `0x81` byte** at the start of `0x11315` run code that is not modelled: such variants are skipped (4 of 120 fuzz
+  variants, none of the 53 shipped scenes).
+- **What the fuzz varies:** the scene number, the hero position, the flag bytes, the party's status and item bytes, `RPG.LCP[0]`, and a third of the scene
+  records (kind and fields). It does not change `TAB.TAB`, `__2.ALL` or the other data files, so those formats are checked by the 53 scenes only.
+- **Not understood:** the two 240-byte blocks of the decoded map; header bytes 3 and 5; why the state file's own position differs from byte 502-503.
+- **Not looked at:** music start-up, the weather clock, and what the shipped `__1.NOW` holds for scenes other than 0 (the model matches the oracle there,
+  which shows the code path, not that the contents make sense).
+- The record rules were written from the code; the 36 deliberate bugs are all caught, but this is a model of one start-up path, not of the whole game state.
+
+**Inputs that still come from the oracle for the first screen:** the menu's last screen (`work/check_credits/start.raw`), the hero's walk counter
+(0) and the rain stride (0x384) in this frame. Nothing is in C yet.
+
+**New tools:** `walk_scene.py` (`show`, `check`, `scenes`, `fuzz`), `mutate_scene.py`, `walk_wtrace.py` (log every write into a memory range with the
+writing instruction). `walk_first_frame.py` now uses the loader.
+
+## WALK.SL step 5: the C port of the first screen, 2026-10-17
+
+Built from the verified pieces of steps 1-4 (details and checks in `docs/port.md`, "Milestone 7a"). Results worth recording here:
+- The port's first screen is **identical** to the original's at BIOS tick 21 (pixels and palette), over the port's own menu screen.
+- It is also identical when drawn over the menu's *first* frame instead of its pass 3: outside the 192 x 168 panel the menu screens are the same picture
+  and the window covers the panel exactly, so the hand-over from the menu does not matter for this frame.
+- The labels need `MES_TXT.LCC` bytes `0x386..0x3bd` (fourteen two-character labels, 4 Big5 bytes each); the lone 是 / 否 are not in that read,
+  so the port writes their Big5 codes (`AC 4F`, `A7 5F`); where the original gets them is still not found.
+- A hex slip of mine (0xe90a - 0x9470 is 0x549a, not 0x5496) was found by a unit test failing on correct code; it concerns only the test.
+- The shipped `__1.NOW` and `MAN_INFO.NOW` are used as they are; the new-game step that writes them from `__1.AL1`, `__1.AL2` and
+  `MAN_INFO.ALL` is not ported.
+
+## WALK.SL step 6: the idle main loop, frame 21 onward, 2026-10-17
+
+What WALK.SL does pass after pass at the loop top `0x11d36` with no key and no mouse. Method: `tools/walk_idle_trace.py` runs the original in the
+oracle (`--loop-top` style: the BIOS clock is `base + pass / 3`) and records, at every arrival at the loop top, the main frame's locals, the data
+segment's counters, the villager / party / animation tables, the rain list, the rand state, the screen and the palette. `tools/walk_idle.py`
+(`check`) is a Python model of one pass compared with those records; `walk_idle.py cross` compares the C port (`build/walk_dump idle`).
+Pass numbering: arrival n = n passes completed. Arrival 1 is the first screen of step 3 (0 differing pixels), so the first screen is the window
+copy of pass 0, and "frame 21" onward is arrival 2 and later.
+
+**Result (CONFIRMED):** the model and the C port both reproduce the oracle's villager table, party table, rain list, rand state, palette buffer,
+DAC, both animation tables, the specks list and the screen **at every arrival**, over 5,593 passes at seven starting clock readings (1,499 passes
+from clock 20, and 599-899 from 4096, 11264, 20224, 28672, 40704 and 45056).
+
+**What an idle pass is made of** (addresses in WALK.SL; the order is the original's):
+1. `0x2b898`, `0x2b99a`: animated tiles. These are **the two 240-byte blocks** of the decoded map that were "not understood" at step 4:
+   `[38500:38740]` is a table of up to 30 ground-tile animations (8 bytes: ground-map byte offset, period, counter, first tile, last tile;
+   an offset of 0 ends the list), `[38840:39080]` up to 40 object animations (6 bytes: offset, period, counter, first id, last id). A ground
+   tile steps every `period + 1` passes and goes from the last tile back to the first; an object's counter must hit the period exactly.
+   Scene 0 has 23 ground entries (the pond: first/last tile 0x76/0x7e and others) and 2 object entries.
+2. `0x1c284`: **palette cycle.** Five counters at data segment `0x532..0x536`, all counting every pass from 0, act when they pass 3 / 10 / 6 / 12 / 8:
+   `0x533` rotates palette-buffer entries 1-3 forward, `0x534` entries 4-6 forward, `0x535` entries 7-10 backward, `0x536` entries 11-14 backward
+   (`0x2c71d`, `0x2c795`), `0x532` steps entry 15's green byte by 7 (`0x2c82c`: up while its red byte is 1, a landing exactly on 0x3f sets the red
+   byte to 0 and it falls by 7 until it is 1 or less, then rises again; the byte wraps at 256 and the DAC keeps 6 bits). Each time `0x2c85e`
+   writes 48 bytes to DAC entries **0 to 15** after a wait for the retrace. The palette buffer's first 48 bytes are `RPG.LCP[0:48]`.
+   (It was `0x2c85e` that I first read as starting at DAC entry 1: `tools/calls16.py` does not print `xor al, al`, which is at `0x2c88c`, and
+   the same hid the `xor al, al` at `0x2c849` that sets the ramp's red byte to 0. The oracle's DAC log showed both; the tool is a reading aid.)
+3. The picture: ground `0x2c362`, entities (existing model), objects `0x2c456`, then, by the clock below, the dark specks `0x2c2c2` or the rain
+   `0x2c1ae`, then the window copy `0x2b9ec`. The ten entries at `[bp-0xcc]` (frame, x, y, direction; moved by `0x2ba82`, drawn as 8 x 8 sprites)
+   are all switched off (frame 0xa) in an idle pass: nothing starts them here.
+4. Villagers: for each of the 20 records `0x2bccd`. Fields: x, y (half tiles), direction (0 up, 1 down, 2 left, 3 right; 4-7 stand still;
+   `0x61` a timer), limits x [3] .. [5], y [4] .. [6], [7] a counter, [8] the speed (a step every [8] calls, counted in [9]), [0xa] the 0/1 frame,
+   [0xb] the sprite set (0 or 6+: the record is skipped). A step moves one half tile towards the direction unless at the limit, **then tests the tiles
+   it would stand on**: the cells at the new position (two, a third when x is odd, the next row's when y is odd) must all be on the scene's list of
+   100 tile numbers (`__2.ALL`'s first 100 bytes plus `[38740:38840]`, extended by scene records of kind 0xf): this is a list of **walkable** tiles, a
+   tile not on it blocks the step. The scan is `repne scasw` and the code takes a count of 0 as "not found", so **an entry in the 100th place
+   never counts**. Then [7] += 1; it returns that value (and resets [7] to 0 when above 10). When the value is 10 the caller runs `0x134ba`: [7] = clock & 7,
+   then `rand()`: below 0x2aaa go left / right towards the hero's x, above 0x5554 up / down towards the hero's y, otherwise (or when it is raining,
+   or when byte 0x31 of the record is 0) a second `rand()` / 0x1000 (0 to 7) picks the direction. The special return 0xc (direction `0x61` timing
+   out) is not built.
+5. The hero's walk counter: `[bp-0x3c]` counts passes and resets above `class + [bp-0x2e]`, `class` = `RPG.LCP[0]` (2) and `[bp-0x2e]` = 3 while nothing is
+   pressed, so the frame `[bp-0x5e]` advances every 6th pass, 0 1 2 3 (the offsets 0, 0x100, 0x200, 0x100 as before).
+
+**Clock, weather and the random lists** (CONFIRMED over the seven clock readings). `0x25df2` reads the BIOS clock; the main loop uses **its low 16 bits**.
+At weather mode 1 or 2 (scene header byte 4; scene 0: 1): below 0x5000 it rains with stride `0xe1 * n + 0x384`, n = clock >> 10 (20 - n above 10);
+from 0x5000 to 0xa000 it is dry; above 0xa000 `0x2c2c2` draws 300 dark specks (each darkens its pixel by 2, first 150 move down-left by 0xdf, the other
+150 up-right, with wraps at 0xa0f0 / 0xe10) and there is no rain. So the weather has a period of 65,536 ticks (3,599.6 s, an hour of the BIOS clock): 18.75 minutes of rain,
+18.75 dry and 22.5 with the specks (I read these as night, but that is a guess). The specks can reach offset 0xaf00, past the end of the 224 x 200 buffer; the
+original writes into whatever follows, the port into a buffer made 0x400 bytes longer (nothing in the window shows it over the passes checked).
+At start-up `srand(clock)` (the program reads the BIOS clock first thing), then `0x10610` draws the 75 rain values and `0x10641` the **second list of
+300 distinct words** (`rand() + 0xe10`, a repeat is drawn again): 378 draws in all for seed 0; the model reproduces the rand state at pass 0 exactly.
+In the oracle the first screen's clock is 0, so there is rain with stride 0x384 and the specks are only reached with a clock above 0xa000.
+Villagers' decisions use the same clock (the low 3 bits) and, for rain, the same stride.
+
+**Not built / not seen:** keys, mouse, the party loop (`0x120a3`), hero-villager contact (`0x2c0da`), the special return 0xc of `0x2bccd`, weather
+mode 2 (the port draws nothing for it), the call at `0x1c346` (only when a byte at `[0x38c]:5` is 0x81; not reached here), other scenes' idle
+loops (only scene 0 was run), what the ten effect entries do. Only the 23 + 2 animation entries of scene 0 were exercised, so the 30- and 40-entry
+limits come from the code.
+
+**New tools:** `walk_idle_trace.py` (records the oracle's passes, zlib-compressed pickle), `walk_idle.py` (`check` the model, `cross` the C port).
+`check_walk.sh` runs the seven traces (about a minute; `IDLE=0` skips them).
+
+## WALK.SL step 7: the arrow keys, 2026-10-17
+
+The hero walks. `tools/walk_idle.py` (the Python model, now with a keyboard port value per pass) and the C port reproduce the oracle's passes
+exactly with the four arrow keys: 21 scripted or random key sequences, about 18,000 passes in all, thousands of steps and bumps and dozens of
+scene-record hits, at seven BIOS clock readings. Compared after every pass: screen, palette, villager table, party table (all five records), trail, rand
+state, rain and specks lists, palette buffer, animation tables and the hero's counters. SEEN = in the oracle's traces
+(`tools/walk_idle_trace.py --key PASS:CODE`; `tools/walk_keys.py` makes the scripts); READ = from the disassembly only.
+
+**Keys (SEEN for the arrows, READ for the rest).** The loop reads the keyboard port raw each pass (`0x274b8`), so a key is its make code while
+held and its break code (make + 0x80) after release; the code lands in `[bp-0x58]`, the previous one in `[bp-0xc2]`. The logic (`0x135f0`-`0x13ad9`):
+- a break code 0xc8 .. 0xd0 does not release the held arrow unless it is that arrow's own (0xc8 up, 0xd0 down, 0xcb left, 0xcd right);
+  otherwise the held code is used again;
+- 0xe0 (the extended prefix) also means "the held key"; any code above 0x7f clears the last key and ends the pass's key work;
+- the make codes 2, 3 and 0x1e (the keys 1, 2, A) are treated as releases while they repeat; the last key is then set to the new one;
+- the arrow handlers run only when the counter `[bp-0x98]` has just wrapped to 0: it counts up to the speed class, so **every third pass**
+  (`class + 1`), in the order up, down, left, right. A handler that sets `[bp-0x58]` to a new value is followed by the later handlers, which
+  test it again: the success value 1 or the failure value 0 ends the matching. (Sliding sets 0x4b/0x4d from up or down: see below.)
+
+**A step (SEEN).** The direction goes into the hero's party record (byte 2: 0 up, 1 down, 2 left, 3 right), `[bp-0x2e]` becomes 1, the coordinate moves
+by one half tile and the same footprint test as the villagers' is made on it (`0x2bf02`: the cells under the hero on the list of walkable tiles).
+- **Allowed:** `0x2bfd5` shifts the 13-entry trail one place on (entry k+1 gets entry k), puts (x, y, direction) in front, sets party record 0 to
+  (x, y) and gives records 1-4 the trail entries 3, 6, 9 and 12 (so the followers walk the hero's path, 3 steps apart).
+- **Blocked:** the coordinate is restored, `[bp-0x2e]` becomes 5 and `[bp-0x48]` becomes 2: the bump.
+- **The walk frame:** `[bp-0x2e]` is also the walk-frame counter's limit: the pass end resets `[bp-0x3c]` and advances the hero's frame when it
+  exceeds `class + [bp-0x2e]` (3 at the start, 1 on the pass that made a step, 5 after that and **for good**: nothing sets it back to 3, so after the
+  first key press an idle hero changes frame every 8th pass, not every 6th).
+
+**The bump (SEEN).** For `[bp-0x48]` passes (2, then 1) the window is copied from a little way into the world buffer: with `t = 4 * [bp-0x48]`,
+`d = 0x7fff / t + 1`, `a = rand() / d`; when `a` is above `[bp-0x48]` the window is read `(a - [bp-0x48]) * 224` bytes in (1 to 5 rows down), otherwise `a`
+bytes in (0 to 2 pixels). It draws from the game's `rand()` (shared with the villagers), so a bump changes every villager's later choices; the model
+and the port do the same, and the rand state agrees at every pass.
+
+**Scene records under the hero (SEEN).** In the pass after a step (`[bp-0x2e]` is 1 at `0x12051`), `0x2c098` looks for a scene record whose
+x (low bit cleared) and y/2 equal the hero's; a kind 5 record under odd coordinates is not a hit. On a hit the code jumps to `0x172f0`, which
+handles the record's kind, and then back through `0x10bf9` to **`0x113c4`: the loader's record loop, run again on the live state** (maps, villager
+table, flags, list of walkable tiles); the rest of that pass is skipped: no rain, no window copy, no villager step, no key work and no counter
+update (`jmp 0x172ed`). The picture stays as it was for that pass. The record loop is now a function in the model (`walk_scene.apply_records`) and in C
+(`walk_scene_apply_records`).
+- **Kind 3 (READ, partly SEEN):** the roof of a house. The records of scene 0 are in pairs (x, y) and (x, y + 1) with byte 3 = 0 and 1. Hero facing up
+  on a record with byte 3 = 0 with the roof on: a call (`0x2a04`) swaps a region (bytes 4-7 of the record), the byte at `[bp-0x9e]` becomes 1,
+  the weather mode `[bp-0xd8]` gains 3 and `0x3a5e` is called; facing down on a record with byte 3 = 1 with the roof off, the reverse (and a bump of 2).
+  Walking sideways over the house's door (x = 38, 39 at y = 44) does nothing: SEEN, the passes where only the re-entry happens match exactly.
+  The roof toggle itself is **not built**: the model and the port report it ("a roof comes off or goes back") and carry on without it, so the
+  picture differs from the original afterwards (SEEN with Right, Right, then Up into the door: the port reports the toggle at pass 31 and the
+  first mismatch with the oracle is at pass 33).
+- **Other kinds:** the block names kinds 1, 4, 5, 7, 8, 0xe and 0x11-0x14 (**not built**, reported). The other kinds (2, 6, 0xa, 0xb ...) are
+  taken to do nothing but the re-entry; that is READ (the dispatch has no case for them), and in scene 0 only kind 3 was stepped on.
+
+**Not built.** Sliding round a corner (`[bp-0x76]`, toggled by the A key: the four handlers then test positions two cells to the side and
+substitute a sideways move; READ); the no-clip toggle (Backspace after the key left of 1: the arrow keys then move one half tile with only a clamp
+to x 0x16 .. 0xe4, y 0x16 .. 0xb0; the developers' test mode, READ); every other key, the mouse and the ten F-key actions; hero-villager contact
+(`0x2c0da`); the scene changes of kind 1 records. Stepping off the map's edge is not modelled (the original reads whatever follows the map).
+
+**New or changed:** `tools/walk_idle.py` (`check` / `cross` take the key script from the trace), `walk_idle_trace.py --key`, `walk_keys.py`,
+`walk_scene.py apply_records`; `check_walk.sh` runs eight key scripts after the idle traces (about 2.5 minutes in all).

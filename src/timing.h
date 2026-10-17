@@ -99,4 +99,15 @@
  * of names takes 0.46 s to move its own height and the whole credits last 51 s. A choice, not a measurement;
  * the operator found it right (2026-10-16). */
 #define TK_CREDITS_PASS_HZ 35
+
+/* WALK.SL's main loop (0x11d36) with nothing pressed: how many passes per second. A pass draws a 224 x 200 world
+ * buffer (about 45 KB, and 25 sprites), copies a 32 KB window and steps 20 villagers; nothing in it waits, so
+ * the speed of everything in the world (the rain falling 4 rows per pass, the palette shimmer every 4th to 13th pass,
+ * a villager's step every few passes, the hero changing frame every 6th pass) was the machine's. 35 is taken from the
+ * menu and the intro. A choice, not a measurement; the operator found the idle world right by eye (2026-10-17). */
+#define TK_WALK_PASS_HZ 35
+/* The BIOS clock the world reads (rain strength, the dark specks, the villagers' direction choice) runs at
+ * 1193182 / 65536 = 18.2065 ticks per second. */
+#define TK_BIOS_TICKS_PER_SEC_NUM 1193182ull
+#define TK_BIOS_TICKS_PER_SEC_DEN 65536ull
 #endif
