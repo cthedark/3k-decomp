@@ -13,7 +13,7 @@ With a keyboard port value per pass (`run_pass(screen, port60)`) it also models 
 (0x135f0-0x13ad9), the four walking handlers with the walkable-tile test (0x2bf02), the bump shake, the party trail (0x2bfd5) and what the
 loop does when the hero stands on a scene record (0x2c098 and the re-entry at 0x113c4). Not modelled, and reported in `self.unbuilt`:
 other keys, the mouse, the sliding round corners (needs the setting at [bp-0x76], toggled by the A key), scene-record events other than
-kind 3 that does nothing, and hero-villager contact (0x2c0da).
+the music change a roof makes (0x1c68e), and hero-villager contact (0x2c0da).
 
 Usage: work/venv/bin/python tools/walk_idle.py check TRACE.pkl [NPASSES]
        work/venv/bin/python tools/walk_idle.py cross build/walk_dump TRACE.pkl [NPASSES]     (the C port)
@@ -355,7 +355,7 @@ class Idle:
         self.v48 = 0          # [bp-0x48] the shake after bumping into something
         self.c2 = 0           # [bp-0xc2] the last key
         self.v76 = 0          # [bp-0x76] sliding round corners (toggled by the A key)
-        self.indoors = 0      # the byte [bp-0x9e] points to (kind 3 records)
+        self.alt = bytearray(1 + 256 * 256)   # [bp-0x9e]: byte 0 is the "roof is off" flag, the rest holds the roof's rectangle of the object map
         self.unbuilt = []     # what the original did that this model does not do
         self.events = 0
 
@@ -411,16 +411,40 @@ class Idle:
                 self.v48 -= 1
         return a
 
+    def roof(self, rec, enter):
+        """0x1b634 (called as 0x2a04 from the record block): the rectangle (x0, y0) .. (x1, y1) of the object map, bytes 4-7 of the record.
+        Going in the rectangle is saved after the flag byte and cleared to 0xff (the roof disappears); coming out it is put back."""
+        x0, y0, x1, y1 = rec[4], rec[5], rec[6], rec[7]
+        w = x1 - x0 + 1
+        off = x0 + (y0 << 7)
+        idx = 1
+        for _ in range(y0, y1 + 1):
+            if enter:
+                self.alt[idx:idx + w] = self.omap[off:off + w]
+                self.omap[off:off + w] = b"\xff" * w
+            else:
+                self.omap[off:off + w] = self.alt[idx:idx + w]
+            off += 0x80
+            idx += w
+
     def hit_record(self, si):
         """What the original does when the hero stands on scene record `si` (0x172f0 .. 0x18b82, then the re-entry at 0x113c4).  Only the
-        kinds seen are modelled: kind 3 (the roof of a house) does nothing unless the hero is going through the door; every kind
-        the block does not mention is skipped; the rest is reported."""
-        rec = self.tab_a[1000 + si:1000 + si + 15]
+        kinds seen are modelled: kind 3 (the roof of a house) takes the roof off when the hero goes up through the door and puts it
+        back when he comes down (the weather mode also changes by 3, which stops the rain); the kinds the block names are reported;
+        every other kind does nothing but the re-entry."""
+        rec = bytes(self.tab_a[1000 + si:1000 + si + 15])
         kind = rec[2]
         d = self.tab_b[2]
         if kind == 3:
-            if (d == 0 and rec[3] == 0 and not self.indoors) or (d == 1 and rec[3] == 1 and self.indoors):
-                self.unbuilt.append(("roof toggle", self.n, si))
+            if d == 0 and rec[3] == 0 and self.alt[0] == 0:
+                self.roof(rec, True)
+                self.alt[0] = 1
+                self.weather += 3
+            if d == 1 and rec[3] == 1 and self.alt[0] != 0:
+                self.roof(rec, False)
+                self.alt[0] = 0
+                self.v48 = 2
+                self.weather -= 3
         elif kind in (0, 1, 4, 5, 7, 8, 0xE, 0x11, 0x12, 0x13, 0x14):
             self.unbuilt.append((f"scene record kind {kind:#x}", self.n, si))
         # the re-entry: the record loop again, on the live state (the speed-class rule before it is not repeated)
@@ -560,15 +584,19 @@ def check(trace, npass=None):
             checks["hero locals"] = (m.tab_b[0], m.tab_b[1], m.v2e, m.v98, m.ctr, m.hero_frame, m.v48, m.c2) == (
                 local(r, 0x8E), local(r, 0xB6), local(r, 0x2E), local(r, 0x98), local(r, 0x3C), local(r, 0x5E), local(r, 0x48),
                 local(r, 0xC2))
+        if "alt0" in r:
+            checks["roof"] = (m.alt[0], m.weather) == (r["alt0"][0], local(r, 0xD8))
         for k, v in checks.items():
             if not v and k not in first_bad:
                 first_bad[k] = n
         screen = m.run_pass(screen, port_at(keys, n))
     print(f"passes compared: {npass}")
-    for k in ("villagers", "party", "trail", "hero locals", "drops", "rand", "palbuf", "dac", "other", "blockX", "blockY", "screen"):
+    for k in ("villagers", "party", "trail", "hero locals", "roof", "drops", "rand", "palbuf", "dac", "other", "blockX", "blockY", "screen"):
         if k == "trail" and "trail" not in rec[0]:
             continue
         if k == "hero locals" and "trail" not in rec[0]:
+            continue
+        if k == "roof" and "alt0" not in rec[0]:
             continue
         print(f"  {k:12s}", "identical at every pass" if k not in first_bad else f"FIRST DIFFERENCE at pass {first_bad[k]}")
     if m.unbuilt:
@@ -597,10 +625,14 @@ def cross(cbin, trace, npass=None, start="work/check_credits/start.raw", data="o
     keyed = "trail" in rec[0]
     if keyed:
         parts += [("party", 200, "party"), ("trail", 39, "trail"), ("hero locals", 6, None)]
+        if "alt0" in rec[0]:
+            parts += [("roof", 2, "roof")]
     keys = rec[0].get("keys", {})
     size = 64000 + 768 + sum(n for _, n, _ in parts)
     if not keyed:      # an older trace: the port's extra state (party, trail, locals) is in the dump but not compared
         size += 200 + 39 + 6
+    if keyed and "alt0" not in rec[0]:
+        size += 2
     assert len(blob) == size * npass, (len(blob), size * npass)
     first = {}
     for i in range(npass):
@@ -610,7 +642,9 @@ def cross(cbin, trace, npass=None, start="work/check_credits/start.raw", data="o
         at = 64768
         for name, n, key in parts:
             mine = chunk[at:at + n]
-            if key is None:       # v2e, v98, ctr, hero_frame, v48, c2 as the port keeps them, against the trace's locals
+            if key == "roof":     # the roof flag and the weather mode
+                want = bytes([o["alt0"][0], local(o, 0xD8)])
+            elif key is None:     # v2e, v98, ctr, hero_frame, v48, c2 as the port keeps them, against the trace's locals
                 want = bytes([local(o, 0x2E), local(o, 0x98), local(o, 0x3C), local(o, 0x5E), local(o, 0x48), local(o, 0xC2)])
             else:
                 want = o[key][:n] if key == "palbuf" else o[key]

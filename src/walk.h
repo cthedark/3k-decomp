@@ -104,6 +104,8 @@ unsigned walk_find_record(const uint8_t *tab_a, unsigned x, unsigned y);
 /* (0x1252c) How far into the buffer the window is read for a bump of strength `v48` (2, then 1) given the random value `r` (0 .. 0x7fff):
  * t = 4 * v48, d = 0x7fff / t + 1, a = r / d; when a is above v48 the offset is (a - v48) * 224 (1 to 5 rows), else a (0 to 2 pixels). */
 unsigned walk_shake_offset(unsigned v48, unsigned r);
+/* (0x1b634) A house's roof: `alt` holds the roof flag in byte 0 and the saved part of the object map after it. See walk.c. */
+int walk_roof(uint8_t *omap, uint8_t *alt, const uint8_t *rec, int enter);
 /* Copy the world buffer's window to screen (64, 16), read `shift` bytes into the buffer (the bump shake). */
 void walk_copy_window_at(screen_t *scr, const uint8_t *buf, unsigned shift);
 
@@ -137,7 +139,7 @@ int walk_villager_decide(uint8_t rec[WS_VILLAGER_SIZE], uint32_t *rng, uint32_t 
 /* The state that does not show on the screen, for comparing with the original's (tools/walk_idle.py cross): the 20
  * villager records (1,000 bytes), the rand state (4, little-endian), the rain list (75 words), the specks list (300 words),
  * the first 48 bytes of the palette buffer and the two animation tables (240 bytes each). */
-enum { WALK_STATE_BYTES = 1000 + 4 + 150 + 600 + 48 + 240 + 240 + 200 + 39 + 6 };
+enum { WALK_STATE_BYTES = 1000 + 4 + 150 + 600 + 48 + 240 + 240 + 200 + 39 + 6 + 2 };
 void walk_state_dump(const walk_t *w, uint8_t out[WALK_STATE_BYTES]);
 
 /* The game's rand() on a state: advances it and returns state >> 16 & 0x7fff. */

@@ -928,6 +928,11 @@ static int play_walk(screen_t *scr)
         return -1;
     }
     platform_show_pointer(1);
+    /* The scene's song (the loader found it in MUC.ALL: RPG.LCP 0x7add + 5 * the map header's byte 2) starts as the first screen shows and
+     * plays on, starting again at its end, until the window is closed. Its register writes are the original driver's, all 6,180 ticks of
+     * scene 0's song (tools/compare_opl.py). Silent without a sound device or with --no-music. */
+    const walk_scene_t *sc = walk_scene(w);
+    music_t *song = song_start_at("walk", sc->song_pos, sc->song_len);
     const uint32_t start = platform_ticks_ms();
     uint32_t next = start;
     int event_reported = 0;
@@ -950,6 +955,7 @@ static int play_walk(screen_t *scr)
             fprintf(stderr, "walk: not built: %s\n", walk_unbuilt(w));
         platform_present(scr);
     }
+    song_stop(song);
     walk_free(w);
     return 1;
 }

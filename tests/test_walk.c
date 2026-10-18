@@ -12,6 +12,8 @@
 #include <string.h>
 
 #include "assets.h"
+#include "cmf.h"
+#include "music.h"
 #include "screen.h"
 #include "walk.h"
 
@@ -323,6 +325,27 @@ static void test_scene0(void)
     CHECK(s->tiles_len == 0x3E80 && s->sprites_len == 0x3E00);
     CHECK(s->bank1_len == 0x2800 && s->bank2_len == 15360);
     CHECK(s->song_pos == 0x1E085 && s->song_len == 0x2593);
+    /* the song is a CMF song of 2,410 events ending at tick 6180 (the register writes of the original's driver for all of it are
+     * compared with the player's in tools/check_walk.sh) and the player can be made from it */
+    {
+        uint8_t *buf = malloc(s->song_len);
+        cmf_t *c = buf && assets_read_at("MUC.ALL", s->song_pos, buf, s->song_len) == 0 ? cmf_parse(buf, s->song_len) : NULL;
+        CHECK(c != NULL);
+        if (c) {
+            cmf_cursor cur;
+            cmf_event ev;
+            unsigned n = 0;
+            cmf_rewind(c, &cur);
+            while (cmf_next(&cur, &ev))
+                n++;
+            CHECK(n == 2410 && cur.tick == 6180 && cmf_ticks_per_second(c) == 96);
+            cmf_free(c);
+        }
+        free(buf);
+        music_t *m = music_load_at(s->song_pos, s->song_len);
+        CHECK(m != NULL);
+        music_free(m);
+    }
     int cells = 0;
     for (int i = 0; i < WS_OMAP_BYTES; i++)
         cells += s->omap[i] != 0xFF;
@@ -1024,11 +1047,11 @@ static void test_walking(void)
     run_walk(w, &scr, up, 1, 3, px, py, NULL);   /* the step is attempted in pass 2 */
     walk_state_dump(w, st);
     CHECK(px[2] == 36 && py[2] == 44 && s->tab_b[2] == 0);
-    CHECK(st[WALK_STATE_BYTES - 2] == 2);        /* [bp-0x48] = 2 */
-    CHECK(st[WALK_STATE_BYTES - 6] == 5);        /* [bp-0x2e] = 5 after a blocked step */
+    CHECK(st[WALK_STATE_BYTES - 4] == 2);        /* [bp-0x48] = 2 */
+    CHECK(st[WALK_STATE_BYTES - 8] == 5);        /* [bp-0x2e] = 5 after a blocked step */
     walk_pass(w, &scr, 21, 0x48);                    /* pass 3: the shake runs in it */
     walk_state_dump(w, st2);
-    CHECK(st2[WALK_STATE_BYTES - 2] == 1);
+    CHECK(st2[WALK_STATE_BYTES - 4] == 1);
     uint32_t rand_before = (uint32_t)st[1000] | (uint32_t)st[1001] << 8 | (uint32_t)st[1002] << 16 | (uint32_t)st[1003] << 24;
     uint32_t rand_after = (uint32_t)st2[1000] | (uint32_t)st2[1001] << 8 | (uint32_t)st2[1002] << 16 | (uint32_t)st2[1003] << 24;
     CHECK(rand_after != rand_before);                /* the shake drew from rand() */
@@ -1089,15 +1112,92 @@ static void test_walking(void)
     rc = run_walk(w, &scr, rt, 1, 8, NULL, NULL, NULL);
     CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "kind 0x7"));
 
-    /* through the door of the house: Right to x = 38, then Up: the roof comes off in the original (not built here) */
-    const keyev door[] = {{10, 0x4D}, {16, 0xCD}, {30, 0x48}};
+    /* through the door of the house: Right to x = 38, then Up (the roof comes off, the rain stops), then Down again (the roof goes back,
+     * the window shakes, the rain returns). The record is record 1 of scene 0: the roof is x 12 .. 21, y 11 .. 21 of the object map. */
+    const keyev door[] = {{10, 0x4D}, {16, 0xCD}, {30, 0x48}, {130, 0xC8}, {150, 0x50}, {260, 0xD0}};
     CHECK(BEGIN());
-    unsigned fl2[40];
-    rc = run_walk(w, &scr, door, 3, 40, px, py, fl2);
-    CHECK(px[30] == 38 && py[39] <= 43);
-    CHECK((fl2[31] & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "roof"));
+    uint8_t before[10 * 11], inside[10 * 11], after[10 * 11];
+    for (int r = 0; r < 11; r++) {
+        memcpy(before + r * 10, s->omap + 12 + ((11 + r) << 7), 10);
+        memset(inside + r * 10, 0xFF, 10);
+    }
+    int nonempty = 0;
+    for (int i = 0; i < 110; i++)
+        nonempty += before[i] != 0xFF;
+    CHECK(nonempty > 20 && s->weather == 1);
+    unsigned fl2[300];
+    int py2[300];
+    rc = run_walk(w, &scr, door, 6, 300, NULL, py2, fl2);
+    CHECK(rc == 0 && walk_unbuilt(w) == NULL);
+    CHECK(py2[29] == 44 && py2[30] == 43 && py2[129] == 36);
+    (void)before;
+    /* replay to just after the roof comes off (pass 31) and just after it goes back (pass 176 in the oracle's run) */
+    CHECK(BEGIN());
+    run_walk(w, &scr, door, 6, 33, NULL, NULL, NULL);
+    for (int r = 0; r < 11; r++)
+        memcpy(after + r * 10, s->omap + 12 + ((11 + r) << 7), 10);
+    CHECK(memcmp(after, inside, sizeof inside) == 0);   /* the roof is gone */
+    CHECK(s->weather == 4);                              /* and with it the rain */
+    CHECK(BEGIN());
+    run_walk(w, &scr, door, 6, 300, NULL, NULL, NULL);
+    for (int r = 0; r < 11; r++)
+        memcpy(after + r * 10, s->omap + 12 + ((11 + r) << 7), 10);
+    CHECK(memcmp(after, before, sizeof before) == 0);   /* put back exactly */
+    CHECK(s->weather == 1);
 #undef BEGIN
     walk_free(w);
+}
+
+static void test_roof(void)
+{
+    printf("a house's roof\n");
+    static uint8_t omap[WS_OMAP_BYTES];
+    static uint8_t alt[1 + 256 * 256];
+    uint8_t rec[15];
+    memset(rec, 0, sizeof rec);
+    rec[4] = 3; rec[5] = 2; rec[6] = 5; rec[7] = 4;   /* x 3 .. 5, y 2 .. 4: 3 wide, 3 high */
+    for (int i = 0; i < WS_OMAP_BYTES; i++)
+        omap[i] = (uint8_t)(i % 200);
+    uint8_t orig[WS_OMAP_BYTES];
+    memcpy(orig, omap, sizeof orig);
+    alt[0] = 0x5A;
+    CHECK(walk_roof(omap, alt, rec, 1) == 0);
+    for (int y = 0; y < 8; y++)
+        for (int x = 0; x < 10; x++) {
+            int inside = x >= 3 && x <= 5 && y >= 2 && y <= 4;
+            CHECK(omap[(y << 7) + x] == (inside ? 0xFF : orig[(y << 7) + x]));
+        }
+    CHECK(alt[0] == 0x5A);                                     /* the flag byte is the caller's */
+    CHECK(alt[1] == orig[(2 << 7) + 3] && alt[3] == orig[(2 << 7) + 5]);   /* row by row, from byte 1 */
+    CHECK(alt[4] == orig[(3 << 7) + 3] && alt[9] == orig[(4 << 7) + 5]);
+    CHECK(walk_roof(omap, alt, rec, 0) == 0);
+    CHECK(memcmp(omap, orig, sizeof orig) == 0);
+    rec[7] = 1;                                                /* y1 < y0: nothing to do */
+    CHECK(walk_roof(omap, alt, rec, 1) == 0 && memcmp(omap, orig, sizeof orig) == 0);
+    rec[7] = 4;
+    rec[6] = 2;                                                /* x1 < x0 */
+    CHECK(walk_roof(omap, alt, rec, 1) == -1);
+    rec[6] = 5;
+    rec[7] = 120;                                              /* below the map */
+    CHECK(walk_roof(omap, alt, rec, 1) == -1);
+    rec[7] = 99;                                               /* the last row is inside */
+    CHECK(walk_roof(omap, alt, rec, 1) == 0 && walk_roof(omap, alt, rec, 0) == 0);
+    rec[7] = 100;                                              /* one past it is not */
+    CHECK(walk_roof(omap, alt, rec, 1) == -1);
+    rec[7] = 4;
+    rec[4] = 100;
+    rec[6] = 130;                                              /* right of the map's 128 columns */
+    CHECK(walk_roof(omap, alt, rec, 1) == -1);
+    rec[6] = 127;                                              /* the last column is inside */
+    CHECK(walk_roof(omap, alt, rec, 1) == 0 && walk_roof(omap, alt, rec, 0) == 0);
+    rec[6] = 128;                                              /* one past it is not */
+    CHECK(walk_roof(omap, alt, rec, 1) == -1);
+    rec[4] = 7; rec[5] = 9; rec[6] = 8; rec[7] = 9;            /* a rectangle of one row is a rectangle */
+    CHECK(walk_roof(omap, alt, rec, 1) == 0);
+    CHECK(omap[(9 << 7) + 7] == 0xFF && omap[(9 << 7) + 8] == 0xFF && omap[(9 << 7) + 6] == orig[(9 << 7) + 6]);
+    CHECK(alt[1] == orig[(9 << 7) + 7] && alt[2] == orig[(9 << 7) + 8]);
+    CHECK(walk_roof(omap, alt, rec, 0) == 0);
+    CHECK(memcmp(omap, orig, sizeof orig) == 0);
 }
 
 static void test_shake(void)
@@ -1154,6 +1254,7 @@ int main(int argc, char **argv)
     test_foot();
     test_trail_and_records();
     test_walking();
+    test_roof();
     test_shake();
     test_missing_data();
     printf("%s: %d failure(s), %d skipped\n", failures ? "FAILED" : "ok", failures, skipped);

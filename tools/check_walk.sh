@@ -19,7 +19,7 @@ mkdir -p "$OUT"
 PY=work/venv/bin/python
 fail=0
 
-make build/walk_dump build/3k_headless > "$OUT/build.log" 2>&1 || { echo "build failed, see $OUT/build.log"; exit 2; }
+make build/walk_dump build/3k_headless build/music_regs > "$OUT/build.log" 2>&1 || { echo "build failed, see $OUT/build.log"; exit 2; }
 
 # the screen the menu leaves: the port's menu a few passes in (equal to the original's, tools/check_menu.sh)
 START=$OUT/start.raw
@@ -56,9 +56,9 @@ if [ "${IDLE:-1}" != 0 ]; then
     done
     # ---- 4. the hero walking: arrow keys held, released and mixed (tools/walk_keys.py), at several clock readings. The hero bumps into
     #         walls (the shake), steps on the house door's scene records (the pass that does nothing else), and the trail and the party
-    #         records follow. Every pass is compared: screen, palette, villagers, party, trail, rand state and the hero's counters.
+    #         records follow; the 'door' scripts go up through the house door (the roof comes off, the rain stops) and down again. Every pass is compared: screen, palette, villagers, party, trail, rand state and the hero's counters.
     echo "== walking"
-    for spec in fuzz:1:900:20 fuzz:11:1100:4096 fuzz:12:1100:11264 fuzz:13:1100:20224 fuzz:15:1100:40704 yoyo:21:900:20 yoyo:22:900:28672 yoyo:23:900:45056; do
+    for spec in fuzz:1:900:20 fuzz:11:1100:4096 fuzz:12:1100:11264 fuzz:13:1100:20224 fuzz:15:1100:40704 yoyo:21:900:20 yoyo:22:900:28672 yoyo:23:900:45056 door:0:420:20 door:1:420:4096 door:2:420:45056 route:0:480:20 route:1:480:28672; do
         kind=${spec%%:*}; rest=${spec#*:}
         seed=${rest%%:*}; rest=${rest#*:}
         n=${rest%%:*}; base=${rest##*:}
@@ -68,6 +68,21 @@ if [ "${IDLE:-1}" != 0 ]; then
         res=$($PY tools/walk_idle.py cross build/walk_dump "$T" "$((n - 1))") || fail=1
         echo "$kind $seed: $res"
     done
+fi
+
+# ---- 5. the scene's song. WALK.SL plays the song its map names (scene 0: MUC.ALL 0x1e085, 0x2593 bytes) through the same FM driver as the other
+#         programs; the OPL register writes it makes in the oracle over the whole first pass of the song (6,180 song ticks, 1,250 BIOS ticks of
+#         run time) against the player's. The driver's own reset writes at tick 0 are not reproduced by the player (tools/compare_opl.py).
+#         Set MUSIC=0 to skip this part (about 15 seconds).
+if [ "${MUSIC:-1}" != 0 ]; then
+    echo "== music"
+    $PY tools/dosemu.py work/unpacked/WALK.SL.exe --data original_bin --work "$OUT/music_emu" --screen-from "$START" --palette-from "$START" \
+        --ticks 1250 --opl-log "$OUT/opl_all.txt" > "$OUT/opl.log" 2>&1 || { echo "oracle music run failed, see $OUT/opl.log"; exit 2; }
+    awk '$1 < 6199' "$OUT/opl_all.txt" > "$OUT/opl_pass1.txt"
+    build/music_regs original_bin 0x1e085 0x2593 7000 "$OUT/opl_player.txt" > /dev/null || { echo "music_regs failed"; exit 2; }
+    r=$($PY tools/compare_opl.py "$OUT/opl_pass1.txt" "$OUT/opl_player.txt" --ticks 6180 | tail -1)
+    echo "song against the original's driver: $r"
+    case "$r" in *"6180 identical, 0 same writes in another order, 0 different"*) ;; *) fail=1 ;; esac
 fi
 
 if [ $fail -eq 0 ]; then echo "check_walk: all identical"; else echo "check_walk: DIFFERENCES"; fi

@@ -65,6 +65,7 @@ def cb(uc, address, size, user):
              blky=bytes(uc.mem_read(far(uc, ss, bp, 0xd0), 240)),
              other=bytes(uc.mem_read(far(uc, ss, bp, 0xdc), 600)),
              trail=bytes(uc.mem_read(far(uc, ss, bp, 0xc8), 39)),
+             alt0=bytes(uc.mem_read(far(uc, ss, bp, 0x9e), 1)),
              rnd=bytes(uc.mem_read(ds * 16 + 0x2d4, 4)),
              palbuf=bytes(uc.mem_read(far(uc, ss, bp, 0xac), 768)),
              screen=bytes(uc.mem_read(VGA, 64000)), pal=bytes(emu.pal))

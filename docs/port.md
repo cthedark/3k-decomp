@@ -776,7 +776,7 @@ clock, no input and no SDL, like `menu.c` and `credits.c`.
 - **Run it:** `build/3k --scene walk --data original_bin` shows the first screen until the window is closed. `--scene game` now
   goes title -> menu -> (new game) -> this screen. Headless: `build/3k_headless --scene walk --step-dump N:FILE` (raw dump of the screen after pass N; 0 is the first
   screen, see Milestone 7b for the later passes) or `--ppm FILE`. `--screen-from FILE` starts over a screen dump instead of the menu's first frame.
-- **What it was (superseded by 7b, where the world moves):** the game. Nothing moves, nothing is played (WALK.SL's own song is located by the loader but not started),
+- **What it was (superseded by 7b, where the world moves, and 7e, where the song plays):** the game. Nothing moves, nothing is played (WALK.SL's own song is located by the loader but not started),
   no input is read, and there is no hand-over of the menu's last frame (the port uses the menu's first frame; outside the window the
   two are the same picture, which the check confirms: the first screen built over the menu's pass 3 and over its first frame is identical).
 - **New game:** the original writes `__1.NOW` and `MAN_INFO.NOW` from `__1.AL1`, `__1.AL2` and `MAN_INFO.ALL` first. The port does not;
@@ -864,13 +864,11 @@ Headless: `--walk-key N:CODE` (repeatable; the value set at pass N holds from th
 
 - **What happens at a scene record:** the pass after a step onto the position of one of the scene's 50 records does nothing else (as in the
   original), and the record loop runs again on the live state. The house's door (x 38 and 39, y 44 and 45 in scene 0) is such a place; walking
-  sideways over it changes nothing you can see. **Walking up into the door (or down out of it) is not built:** the original takes the roof off
-  or puts it back, and changes the weather mode; the port says `walk: not built: a roof comes off or goes back (scene record 1)` on stderr
-  and the picture then differs from the original (rain stays on, the roof stays).
+  sideways over it changes nothing you can see. Walking up into the door or down out of it takes the roof off or puts it back (7d below).
 - **Not built:** sliding round corners (the A key), the no-clip test mode, every other key, the mouse, the F-key actions, hero-villager contact,
   the other record kinds named in `findings.md` "WALK.SL step 7". Any of these that is reached is reported once per pass on stderr.
-- **Pace:** the hero's speed is the loop's: 35 passes a second is the guess the operator found right for the idle world; whether a step every
-  third pass feels right in play is not known yet.
+- **Pace:** the hero's speed is the loop's: 35 passes a second, found right by the operator for the idle world. The operator confirmed that walking
+  with collision works (2026-10-17) and did not ask for another speed, so a step every third pass stays.
 
 **Checked** (`tools/check_walk.sh`, about 2.5 minutes; `IDLE=0` skips the idle and walking parts):
 - eight key scripts (five random, three yo-yoing around the door) of 900 to 1,100 passes at five clock readings, and the seven idle traces of
@@ -890,3 +888,37 @@ Headless: `--walk-key N:CODE` (repeatable; the value set at pass N holds from th
   walking test read freed memory and passed anyway. AddressSanitizer caught it; the test now takes the pointer again after each `walk_begin`
   (and one test that changed a record before reloading had been testing nothing). The unit test, and the comparison for five of the key
   scripts, are clean under AddressSanitizer and UBSan.
+
+
+## Milestone 7d: a house's roof (C), built 2026-10-17
+
+Walking **up through the door** of the first house (right of the start, x = 38, y = 44 and up) takes its roof off: the object map's roof rectangle is saved
+and cleared, so you see into the room, and the rain stops (the weather mode goes from 1 to 4, which draws neither rain nor the dark specks).
+Walking **down** out of it puts the roof back, shakes the window once, and the rain returns. `walk_roof` is the copy, `hit_record` the rule (`src/walk.c`).
+
+- **Checked:** `tools/check_walk.sh` now has three `door` scripts (at the clock readings 20, 4096 and 45056) and two `route` scripts (a tour of the streets
+  from the start to (86, 73) and back, planned with the model): after every pass the screen, palette, villager and party tables, trail, rand state, counters,
+  the roof flag and the weather mode are **identical** to the original's in the oracle, for the model and for the C port. `tests/test_walk.c` adds the roof copy on a
+  made-up map (rows, the flag byte, the saved layout, empty and invalid rectangles at each edge) and the door on scene 0 (the cells are 0xff inside, the weather is 4,
+  and after the way back the rectangle is identical to the start and the weather is 1).
+- **Mutations:** `tools/mutate_walk.py` has 276 deliberate bugs (28 of them for the roof). The first full run caught 274; the two that survived (a roof
+  rectangle of a single row, and the right edge of the map at column 128) were gaps in the unit test; I added both cases and re-ran the roof group:
+  all caught. The full list was not run again in one go after that. AddressSanitizer and UBSan are clean on the unit test and on the door and route scripts.
+- **Not built:** the change of music a roof makes (`0x1c68e`; there is no WALK.SL music yet), and the other three roofs of scene 0 were not walked through
+  (their doors are locked at the start; the code is the same).
+
+
+## Milestone 7e: the scene's music (C), built 2026-10-17
+
+`build/3k --scene walk` now plays the scene's song while you walk: the one the map names (scene 0: `MUC.ALL` `0x1e085`), started with the first screen, looping
+until the window is closed, with the other scenes' flags (`--no-music`, `--music-gain`). The player is the one built for the intro, credits and menu, so no new
+music code: only `play_walk` in `src/main.c` starts and stops it.
+
+- **Checked:** `tools/check_walk.sh` (new part 5, about 15 s, `MUSIC=0` skips it) runs WALK.SL in the oracle with the AdLib model for 1,250 BIOS ticks and compares the
+  whole first pass of the song with the player's register writes: **6180 of 6180 song ticks identical**. `tests/test_walk.c` checks that the loader's song parses
+  (2,410 events, 96 ticks a second, end at tick 6180) and that a player can be made from it. Rendered through SDL's disk audio driver for 6 seconds, the walk scene
+  gives sound with about the same level as the other scenes (peak 15,276; RMS 2,954).
+- **Differences from the original:** the song starts again at once at its end (the original's takes about one main-loop pass, 83 ms in the oracle); the song starts
+  with the first screen, not 0.6 s earlier (the original starts it while the scene is still loading); the digital sound effect a roof makes on a machine with a
+  Sound Blaster is not built (`findings.md` "WALK.SL step 9").
+- **Not looked at:** how loud the music is against the original (the player's level is the one the operator found right in the other scenes).

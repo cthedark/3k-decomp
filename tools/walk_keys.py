@@ -3,12 +3,19 @@
 
 Usage: tools/walk_keys.py fuzz SEED NPASSES    random presses and releases of the four arrow keys (also the break code of a key that is not
                                                the held one, the 0xe0 prefix and break codes of other keys, and bumps into walls)
+       tools/walk_keys.py door SEED NPASSES    (SEED and NPASSES are ignored) right to x = 38, up through the house door to the top of the
+                                               corridor and down again: the roof comes off and goes back (needs about 420 passes)
+       tools/walk_keys.py route SEED NPASSES   (SEED and NPASSES are ignored) a tour of the streets planned with the model (tools/walk_route.py):
+                                               to (60, 46), to (86, 73) and back to (40, 46); about 470 passes
        tools/walk_keys.py yoyo SEED NPASSES    right and left in turn with short holds and now and then a vertical nudge; it keeps the hero
                                                around the house door (x 34 .. 44), so scene records are stepped on again and again
 Codes: 0x48 up, 0x50 down, 0x4b left, 0x4d right; the break code is the make code + 0x80.
 """
 import random
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 def fuzz(seed, n):
@@ -49,7 +56,18 @@ def yoyo(seed, n):
     return out
 
 
+def door(seed, n):
+    return [f"--key {p}:{c:#x}" for p, c in ((10, 0x4D), (16, 0xCD), (30, 0x48), (130, 0xC8), (150, 0x50), (260, 0xD0))]
+
+
+def route(seed, n):
+    import walk_route
+    events, end, _m = walk_route.plan([(60, 46), (86, 73), (40, 46)])
+    events[end] = events[max(events)] + 0x80
+    return [f"--key {p}:{c:#x}" for p, c in sorted(events.items())]
+
+
 if __name__ == "__main__":
-    if len(sys.argv) != 4 or sys.argv[1] not in ("fuzz", "yoyo"):
+    if len(sys.argv) != 4 or sys.argv[1] not in ("fuzz", "yoyo", "door", "route"):
         raise SystemExit(__doc__)
-    print(" ".join((fuzz if sys.argv[1] == "fuzz" else yoyo)(int(sys.argv[2]), int(sys.argv[3]))))
+    print(" ".join({"fuzz": fuzz, "yoyo": yoyo, "door": door, "route": route}[sys.argv[1]](int(sys.argv[2]), int(sys.argv[3]))))

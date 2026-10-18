@@ -2269,20 +2269,65 @@ handles the record's kind, and then back through `0x10bf9` to **`0x113c4`: the l
 table, flags, list of walkable tiles); the rest of that pass is skipped: no rain, no window copy, no villager step, no key work and no counter
 update (`jmp 0x172ed`). The picture stays as it was for that pass. The record loop is now a function in the model (`walk_scene.apply_records`) and in C
 (`walk_scene_apply_records`).
-- **Kind 3 (READ, partly SEEN):** the roof of a house. The records of scene 0 are in pairs (x, y) and (x, y + 1) with byte 3 = 0 and 1. Hero facing up
-  on a record with byte 3 = 0 with the roof on: a call (`0x2a04`) swaps a region (bytes 4-7 of the record), the byte at `[bp-0x9e]` becomes 1,
-  the weather mode `[bp-0xd8]` gains 3 and `0x3a5e` is called; facing down on a record with byte 3 = 1 with the roof off, the reverse (and a bump of 2).
-  Walking sideways over the house's door (x = 38, 39 at y = 44) does nothing: SEEN, the passes where only the re-entry happens match exactly.
-  The roof toggle itself is **not built**: the model and the port report it ("a roof comes off or goes back") and carry on without it, so the
-  picture differs from the original afterwards (SEEN with Right, Right, then Up into the door: the port reports the toggle at pass 31 and the
-  first mismatch with the oracle is at pass 33).
+- **Kind 3:** the roof of a house; built in the next step ("WALK.SL step 8").
 - **Other kinds:** the block names kinds 1, 4, 5, 7, 8, 0xe and 0x11-0x14 (**not built**, reported). The other kinds (2, 6, 0xa, 0xb ...) are
   taken to do nothing but the re-entry; that is READ (the dispatch has no case for them), and in scene 0 only kind 3 was stepped on.
 
-**Not built.** Sliding round a corner (`[bp-0x76]`, toggled by the A key: the four handlers then test positions two cells to the side and
+**Not built at this step.** Sliding round a corner (`[bp-0x76]`, toggled by the A key: the four handlers then test positions two cells to the side and
 substitute a sideways move; READ); the no-clip toggle (Backspace after the key left of 1: the arrow keys then move one half tile with only a clamp
 to x 0x16 .. 0xe4, y 0x16 .. 0xb0; the developers' test mode, READ); every other key, the mouse and the ten F-key actions; hero-villager contact
 (`0x2c0da`); the scene changes of kind 1 records. Stepping off the map's edge is not modelled (the original reads whatever follows the map).
 
 **New or changed:** `tools/walk_idle.py` (`check` / `cross` take the key script from the trace), `walk_idle_trace.py --key`, `walk_keys.py`,
 `walk_scene.py apply_records`; `check_walk.sh` runs eight key scripts after the idle traces (about 2.5 minutes in all).
+
+## WALK.SL step 8: the roof of a house, 2026-10-17
+
+The records of kind 3 take a house's roof off when the hero goes up through the door and put it back when he comes down. Built in the Python
+model and in C; the door of scene 0's first house, walked through in both directions, matches the oracle at every pass (screen, palette,
+all tables, the roof flag and the weather mode) at three clock readings (rain of strength 0, rain of strength 4, and the dark specks).
+
+**The record** (15 bytes, kind 3; pairs of records one row apart): bytes 0-1 the position (x, y/2), byte 3 = 0 on the row where the hero enters
+and 1 on the row where he leaves, bytes 4-7 the roof's rectangle (x0, y0, x1, y1) **in the object map** (128 columns). Scene 0's first house:
+records 1 (38, 21) and 2 (38, 22), rectangle x 12 .. 21, y 11 .. 21 (10 by 11 cells of 8 x 8 pixels).
+
+**What happens** (READ at `0x17b0f` .. `0x17c32`, `0x1b634`; SEEN in the oracle):
+- **Going in:** the hero faces up (party byte 2 = 0), the record's byte 3 is 0 and the flag byte `alt[0]` (the first byte of the buffer `[bp-0x9e]`)
+  is 0. `0x1b634` copies the rectangle of the object map row by row into `alt` from byte 1 on and fills it with 0xff in the map (no object:
+  the roof is gone and the room shows), `alt[0]` becomes 1, the weather mode `[bp-0xd8]` gains 3 and `0x1c68e` is called.
+- **Coming out:** the hero faces down (byte 2 = 1), the record's byte 3 is 1 and `alt[0]` is not 0: the rectangle is copied back, `alt[0]`
+  becomes 0, the bump (`[bp-0x48]` = 2) starts and the weather mode loses 3.
+- **The weather:** scene 0 has mode 1 (rain by the clock). Mode 4 draws neither rain nor the dark specks, and the villagers' direction choice sees
+  stride 0, so indoors the rain stops and the villagers decide as in dry weather.
+- **After either:** the record loop runs again on the live state (step 7), as for every record.
+- **Not built:** `0x1c68e`. When the sound card state at `[0x388]:0xc` is 0x81 it stops the music and starts another song (pointer `[bp-0x4c]` + 0x127d):
+  the inside and outside themes. WALK.SL's music is not played by the port at all yet, so there is nothing to change; the oracle's run has no
+  OPL answering at that point, so it was not seen either. The other three roofs of scene 0 (records 3-8 at (86, 34/35), (90, 47/48), (106, 34/35))
+  use the same code but their doors cannot be reached at the start: the cells in front of them are not on the list of walkable tiles until a
+  flag has patched the map (the kind 0xa record 10 at (86, 36)), so they were not walked through.
+
+**Tools:** `walk_route.py` plans a key script through given waypoints with the model (a breadth-first search over walkable half-tile positions,
+the model walking it pass by pass). `walk_keys.py` has two new scripts: `door` (right to x = 38, up through the door, down again) and `route`
+(a tour of the streets: (60, 46), (86, 73) and back to (40, 46); 152 steps, five records stepped on). `walk_idle_trace.py` records the roof flag byte.
+
+## WALK.SL step 9: the scene's music, 2026-10-17
+
+WALK.SL plays the song its map names, through the same FM driver as the other programs. Checked in the oracle with an AdLib model that answers
+(`dosemu.py --opl-log`): the register writes of the original over the whole first pass of scene 0's song are **identical** to the port's player for
+all 6,180 song ticks (`compare_opl.py`: 6180 identical, 0 different), the driver's own reset writes at tick 0 aside (known, step 5b).
+
+- **Which song:** `RPG.LCP` at `0x7add + 5 * (map header byte 2)` locates it in `MUC.ALL` (scene 0: offset `0x1e085`, `0x2593` bytes, 2,410 events, 96 ticks a
+  second, ends at tick 6180, about 64 s). The loader already found it (step 4); it reads it at BIOS tick 10, the first note sounds 11 driver ticks after the
+  driver starts, and the first screen appears at tick 21.
+- **A second song is read and not played:** the loader also reads `MUC.ALL` at `0x2bad9` (`0x1c92` bytes), the menu's song, at tick 9. In the oracle's runs
+  (300 passes of walking, a trip through the house door and back) it is never started. What it is for (an event, the other side of a door) is not known.
+- **The loop:** at the end of the song (interrupt 6191, song tick 6180) the driver writes its stop routine (nine writes to register 0x83, the same as at the
+  end of every song). The main loop polls a flag the driver sets (`[0x384]:6`, tested at the loop top `0x11d3a` together with `[0x380]:0xc` and
+  `[0x24e]`), and calls `0x2914d` (stop) and `0x29129(0)` (play from the start); in the oracle the song starts again at interrupt 6199, **8 ticks (83 ms)
+  after the end**, with the same 157 reset writes as the first time and the same notes after it. That gap is however long the main loop took to come
+  round, which is the machine's speed (about one pass); the port starts the song again at once, as it does for the other scenes. GUESS (the gap is an
+  artifact of the unpaced loop).
+- **The roof does not change the music.** The call a roof makes (`0x1c68e`) tests `[0x388]:0xc` = 0x81 and then stops the sound and starts the sample at
+  `[bp-0x4c] + 0x127d` with `0x2917c`: this is the **digital sound** (Sound Blaster) driver, not the FM one; the oracle has no Sound Blaster, so the flag is 0 and
+  nothing happens there. With a Sound Blaster the door gives a sound effect (probably from `SND_EF.1`, which WALK.SL does not read in the oracle's runs, and the menu
+  reads on a real machine). Not seen, not built.

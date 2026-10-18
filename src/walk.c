@@ -16,13 +16,13 @@ struct walk {
     int pal_c[5];                       /* counters at data segment 0x532 .. 0x536 */
     unsigned hero_frame, ctr;           /* [bp-0x5e], [bp-0x3c] */
     unsigned v2e, v98, v48, c2;         /* [bp-0x2e], [bp-0x98], [bp-0x48], [bp-0xc2]: see walk_keys */
-    int indoors;                        /* the byte [bp-0x9e] points to: set while a kind 3 record has taken the roof off */
+    uint8_t *alt;                       /* [bp-0x9e]: byte 0 is 1 while a kind 3 record has taken the roof off, then the roof's saved part of the object map */
     char unbuilt[120];                  /* the last thing the original did that is not built, "" when none */
     int unbuilt_new;                    /* set when it changed during the current pass */
     uint8_t *buf;                       /* the world buffer, a little longer than WALK_W * WALK_H (see walk_draw_specks) */
 };
 
-enum { WALK_BUF_LEN = WALK_W * WALK_H + 0x400 };
+enum { WALK_BUF_LEN = WALK_W * WALK_H + 0x400, WALK_ALT_LEN = 1 + 256 * 256 };
 
 static unsigned w16(const uint8_t *b, size_t o)
 {
@@ -54,7 +54,7 @@ int walk_reset(walk_t *w, uint32_t seed)
     w->v98 = 0;
     w->v48 = 0;
     w->c2 = 0;
-    w->indoors = 0;
+    memset(w->alt, 0, WALK_ALT_LEN);
     w->unbuilt[0] = 0;
     w->unbuilt_new = 0;
     w->rng = seed;
@@ -81,7 +81,8 @@ walk_t *walk_create(void)
     if (!w)
         return NULL;
     w->buf = calloc(1, WALK_BUF_LEN);
-    if (!w->buf || walk_reset(w, 0) != 0) {
+    w->alt = calloc(1, WALK_ALT_LEN);
+    if (!w->buf || !w->alt || walk_reset(w, 0) != 0) {
         walk_free(w);
         return NULL;
     }
@@ -94,6 +95,7 @@ void walk_free(walk_t *w)
         return;
     walk_scene_free(w->scene);
     free(w->buf);
+    free(w->alt);
     free(w);
 }
 
@@ -542,16 +544,54 @@ const char *walk_unbuilt(const walk_t *w)
     return w->unbuilt[0] ? w->unbuilt : NULL;
 }
 
-/* The hero stands on scene record `si` (0x172f0 .. 0x18b82). Kind 3 (a house's roof) does nothing unless the hero is
- * going through the door; the kinds the block names are not built; then the record loop runs again on the live state. */
+/* (0x1b634) The roof of a house: the rectangle (x0, y0) .. (x1, y1) of the object map, bytes 4 to 7 of a kind 3 record. Going in, it is saved in `alt`
+ * after the flag byte and cleared to 0xff, so the roof disappears; coming out it is put back. Returns 0, or -1 if the rectangle is not
+ * inside the map (the original would then change whatever follows it). */
+int walk_roof(uint8_t *omap, uint8_t *alt, const uint8_t *rec, int enter)
+{
+    unsigned x0 = rec[4], y0 = rec[5], x1 = rec[6], y1 = rec[7];
+    int wd = (int)x1 - (int)x0 + 1;
+    if (y1 < y0)
+        return 0;
+    if (wd <= 0 || x1 >= WS_MAP_W || y1 >= 100 || 1 + (size_t)wd * (y1 - y0 + 1) > WALK_ALT_LEN)
+        return -1;
+    unsigned off = x0 + (y0 << 7);
+    size_t idx = 1;
+    for (unsigned y = y0; y <= y1; y++) {
+        if (enter) {
+            memcpy(alt + idx, omap + off, (size_t)wd);
+            memset(omap + off, 0xFF, (size_t)wd);
+        } else {
+            memcpy(omap + off, alt + idx, (size_t)wd);
+        }
+        off += 0x80;
+        idx += (size_t)wd;
+    }
+    return 0;
+}
+
+/* The hero stands on scene record `si` (0x172f0 .. 0x18b82). Kind 3 (a house's roof): going up through the door takes the roof off
+ * and changes the weather mode by 3 (which stops the rain), coming down puts it back with a bump; the kinds the block names are
+ * not built; then the record loop runs again on the live state. */
 static void hit_record(walk_t *w, unsigned si)
 {
     walk_scene_t *s = w->scene;
     const uint8_t *rec = s->tab_a + 1000 + si;
     unsigned kind = rec[2], d = s->tab_b[2];
     if (kind == 3) {
-        if ((d == 0 && rec[3] == 0 && !w->indoors) || (d == 1 && rec[3] == 1 && w->indoors))
-            note_unbuilt(w, "a roof comes off or goes back", si / WS_RECORD_SIZE);
+        if (d == 0 && rec[3] == 0 && w->alt[0] == 0) {
+            if (walk_roof(s->omap, w->alt, rec, 1) != 0)
+                note_unbuilt(w, "a roof outside the map", si / WS_RECORD_SIZE);
+            w->alt[0] = 1;
+            s->weather += 3;
+        }
+        if (d == 1 && rec[3] == 1 && w->alt[0] != 0) {
+            if (walk_roof(s->omap, w->alt, rec, 0) != 0)
+                note_unbuilt(w, "a roof outside the map", si / WS_RECORD_SIZE);
+            w->alt[0] = 0;
+            w->v48 = 2;
+            s->weather -= 3;
+        }
     } else if (kind == 0 || kind == 1 || kind == 4 || kind == 5 || kind == 7 || kind == 8 || kind == 0xE ||
                (kind >= 0x11 && kind <= 0x14)) {
         char what[48];
@@ -723,6 +763,8 @@ void walk_state_dump(const walk_t *w, uint8_t out[WALK_STATE_BYTES])
     out[o++] = (uint8_t)w->hero_frame;
     out[o++] = (uint8_t)w->v48;
     out[o++] = (uint8_t)w->c2;
+    out[o++] = w->alt[0];
+    out[o++] = (uint8_t)s->weather;
 }
 
 /* ---- the window ---- */
