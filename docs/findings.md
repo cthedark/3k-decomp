@@ -2331,3 +2331,35 @@ all 6,180 song ticks (`compare_opl.py`: 6180 identical, 0 different), the driver
   `[bp-0x4c] + 0x127d` with `0x2917c`: this is the **digital sound** (Sound Blaster) driver, not the FM one; the oracle has no Sound Blaster, so the flag is 0 and
   nothing happens there. With a Sound Blaster the door gives a sound effect (probably from `SND_EF.1`, which WALK.SL does not read in the oracle's runs, and the menu
   reads on a real machine). Not seen, not built.
+
+## WALK.SL step 10: the other keys, a survey, 2026-10-17
+
+Read-only survey; nothing built. READ = the dispatch in `main` after the arrow handlers (`0x1424c` .. `0x172a4`, via `tools/calls16.py`). SEEN = one key
+pressed in the oracle at the start position of scene 0 (`dosemu.py --key 26:CODE:30 --snap 59:...`, and `--loop-top 0x11d36 --key-pass 9:CODE` to see whether
+the main loop keeps running). A handler that waits for an answer stops the main loop's passes, so "waits" below means the oracle's pass count stopped.
+Each F-key handler first highlights its button with `0x1c3ba(screen offset, 0x2f, 0x14, ...)`; the offsets match the label positions of step 3, which is
+how the key-to-button mapping was read (high confidence). F-keys are handled only between 0x3b and 0x44 (`0x14d4c`), after the screen is redrawn once.
+
+| Key (scan code) | Button (screen offset of the highlight) | What the oracle showed | Files opened |
+|---|---|---|---|
+| F1 (0x3b) | 交談 talk (0x284) | nothing: no one to talk to at the start; the loop goes on | - |
+| F2 (0x3c) | 觀看 look (0x1b84) | nothing visible; the loop goes on | - |
+| F3 (0x3d) | 取物 take (0x3484) | nothing visible; the loop goes on | - |
+| F4 (0x3e) | 施法 magic (0x4d84) | a selection box over the hero (pick a party member); waits | - |
+| F5 (0x3f) | 物品 items (0x6684) | the same selection box; waits | - |
+| F6 (0x40) | 裝備 equip (0x7f84) | the same selection box; waits | - |
+| F7 (0x41) | 使用 use (0x9884) | the prompt 金錢 或 物品 ("money or item?") at the bottom of the window; waits | `mes_txt.lcc` |
+| F8 (0x42) | 地圖 map (0xb184) | nothing visible (no map item, probably); the loop goes on | - |
+| F9 (0x43) | 位置 position (0x498d) | a small box at the hero (probably the party's marching order); waits | `rpg.lcp` |
+| F10 (0x44) | 資料 data (0x628d) | the hero's status panel over the left buttons: portrait and six values (HP, MP and others); waits | `mandata1.lcc`, `mes_txt.lcc`, `man_pic.lcc` |
+| 1 (0x02) | 音樂 music (0x7b8d) | music on/off: tests the FM flag `[0x37e]:5` (0x81 = playing; `0x266f6` stops, `0x2660c` starts); the loop goes on | - |
+| 2 (0x03) | 音效 sound effects (0x948d) | sound effects on/off (`[0x380]:0xc`, the Sound Blaster flag); the loop goes on | - |
+| 3 (0x04) | 儲存 save (0xad8d) | 請輸入欲存編號(0-10) ("enter the save number, 0-10") with a number field at the top; waits. The code after it writes the state files (`0x26c54` with mode 1 = create, `0x26cf5` = write) | `mes_txt.lcc`, `rpg.lcp` |
+| 4 (0x05) | 離開 quit (0xc68d) | 確定離開遊戲嗎? ("really leave the game?"); waits | `mes_txt.lcc` |
+| A (0x1e) | - | sliding round corners on/off (`[bp-0x76]`, step 7); recolours a 0x1ec-byte strip of the screen between colours 9 and 0x1f as the indicator | - |
+| Space (0x39) | - | runs code that tests a party record against 0x64 and draws random numbers; nothing visible here; the loop goes on. Not understood (an action on what the hero faces?) | - |
+
+So the right-hand column of buttons is 位置/資料 on F9/F10 and 音樂/音效/儲存/離開 on the number keys 1-4 (the labels carry no key names; this mapping is
+from the highlight offsets). 是/否 (yes/no) are the answers to the prompts; how they are given (keys or the mouse) is not read. The mouse: not read.
+
+**Not known:** what Space does; what F1-F3 and F8 do when there is something to act on; the dialogs' own input loops; the save file layout written by key 3.
