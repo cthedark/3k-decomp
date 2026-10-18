@@ -51,6 +51,8 @@ int walk_first_screen(walk_t *w, screen_t *scr);
  * tick count it reads first; the shipped checks use 0), `ticks` the clock at the first pass. The interface is drawn, the
  * moving world is reset and pass 0 is run, so later walk_pass calls continue from there. */
 int walk_begin(walk_t *w, screen_t *scr, uint32_t seed, uint32_t ticks);
+/* What walk_begin's first pass returned (walk_pass's mask): WALK_PASS_BATTLE when the party starts on an enemy. */
+int walk_begin_result(const walk_t *w);
 
 /* The interface: sixteen labels and the two pieces at the bottom right. Returns 0, or -1 if NUMBER.LCZ or
  * MES_TXT.LCC cannot be read. */
@@ -85,8 +87,19 @@ int walk_reset(walk_t *w, uint32_t seed);
  * 0x4d right) walk the hero (see walk_keys in walk.c) and Space (0x39) fires the party's shots; no other key and no mouse is read yet.
  * Returns a mask: WALK_PASS_UNBUILT when the original did something that is not built (walk_unbuilt says what).
  * WALK_PASS_VILLAGER_EVENT is no longer returned: the case it reported (0x13356) is an enemy coming back, now built. */
-enum { WALK_PASS_VILLAGER_EVENT = 1, WALK_PASS_UNBUILT = 2 };
+enum { WALK_PASS_VILLAGER_EVENT = 1, WALK_PASS_UNBUILT = 2, WALK_PASS_BATTLE = 4 };
 int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60);
+
+/* ---- for battle.c: a pass that returns WALK_PASS_BATTLE has left the loop where the original leaves it for a battle (after the
+ * window copy, before the villagers' steps), with the touched enemy already moved away when its byte 0x2f is 0. ---- */
+uint32_t *walk_rng(walk_t *w);
+/* The palette cycle of 0x1c284 (the battle runs it too, on the same counters). */
+void walk_palette_step(walk_t *w, screen_t *scr);
+/* The touch: the member's offset in the party table (0, 0x28, ...), the monster group, the enemy record's byte 0x2f. */
+void walk_battle_info(const walk_t *w, unsigned *member, unsigned *group, unsigned *boss);
+/* The world drawn again at the hero with walk frame 0 and its middle 96 x 84 doubled through `table` (0x2c658): the 192 x 168 picture
+ * the battle's backdrop is made from. Uses (and overwrites) the world buffer. */
+void walk_battle_view(walk_t *w, const uint8_t table[256], uint8_t window[192 * 168]);
 
 /* Shots ([bp-0x62]: 5 of x, y, direction, zigzag phase) and sparks ([bp-0xcc]: 10 of frame, x, y, direction), kept as one list. */
 enum { WALK_SHOTS = 5, WALK_SPARKS = 10, WALK_FX_BYTES = 4 * (WALK_SHOTS + WALK_SPARKS), WALK_ART_BYTES = 0x15E + 0x44 + 0x140,

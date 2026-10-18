@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "assets.h"
+#include "battle.h"
 #include "walk.h"
 
 static int read_raw(screen_t *scr, const char *path)
@@ -78,9 +79,14 @@ int main(int argc, char **argv)
     if (!w)
         return 1;
     int rc = 2;
-    if (!strcmp(mode, "idle") && argc >= 8) {
+    if ((!strcmp(mode, "idle") || !strcmp(mode, "battle")) && argc >= 8) {
         /* build/walk_dump DATA idle OUT N TICKBASE TICKDIV START: N idle passes at clock TICKBASE + pass / TICKDIV, drawn
-         * over START (after the interface); OUT gets, after each pass, 64,000 pixels then the 768-byte palette */
+         * over START (after the interface); OUT gets, after each pass, 64,000 pixels then the 768-byte palette.
+         * "battle" instead of "idle": a pass that touches an enemy starts the battle (battle.h) and the later passes are the battle's;
+         * after each pass OUT gets the pixels, the palette, a byte (0 world, 1 battle) and BATTLE_STATE_BYTES (a world pass: the rand
+         * state, then zeros). */
+        int battle_mode = !strcmp(mode, "battle");
+        battle_t *bt = NULL;
         static screen_t scr;
         if (argc - 8 > (int)(sizeof g_keys / sizeof g_keys[0])) {
             fprintf(stderr, "idle: at most %d key arguments\n", (int)(sizeof g_keys / sizeof g_keys[0]));
@@ -107,8 +113,37 @@ int main(int argc, char **argv)
             FILE *f = fopen(out, "wb");
             rc = f ? 0 : 2;
             for (int i = 0; f && i < n; i++) {
+                if (battle_mode) {
+                    int ev = bt ? battle_pass(bt, &scr, port_at(i))
+                                : walk_pass(w, &scr, (uint32_t)(base + (unsigned long)i / div), port_at(i));
+                    if (!bt && (ev & WALK_PASS_BATTLE)) {
+                        bt = battle_begin(w, &scr);
+                        if (!bt) {
+                            rc = 1;
+                            break;
+                        }
+                    }
+                    if (ev & WALK_PASS_UNBUILT)
+                        fprintf(stderr, "battle: pass %d: %s\n", i,
+                                bt ? (battle_unbuilt(bt) ? battle_unbuilt(bt) : "?") : (walk_unbuilt(w) ? walk_unbuilt(w) : "?"));
+                    uint8_t st[1 + BATTLE_STATE_BYTES] = {0};
+                    st[0] = bt != NULL;
+                    if (bt) {
+                        battle_state_dump(bt, st + 1);
+                    } else {
+                        uint32_t r = *walk_rng(w);
+                        for (int j = 0; j < 4; j++)
+                            st[1 + j] = (uint8_t)(r >> (8 * j));
+                    }
+                    if (fwrite(scr.pix, 1, sizeof scr.pix, f) != sizeof scr.pix || fwrite(scr.pal, 1, sizeof scr.pal, f) != sizeof scr.pal ||
+                        fwrite(st, 1, sizeof st, f) != sizeof st)
+                        rc = 2;
+                    continue;
+                }
                 int ev = walk_pass(w, &scr, (uint32_t)(base + (unsigned long)i / div), port_at(i));
-                if (ev)
+                if (ev & WALK_PASS_BATTLE)
+                    fprintf(stderr, "idle: pass %d: a battle: the party touched an enemy\n", i);
+                else if (ev)
                     fprintf(stderr, "idle: pass %d: %s\n", i, walk_unbuilt(w) ? walk_unbuilt(w) : "the unbuilt villager event");
                 if (fwrite(scr.pix, 1, sizeof scr.pix, f) != sizeof scr.pix || fwrite(scr.pal, 1, sizeof scr.pal, f) != sizeof scr.pal)
                     rc = 2;
@@ -120,6 +155,7 @@ int main(int argc, char **argv)
             if (f)
                 fclose(f);
         }
+        battle_free(bt);
     } else if (!strcmp(mode, "first") && argc >= 5) {
         static screen_t scr;
         if (read_raw(&scr, argv[4]) != 0) {

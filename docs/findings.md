@@ -2483,3 +2483,80 @@ would stop it), `--snap` at chosen ticks and `--key` scripts; code coverage from
   - **Damage:** the damage formula and where the shouts come from (probably `MES_TXT.LCC` or `MON.ALL`).
   - **Results:** winning (coins, experience, the return to the world), losing, and the monster groups' data in `MON.ALL`.
   - **Byte 0x2f:** the record's byte 0x2f paths (dialog before the battle).
+
+## WALK.SL step 13: the battle's first screen and idle passes (stage 1), 2026-10-18
+
+Built in C (`src/battle.c`, the hooks in `src/walk.c`) and compared with the original pass by pass by `tools/check_battle.sh`
+(`tools/battle_check.py`: the oracle counts the world loop `0x11d36` and the battle loop `0x1d418` as one sequence of passes). Everything
+below is READ from the code and then CONFIRMED by that comparison unless it says otherwise. Method: oracle dumps of each intermediate
+buffer (`--dump-local` / `--dump-hit` at the call sites), checked one step at a time in a scratch model (`work/b1/m.py`), then the C port
+against the screens.
+
+**The world's side of a touch (`0x1275e` .. `0x12e4e`).**
+- The touching member's party offset (`di`, 0, 0x28, ...) is kept. Record byte 0x2f = 0: the enemy goes to a random open place (the
+  respawn's two `rand()` draws and `0x2c119` test, without the view bounds), and the monster group is `party table[518] * 5 + record[0xb] - 1`
+  (bytes). **Correction to step 11:** `[bp-0x34]` is the party table + 500, not the `RPG.LCP` buffer; byte 0x12 of it is party-table byte 518,
+  the map header's byte 1 (written by the loader at `0x10e05`). Byte 0x2f set: the group is byte 0x30, after a dialog when the word at 0x11 is
+  not 0 (not built; scenes 4 and 40 have such enemies).
+- The world buffer's bytes 0..3 become 0, hero x, hero y, 1, and the frame routine `0x19680` runs again. It is **not** the main loop's drawing
+  (that is inlined in the loop); with byte 0 = 0 it draws no villagers and no party (`0x19713`), with byte 3 = 1 the ground and objects of 14 x 13
+  cells from buffer (64, 56) only, then `0x2c658` doubles the 96 x 84 pixels from (64, 57): `p`, `t[p]` / `t[p]`, `t[t[p]]`, with
+  `t` = `RPG.LCP` 0x340 (256 bytes, at world buffer + 0xfe78), and copies the doubled picture back over the world buffer (`0x5080` words).
+  A first attempt drew the hero in it; the dump at `0x19985` showed he is left out.
+- `0x2728d` takes the 192 x 168 window from (16, 16). Row k of it (k = 0 .. 109) is stretched to 195 + 6k pixels (`0x26de8`: a 16-bit step
+  0xffff * 192 / width, starting at 1, so even equal widths repeat a pixel) and its middle 195 kept, giving a 195 x 110 backdrop in which the
+  ground seems to lie back. Every 36 rows two 6 x 6 squares go on screen (colour 0x10 at (80 + 10i, 50), 0x1f at (82 + 10i, 52)), a progress row
+  the party strip covers a moment later. In the original each row's 4-byte image header is written over the end of the previous row in place.
+- `0x2b8f6` (read as a scan in step 12; it is a replace): in every second byte of the backdrop's first 0x5284, the colours below 16 (the ones the
+  palette cycle changes) become fixed ones (1 → 0x57, 2 → 0x59, ... 15 → 0x36). Found when scenes 1 records 5 and 9 differed in 46 pixels.
+- `0x25dca` four times (byte translation through `t`): bytes 0..0x3e0e, 1..0x2e89, 0..0x1f05, 0..0xf82, so the far rows are shaded most.
+- The battle's music: if music is on (`[0x37e]:5` = 0x81) the scene's song stops and the song at buffer + 0x4a38 starts, which is `MUC.ALL`
+  0x2bad9 (0x1c92 bytes). **Correction to step 9:** that "second song" is the battle's song, not unused. The original's register writes after
+  the touch match the player for song ticks 1 .. 3,119 (`compare_opl.py`; tick 0 is the driver's known reset).
+- The party strip (`RPG.LCP` 0x18691, 0x1247 bytes, a 192 x 58 picture) at (64, 16); for each member with byte 3 <= 4: a 20 x 20 box of colour 0
+  at (67 + 38k, 29), his 16 x 16 face (bank 2 + number * 0xc00 + 0x400) there, darkened seven times through `t` when his HP word (+8) is 0, the
+  HP at 16 rows below in colour 0xf0 and the MP word (+0xd) 16 pixels right in 0xb0. Numbers (`0x1c47c`, mode 0): a 20 x 5 picture, five 3 x 5
+  digits 4 apart from `RPG.LCP` 0xd30 (the battle buffer's +0xd44c), leading zeros left out, ink 0x10 recoloured.
+- `0x1c68e` (a Sound Blaster sample) and the mouse pointer's save and restore are not built (no Sound Blaster, no mouse in the oracle).
+
+**The battle's set-up (`0x1cbb6` .. `0x1d415`).** Its buffers are carved out of the world's (backdrop copy at world buffer + 0x5460, field
+picture at + 0xa974, monster table at the big buffer + 0x4028, and more).
+- Five slots (4 bytes: field position word, frame, state): each slot draws `rand() / 0x199a` (0 .. 4); above 2 it is empty (9); a record with
+  byte 0x2f set makes every slot frame 1. Again until a slot is filled. Then each empty front slot (2 .. 4) takes the first filled back one (0, 1).
+  Positions in the 192-wide field: 0x21f6, 0x222c (back), 0x2101, 0x2142, 0x2183 (front).
+- The group: `TAB.TAB` 0x19f + 5 * group gives its place in `MON.ALL`; decoded, three 60 x 60 pictures 0xe14 apart (their headers overwritten
+  with 60 x 60). The last 10 bytes of the group as read go to table + 0x28 (stats); each filled slot's HP byte (table + 0x32 + slot) is the first.
+  The copy's source is `[bp-0x80]` - 10, where `[bp-0x80]` is the read's byte count, not the `group * 5` stored there just before.
+- Also read and decoded but not used yet: `RPG.LCP` 0x135e4 (two blocks, probably the attack pictures), `RPG.LCP` 0x14891 (21,600 bytes).
+- Who starts: `rand()` below 0x3e80 → the monsters (turn counter 0, acting member 0xf0); otherwise the party from the touching member: the first
+  member with HP and byte 3 below 5 gets the mark (colour 0x1f of the 12 x 3 pixels at (71 + 38k, 21) turns 0x0f).
+
+**The idle pass (`0x1d418` loop).**
+- The world's palette cycle `0x1c284` on the same counters; the four command tabs when the chosen one changed (all at the first pass: outlines
+  0x95 / 0x94 and a fill 0x93, the chosen one 0x92 / 0x90 / 0x10); the sway (count 0 .. 3 and direction, one step a pass) and `0x2c6b9`: field row r
+  is backdrop row r from an offset that starts at the count and bounces between 0 and 3 down the rows.
+- `0x1fd06`, per live slot: one `rand()` jitters it a pixel (below 0xbb8 left, above 0x7447 right; the table is not changed), the back slots are
+  shrunk to 30 x 30 (`0x26f72`) and shaded twice, the front ones drawn at 60 x 60 (state 0 or 0x32), colour 0 transparent; a second `rand()` moves
+  its frame (below 0x2ff down, above 0x7d00 up, within 0 .. 2). So the monsters' idle animation is random frame changes and jitter.
+- The effects list (20 entries at big buffer + 0xd4e2) is empty; a 1 x 1 picture cleared at the second pass is drawn every pass and shows nothing.
+- The field (192 x 110) to screen (64, 74). The key latch: a value above 0x7f arms it; a key counts only when armed.
+- The monsters' turn: the counter walks the slots 4 counts each (one count a pass while the sway's direction is set); an empty slot is passed over
+  (`0x1dbf3`). A live monster's action (`0x1d641` on) is not built.
+
+**Checked:** 10 runs, all identical at every pass in screen, palette, rand state, monster table, sway, acting member and turn counter: starts on
+six enemies of scene 1 (groups 0 to 4, 150 to 300 passes), scenes 34 and 42 (120), a walk into an enemy (9 world passes then 241 battle passes
+at clock 30000; at clock 20 the monsters start, and the 13 passes before their first action match). `tools/mutate_battle.py`: 30 deliberate
+bugs, all caught (one by the unit tests); three more no start can show are listed in the file. Unit tests `tests/test_battle.c`. ASan/UBSan clean on all 10 runs.
+
+**Found in the world on the way** (scenes other than 0 and 1, which the earlier checks did not cover):
+- Map header byte 3 is the shake's start and floor (`0x11233`, `0x1259b`): a scene with 1 there keeps shaking. Built (C port and Python model).
+- Map header byte 5 = 1 (scenes 9, 10, 11, 12, 24, 25, 29, 47) draws the world doubled every pass (it is passed as the view flag at `0x11b4f`,
+  `0x11e01`, `0x122ef`, and changes the window copy at `0x125c6`). **Not built:** in those scenes the port's world window differs from the first
+  pass. Weather mode 2 (scene 3) differs in 122 pixels at the first pass (not built, as before).
+
+**Correction to step 12:** that start shows five monsters, three in front and two half-size ones behind them, not three.
+
+**Not built:** the battle's keys and mouse (commands, targets), the monsters' actions, attacks and damage, the effects, winning, losing and the
+way back to the world (the port stays in the battle), the dialog of byte-0x2f enemies, the Sound Blaster parts. The touched enemy's new place is
+computed but not seen until the battle returns. **Pace:** the original's battle loop is unpaced; the port runs it at the world's 35 passes a
+second. The monsters jitter and change frames at that rate. Not judged by eye yet.

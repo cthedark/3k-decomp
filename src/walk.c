@@ -24,6 +24,9 @@ struct walk {
      * (frame, x, y, direction). All 0xfa at the start (0x102fe). */
     uint8_t fx[WALK_FX_BYTES];
     uint8_t art[WALK_ART_BYTES];        /* RPG.LCP at 0x9b8: ten 7 x 5 digits, the shot (4-byte header, 8 x 8), five 8 x 8 sparks */
+    /* a touch (WALK_PASS_BATTLE): the member's party offset, the monster group, the record's byte 0x2f */
+    unsigned battle_member, battle_group, battle_boss;
+    int begin_result;                   /* what walk_begin's first pass returned */
 };
 
 enum { ART_DIGITS = 0, ART_SHOT = 0x15E, ART_SPARKS = 0x15E + 0x44 };
@@ -67,7 +70,7 @@ int walk_reset(walk_t *w, uint32_t seed)
     w->ctr = 0;
     w->v2e = 3;
     w->v98 = 0;
-    w->v48 = 0;
+    w->v48 = w->scene->header[3];   /* 0x11233: the shake starts at the map header's byte 3 (0 in scenes 0 and 1) */
     w->c2 = 0;
     memset(w->alt, 0, WALK_ALT_LEN);
     w->unbuilt[0] = 0;
@@ -639,7 +642,8 @@ static unsigned shake(walk_t *w)
     unsigned a = 0;
     if (w->v48) {
         a = walk_shake_offset(w->v48, walk_rand(&w->rng));
-        w->v48--;
+        if (w->v48 > w->scene->header[3])   /* 0x1259b: never below the map header's byte 3 (a scene that keeps shaking) */
+            w->v48--;
     }
     return a;
 }
@@ -840,6 +844,13 @@ static void space(walk_t *w)
     }
 }
 
+/* 0x2c119: an enemy can be put at (x, y / 2 = ry) when the two cells of row ry + 1 under it are walkable. */
+static int open_place(const walk_scene_t *s, unsigned rx, unsigned ry)
+{
+    unsigned idx = (((ry + 1) & 0xFF) << 8) | rx;
+    return tile_listed(s->gmap, idx, s->list) && tile_listed(s->gmap, idx + 2, s->list);
+}
+
 /* 0x13356: an enemy's smoke has cleared; it comes back at a random open place outside the view. The original keeps the
  * bounds in the hero's walk counter and frame ([bp-0x3c], [bp-0x5e]), which keep those values. */
 static void respawn(walk_t *w, uint8_t *rec, unsigned hx, unsigned hy)
@@ -854,8 +865,7 @@ static void respawn(walk_t *w, uint8_t *rec, unsigned hx, unsigned hy)
         unsigned ry = (((unsigned)walk_rand(&w->rng) / 0x19A) + 0xA) & 0xFF;
         if (rx >= lo_x && rx <= hi_x && ry >= lo_y && ry <= hi_y)
             continue;
-        unsigned idx = (((ry + 1) & 0xFF) << 8) | rx;   /* 0x2c119: two cells must be open */
-        int ok = tile_listed(s->gmap, idx, s->list) && tile_listed(s->gmap, idx + 2, s->list);
+        int ok = open_place(s, rx, ry);
         ry = (ry * 2) & 0xFF;
         if (ok) {
             rec[0] = (uint8_t)rx;
@@ -926,6 +936,41 @@ static void walk_keys(walk_t *w, unsigned port60)
     }
 }
 
+/* 0x1275e .. 0x128ee: what a touch does before the battle. Byte 0x2f = 0: the enemy goes to a random open place (the respawn's rule
+ * without the view bounds) and the group is the map header's byte 1 (party table byte 518) * 5 + its sprite set - 1; otherwise the group is byte 0x30, after a
+ * dialog when the word at 0x11 is not 0 (not built). */
+static int touch(walk_t *w, unsigned member, uint8_t *rec)
+{
+    walk_scene_t *s = w->scene;
+    w->battle_member = member;
+    w->battle_boss = rec[0x2F];
+    int ret = WALK_PASS_BATTLE;
+    if (rec[0x2F] == 0) {
+        for (long tries = 0;; tries++) {
+            if (tries >= 1000000) {
+                note_unbuilt(w, "no open place for the touched enemy", 0);
+                ret |= WALK_PASS_UNBUILT;
+                break;
+            }
+            unsigned rx = ((((unsigned)walk_rand(&w->rng) / 0x13C) + 0xC) & 0xFF) * 2 & 0xFF;
+            unsigned ry = (((unsigned)walk_rand(&w->rng) / 0x19A) + 0xA) & 0xFF;
+            if (open_place(s, rx, ry)) {
+                rec[0] = (uint8_t)rx;
+                rec[1] = (uint8_t)(ry * 2);
+                break;
+            }
+        }
+        w->battle_group = (s->tab_b[518] * 5 + rec[0xB] - 1) & 0xFF;   /* [bp-0x34] = party table + 500: byte 518 */
+    } else {
+        if (w16(rec, 0x11) != 0) {
+            note_unbuilt(w, "the dialog an enemy starts a battle with (record word 0x11)", w16(rec, 0x11));
+            ret |= WALK_PASS_UNBUILT;
+        }
+        w->battle_group = rec[0x30];
+    }
+    return ret;
+}
+
 int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60)
 {
     walk_scene_t *s = w->scene;
@@ -959,20 +1004,15 @@ int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60)
     walk_copy_window_at(scr, w->buf, shake(w));
 
     /* 0x12703: a party member standing on a live enemy (0x2c0da: same position with the low bits cleared, byte 0x31 set, not in
-     * smoke) starts a battle. The original leaves the loop for it (SEEN: it loads MON.ALL and draws the battle in the window). */
+     * smoke) starts a battle; the loop is left here, before the villagers' steps. */
     for (int i = 0; i < 5; i++) {
         const uint8_t *p = s->tab_b + WS_PARTY_SIZE * i;
         if (p[3] > 0x64)
             break;
         for (int k = 0; k < WS_VILLAGERS; k++) {
-            const uint8_t *r = s->tab_a + k * WS_VILLAGER_SIZE;
-            if (r[2] != 0x61 && (r[0] & 0xFE) == (p[0] & 0xFE) && (r[1] & 0xFE) == (p[1] & 0xFE) && r[0x31] > 0) {
-                char what[80];
-                snprintf(what, sizeof what, "a battle: the party touched enemy %d (villager record)", k);
-                snprintf(w->unbuilt, sizeof w->unbuilt, "%s", what);
-                w->unbuilt_new = 1;
-                return WALK_PASS_UNBUILT;
-            }
+            uint8_t *r = s->tab_a + k * WS_VILLAGER_SIZE;
+            if (r[2] != 0x61 && (r[0] & 0xFE) == (p[0] & 0xFE) && (r[1] & 0xFE) == (p[1] & 0xFE) && r[0x31] > 0)
+                return touch(w, (unsigned)(WS_PARTY_SIZE * i), r);
         }
     }
 
@@ -1142,6 +1182,52 @@ int walk_begin(walk_t *w, screen_t *scr, uint32_t seed, uint32_t ticks)
         return -1;
     if (walk_reset(w, seed) != 0)
         return -1;
-    walk_pass(w, scr, ticks, 0);   /* the first pass: its picture is the first screen */
+    w->begin_result = walk_pass(w, scr, ticks, 0);   /* the first pass: its picture is the first screen */
     return 0;
+}
+
+int walk_begin_result(const walk_t *w)
+{
+    return w->begin_result;
+}
+
+/* ---- for battle.c ---- */
+
+uint32_t *walk_rng(walk_t *w)
+{
+    return &w->rng;
+}
+
+void walk_palette_step(walk_t *w, screen_t *scr)
+{
+    palette_cycle(w, scr);
+}
+
+void walk_battle_info(const walk_t *w, unsigned *member, unsigned *group, unsigned *boss)
+{
+    *member = w->battle_member;
+    *group = w->battle_group;
+    *boss = w->battle_boss;
+}
+
+void walk_battle_view(walk_t *w, const uint8_t table[256], uint8_t window[192 * 168])
+{
+    /* 0x1296e: the frame routine 0x19680 (not the main loop's own drawing) with the buffer's bytes 0..3 = 0, x, y, 1: byte 0 = 0
+     * leaves out every villager and party member, byte 3 = 1 draws the ground and objects for 14 x 13 cells from buffer (64, 56)
+     * only, which holds every pixel the doubling reads, so the full drawing gives the same picture there. 0x2c658 doubles the 96 x 84
+     * pixels from (64, 57): p, t[p] / t[p], t[t[p]]; the window copy 0x2728d then takes its 192 x 168 from (16, 16). */
+    walk_scene_t *s = w->scene;
+    unsigned x = s->tab_b[0], y = s->tab_b[1];
+    memset(w->buf, 0, WALK_BUF_LEN);
+    walk_draw_ground(w->buf, s, x, y);
+    walk_draw_objects(w->buf, s, x, y);   /* no entities: byte 0 of the buffer is 0, and 0x19713 then skips them */
+    for (int r = 0; r < 84; r++)
+        for (int c = 0; c < 96; c++) {
+            uint8_t p = w->buf[0x3220 + r * WALK_W + c], q = table[p];
+            uint8_t *d = window + (2 * r) * 192 + 2 * c;
+            d[0] = p;
+            d[1] = q;
+            d[192] = q;
+            d[193] = table[q];
+        }
 }

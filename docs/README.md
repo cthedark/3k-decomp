@@ -38,7 +38,8 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
 | Plan a key script through waypoints with the model (a route through the streets), to ask the oracle to walk it | `walk_route.py` (`walk_keys.py route` uses it) |
 | Make key scripts for the oracle (random arrow-key presses, or yo-yoing around the house door) | `walk_keys.py` (with `walk_idle_trace.py --key PASS:CODE`; `findings.md` "WALK.SL step 7") |
 | Check WALK.SL's main loop (animated tiles, palette cycle, weather clock, villagers, hero counter, walking, roofs, shots and enemies) pass by pass against the oracle: record, model, C port | `walk_idle_trace.py`, `walk_idle.py` (`check`, `cross`; `WALK_DATA=DIR` for another scene's data); `check_walk.sh` runs seven clock readings (`findings.md` "WALK.SL step 6") |
-| Mutation checks (do the tests fail when the code is wrong?) | `mutate_audio.sh`, `mutate_music.sh` (needs nothing), `mutate_menu.sh` (needs `check_menu.sh` run first), `mutate_credits.sh` (needs `check_credits.sh` run first), `mutate_walk.py` (needs `check_walk.sh` run first; 276 bugs, about 45 minutes; `ONLY=TEXT` runs the ones whose name contains TEXT) |
+| Check WALK.SL's battle pass by pass against the oracle (world loop and battle loop as one pass sequence) | `battle_check.py` (one start; `--cache` keeps the original's recording), `check_battle.sh` (10 starts, about 15 seconds), `walk_scene_data.py` (a start in any scene and place) |
+| Mutation checks (do the tests fail when the code is wrong?) | `mutate_audio.sh`, `mutate_music.sh` (needs nothing), `mutate_menu.sh` (needs `check_menu.sh` run first), `mutate_credits.sh` (needs `check_credits.sh` run first), `mutate_walk.py` (needs `check_walk.sh` run first; 276 bugs, about 45 minutes; `ONLY=TEXT` runs the ones whose name contains TEXT), `mutate_battle.py` (needs `check_battle.sh` run first; about 1 minute) |
 
 ## Current state (update this section each session)
 - Done: PKLITE unpacking of 5 programs; Ghidra loads MARK and TV; the original
@@ -58,7 +59,7 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
 - Code analysis started with `MARK.EXE` (see `code.md`): plain mode 13h
   (the Mode X routines in the programs are never called), DOS file wrappers,
   mouse and palette helpers identified.
-- Native port (`port.md`), as of 2026-10-17. `make` builds `build/3k`; `--scene game` chains title -> intro -> title -> menu -> (new game) world,
+- Native port (`port.md`), as of 2026-10-18. `make` builds `build/3k`; `--scene game` chains title -> intro -> title -> menu -> (new game) world,
   (credits) -> menu. Every scene below is compared with the original's code run in `tools/dosemu.py`, frame by frame or pass by pass, and has a
   `tools/check_*.sh` and a mutation script:
   - **Title** (`MARK.EXE`, milestones 1-2) and **intro** (`STORY2.SL`, milestone 3: seven slides, voice-over, subtitles), with the **FM music**
@@ -67,13 +68,18 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
   - **Credits** (`CAST.SL`): wipe, scrolling names with the reflected floor, song 0 with drums.
   - **World** (`WALK.SL`, milestone 7, scene 0 only): the start-up scene loader (7a), the idle world (animated tiles, palette cycle, the
     hour-long weather clock, villagers walking, 7b), the hero walking with the arrow keys with collision, bump shake and party trail (7c), the
-    roof of the first house coming off and going back (7d), and the scene's song (7e).
+    roof of the first house coming off and going back (7d), the scene's song (7e), and shots, enemies and coins (7f, scene 1).
+  - **Battle** (`WALK.SL`, milestone 8a, 2026-10-18): touching an enemy hands over to the battle's first screen (the doubled, perspective
+    backdrop, the party strip with faces, HP and MP, the command tabs, the monsters) and its idle passes (sway, jitter, frame changes, the
+    battle song); `tools/check_battle.sh`. Nothing can be chosen yet and the battle does not end.
   - The operator has confirmed by eye or ear: the title, intro pacing, voice and subtitle sync, the music balance, the menu and its opening,
     the credits' pace, the first screen of the world, the idle animation, and walking with collision (2026-10-17).
-- **Not built in the world** (`findings.md` "WALK.SL step 7"-"step 9", `port.md` 7c-7e): every key other than the arrows (Space, 1-4, A, the
-  F-key actions), the mouse, sliding round corners, hero-villager contact, the scene-change block at `0x172f0` (doors to other scenes, cut
-  scenes, shops) and the record kinds it names, other scenes than 0, loading a save, the new-game step that writes the `.NOW` files, the
-  Sound Blaster sound effects. A reached unbuilt case is printed on stderr (`walk: not built: ...`).
+- **Not built in the world** (`findings.md` "WALK.SL step 7"-"step 13", `port.md` 7c-8a): the keys 1-4, A and the F-key actions, the mouse,
+  sliding round corners, the scene-change block at `0x172f0` (doors to other scenes, cut scenes, shops) and the record kinds it names, the
+  doubled world of scenes whose map header byte 5 is 1 (9, 10, 11, 12, 24, 25, 29, 47), weather mode 2 (scene 3), loading a save, the
+  new-game step that writes the `.NOW` files, the Sound Blaster sound effects; in the battle everything after the idle passes (keys, the
+  monsters' actions, attacks, win, loss, the way back, the dialog of byte-0x2f enemies). A reached unbuilt case is printed on stderr
+  (`walk: not built: ...`, `battle: not built: ...`).
 - Not done: no code analysed in the overlays; no function renamed or
   reconstructed; subtitle and picture formats unknown.
 - Operator note: the operator's keyboard has no function keys. Use the mouse on
@@ -86,13 +92,15 @@ is still open. For the world, in the order the operator and Kiro agreed to work:
    on-screen buttons with the mouse, so the mouse comes with them). Space (shots) is built (`port.md` 7f).
 2. The scene-change block `0x172f0` .. `0x18b82` and the record kinds 1, 4, 5, 7, 8, 0xe, 0x11-0x14: doors to other scenes, then the scenes
    themselves (the loader already handles all 53, `walk_scene.py scenes`).
-3. The battle that touching an enemy starts (`0x12703`, read in `findings.md` step 11; the respawn `0x13356` is built). Surveyed in `findings.md`
-   step 12: about 30 KB of code, so it is to be built in stages (first screen, command and target choice, one round, the other commands, win and loss).
+3. The battle that touching an enemy starts, in stages (`findings.md` steps 12-13): stage 1, the first screen and idle passes, is built (`port.md`
+   8a). Next: the command and target choice (keys and mouse), one round (the party's attack, the monsters' actions, damage), the other commands,
+   win and loss and the way back to the world.
 4. New game (writing `__1.NOW` / `MAN_INFO.NOW` from `__1.AL1`, `__1.AL2`, `MAN_INFO.ALL`) and loading a save from the slot picker.
 
 How to pick up the world work: `tools/check_walk.sh` checks everything built so far (about 21 minutes; `SHOTS=0` about 3); `tools/walk_idle_trace.py --key` records
 the original's passes with any key script, `tools/walk_idle.py check` / `cross` compare the Python model / the C port with them, and
-`tools/walk_route.py` plans a walk through waypoints. Read `findings.md` "WALK.SL step 6" onward first.
+`tools/walk_route.py` plans a walk through waypoints. Read `findings.md` "WALK.SL step 6" onward first. For the battle: `tools/check_battle.sh` (15 s)
+and `tools/battle_check.py DATA N [--key ...]` for one start; `tools/walk_scene_data.py` makes a start on an enemy.
 
 ## Rules for adding to these docs
 - **Evidence first.** Every claim states the method (tool and command, or

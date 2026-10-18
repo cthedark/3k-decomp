@@ -431,6 +431,7 @@ class Idle:
         self.pal = Palette(rp[:768])
         self.cls = rp[0]
         self.weather = scene.weather
+        self.hdr3 = scene.header[3]   # 0x11233: the shake starts at, and never falls below, the map header's byte 3
         # 0x102fe then 0x11cee: the list all 0xfa, each shot's direction 4 (none flies), each spark's frame 9 (none shows)
         self.fx = bytearray(b"\xfa" * (4 * (NSHOTS + NSPARKS)))
         for i in range(NSHOTS):
@@ -454,7 +455,7 @@ class Idle:
         # the hero (all as the locals of WALK.SL's main function)
         self.v2e = 3          # [bp-0x2e] 3 at start, 1 on the pass a step is made, 5 after
         self.v98 = 0          # [bp-0x98] 0, 1, 2 ... counts up to the speed class: a key is acted on when it wraps to 0
-        self.v48 = 0          # [bp-0x48] the shake after bumping into something
+        self.v48 = self.hdr3  # [bp-0x48] the shake after bumping into something
         self.c2 = 0           # [bp-0xc2] the last key
         self.v76 = 0          # [bp-0x76] sliding round corners (toggled by the A key)
         self.alt = bytearray(1 + 256 * 256)   # [bp-0x9e]: byte 0 is the "roof is off" flag, the rest holds the roof's rectangle of the object map
@@ -609,7 +610,7 @@ class Idle:
             a = self.rnd.next() // d
             if a > self.v48:
                 a = ((a - self.v48) * 0xE0) & 0xFFFF
-            if self.v48 > 0:
+            if self.v48 > self.hdr3:
                 self.v48 -= 1
         return a
 

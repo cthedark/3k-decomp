@@ -38,6 +38,7 @@
 #include "screen.h"
 #include "timing.h"
 #include "title.h"
+#include "battle.h"
 #include "walk.h"
 
 #define MAX_DUMPS 512
@@ -936,17 +937,35 @@ static int play_walk(screen_t *scr)
     const uint32_t start = platform_ticks_ms();
     uint32_t next = start;
     int event_reported = 0;
+    /* A touched enemy starts the battle (battle.h): its first screen at once, then its passes at the world's pace (the original
+     * paces neither). The scene's song stops and the battle's starts: MUC.ALL 0x2bad9, the menu's song, which the loader had read
+     * (the original's register writes match the player for 3,119 song ticks). The battle does not end yet. */
+    battle_t *bt = NULL;
+    int got = walk_begin_result(w);
     platform_present(scr);
     while (platform_poll()) {
+        if (!bt && (got & WALK_PASS_BATTLE)) {
+            bt = battle_begin(w, scr);
+            if (!bt)
+                break;
+            song_stop(song);
+            song = song_start_at("battle", MUSIC_MENU_OFFSET, MUSIC_MENU_LENGTH);
+            platform_present(scr);
+        }
         uint32_t now = platform_ticks_ms();
         if ((int32_t)(now - next) < 0) {
             platform_sleep_ms(1);
             continue;
         }
         next = next_due(next, now, TK_WALK_PASS_HZ);
+        if (bt) {
+            battle_pass(bt, scr, platform_port60());   /* what is not built is said on stderr, once per new case */
+            platform_present(scr);
+            continue;
+        }
         uint32_t ticks = clock0 + (uint32_t)((unsigned long long)(now - start) * TK_BIOS_TICKS_PER_SEC_NUM /
                                              TK_BIOS_TICKS_PER_SEC_DEN / 1000u);
-        int got = walk_pass(w, scr, ticks, platform_port60());
+        got = walk_pass(w, scr, ticks, platform_port60());
         if ((got & WALK_PASS_VILLAGER_EVENT) && !event_reported) {
             fprintf(stderr, "walk: a villager reached the case where the original starts an event (not built)\n");
             event_reported = 1;
@@ -956,6 +975,7 @@ static int play_walk(screen_t *scr)
         platform_present(scr);
     }
     song_stop(song);
+    battle_free(bt);
     walk_free(w);
     return 1;
 }
@@ -978,6 +998,8 @@ static int run_walk_stepped(screen_t *scr, int ndump, const int *dump_pass, cons
         if (dump_pass[i] > last)
             last = dump_pass[i];
     int rc = 0;
+    battle_t *bt = NULL;
+    int got = walk_begin_result(w);
     for (int n = 0; n <= last && rc == 0; n++) {
         if (n > 0) {
             unsigned port60 = 0;   /* the value set at the latest pass number <= n holds */
@@ -987,16 +1009,23 @@ static int run_walk_stepped(screen_t *scr, int ndump, const int *dump_pass, cons
                     best = g_walk_keys[i].pass;
                     port60 = g_walk_keys[i].code;
                 }
-            int got = walk_pass(w, scr, clock0 + (uint32_t)n / 3, port60);
-            if ((got & WALK_PASS_UNBUILT) && walk_unbuilt(w))
-                fprintf(stderr, "walk: pass %d: not built: %s\n", n, walk_unbuilt(w));
+            if (bt) {
+                battle_pass(bt, scr, port60);
+            } else {
+                got = walk_pass(w, scr, clock0 + (uint32_t)n / 3, port60);
+                if ((got & WALK_PASS_UNBUILT) && walk_unbuilt(w))
+                    fprintf(stderr, "walk: pass %d: not built: %s\n", n, walk_unbuilt(w));
+            }
         }
+        if (!bt && (got & WALK_PASS_BATTLE) && !(bt = battle_begin(w, scr)))
+            rc = 1;
         for (int i = 0; i < ndump; i++)
             if (dump_pass[i] == n && write_raw(scr, dump_file[i]) != 0) {
                 fprintf(stderr, "cannot write %s\n", dump_file[i]);
                 rc = 1;
             }
     }
+    battle_free(bt);
     walk_free(w);
     if (rc == 0 && ppm && screen_write_ppm(scr, ppm) != 0)
         rc = 1;

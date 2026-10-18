@@ -951,3 +951,27 @@ it (`walk: not built: a battle: ...`). Scene 0 has no enemies; to try it, start 
   same gap).
 - **A harness bug found on the way:** `build/walk_dump` kept only the first 256 key arguments, silently; long key scripts lost their tail and the
   port seemed to miss a Space press at pass 907. It now takes 4,096 and refuses more.
+
+## Milestone 8a: the battle's first screen and idle passes (C), built 2026-10-18
+
+Touching an enemy in `build/3k --scene walk` now starts the battle instead of stopping: the window becomes the battle field (the world around the
+hero doubled and laid back in perspective, shaded towards the top), the party strip with faces, HP and MP comes up, the battle's song starts, and
+the monsters stand there jittering and changing frames while the field sways. Nothing can be chosen yet and the battle never ends. To try it:
+`work/venv/bin/python tools/walk_scene_data.py DIR 1 106 36` and `build/3k --scene walk --data DIR` (that start has the party act first).
+What the original does is in `findings.md` "WALK.SL step 13".
+
+- **Code:** `src/battle.[ch]` (`battle_begin`, `battle_pass`, the pieces `battle_stretch_row`, `battle_shrink`, `battle_sway`, `battle_number`);
+  `src/walk.c`: the touch (`touch`: the enemy moved away, the group), `walk_battle_view` (the world drawn by `0x19680` and doubled),
+  `walk_rng`, `walk_palette_step`, `walk_battle_info`, `walk_begin_result`; `walk_pass` returns `WALK_PASS_BATTLE`. `src/main.c`: `play_walk` and
+  the stepped mode switch to the battle; the music switches to `MUC.ALL` 0x2bad9.
+- **Checked:** `tools/check_battle.sh` (about 15 seconds; the original's recordings are kept in `work/check_battle`): 10 runs in scenes 1, 34
+  and 42, five monster groups, two clock readings and a walk into an enemy, **identical at every pass in screen, palette, rand state, the monster
+  table, the sway, the acting member and the turn counter**. `tools/mutate_battle.py`: 30 deliberate bugs, all caught. `make test`
+  (new `tests/test_battle.c`). ASan/UBSan clean. The battle song's register writes match the original's for 3,119 song ticks. The headless
+  `--step-dump` agrees with the oracle at passes 0 and 50.
+- **Fixed in the world on the way:** the shake starts at, and does not fall below, the map header's byte 3 (C and Python model); no effect in
+  scenes 0 and 1.
+- **Not built:** keys and mouse in the battle, the monsters' actions (about half of all battles start with them: the port then matches only up
+  to their first action and says so on stderr), attacks, winning and losing, the way back, enemies that start with a dialog, the Sound Blaster
+  sounds. Scenes whose map header byte 5 is 1 draw their world doubled, which the port does not do yet.
+- **Pace:** 35 battle passes a second, the world's pace (the original paces neither). Not judged by eye yet.
