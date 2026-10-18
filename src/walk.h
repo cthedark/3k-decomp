@@ -82,11 +82,22 @@ int walk_reset(walk_t *w, uint32_t seed);
 /* One pass of the main loop at BIOS clock `ticks` (only the low 16 bits are used, like the original) with the keyboard port
  * (0x60) reading `port60`: 0 for no key, a make code while a key is held, the make code + 0x80 after its release. Draws the world
  * into `scr` (window only, plus palette entries 0..15) and advances all moving state. The arrow keys (0x48 up, 0x50 down, 0x4b left,
- * 0x4d right) walk the hero (see walk_keys in walk.c); no other key and no mouse is read yet.
- * Returns a mask: WALK_PASS_VILLAGER_EVENT when a villager reached the special case at 0x13356 (direction 0x61 timing out: the
- * original starts an event there), WALK_PASS_UNBUILT when the original did something that is not built (walk_unbuilt says what). */
+ * 0x4d right) walk the hero (see walk_keys in walk.c) and Space (0x39) fires the party's shots; no other key and no mouse is read yet.
+ * Returns a mask: WALK_PASS_UNBUILT when the original did something that is not built (walk_unbuilt says what).
+ * WALK_PASS_VILLAGER_EVENT is no longer returned: the case it reported (0x13356) is an enemy coming back, now built. */
 enum { WALK_PASS_VILLAGER_EVENT = 1, WALK_PASS_UNBUILT = 2 };
 int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60);
+
+/* Shots ([bp-0x62]: 5 of x, y, direction, zigzag phase) and sparks ([bp-0xcc]: 10 of frame, x, y, direction), kept as one list. */
+enum { WALK_SHOTS = 5, WALK_SPARKS = 10, WALK_FX_BYTES = 4 * (WALK_SHOTS + WALK_SPARKS), WALK_ART_BYTES = 0x15E + 0x44 + 0x140,
+       WALK_GOLD_AT = 0x122 };   /* the coins: a word in the party table, at most 60,000 */
+/* (0x2bac3) Each shot steps 2 along its direction and 2 across, alternately to either side. */
+void walk_shots_move(uint8_t fx[WALK_FX_BYTES]);
+/* (0x2bb5e) Has `shot` reached a live enemy (byte 0x31 set, not in direction 0x61)? 0: no; 1: hit, the enemy turns the shot's
+ * way; 2: its hit counter (byte 0x28) reached twice its sprite set, and it starts going up in smoke (direction 0x61). */
+int walk_shot_hit(const uint8_t shot[4], uint8_t *tab_a);
+/* (0x1bd6e) The coin count at the bottom right of the screen. */
+void walk_draw_gold(screen_t *scr, unsigned value, const uint8_t digits[350]);
 
 /* What the last pass that reported WALK_PASS_UNBUILT could not do, or NULL if nothing so far. */
 const char *walk_unbuilt(const walk_t *w);
@@ -138,8 +149,10 @@ int walk_villager_decide(uint8_t rec[WS_VILLAGER_SIZE], uint32_t *rng, uint32_t 
 
 /* The state that does not show on the screen, for comparing with the original's (tools/walk_idle.py cross): the 20
  * villager records (1,000 bytes), the rand state (4, little-endian), the rain list (75 words), the specks list (300 words),
- * the first 48 bytes of the palette buffer and the two animation tables (240 bytes each). */
-enum { WALK_STATE_BYTES = 1000 + 4 + 150 + 600 + 48 + 240 + 240 + 200 + 39 + 6 + 2 };
+ * the first 48 bytes of the palette buffer and the two animation tables (240 bytes each), then the party (200), trail (39),
+ * six locals, the roof flag and weather (2), the shots and sparks (60) and the coins (2). */
+enum { WALK_STATE_TAIL = 60 + 2,
+       WALK_STATE_BYTES = 1000 + 4 + 150 + 600 + 48 + 240 + 240 + 200 + 39 + 6 + 2 + WALK_STATE_TAIL };
 void walk_state_dump(const walk_t *w, uint8_t out[WALK_STATE_BYTES]);
 
 /* The game's rand() on a state: advances it and returns state >> 16 & 0x7fff. */

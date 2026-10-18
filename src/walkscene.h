@@ -64,6 +64,8 @@ typedef struct {
     size_t bank1_len;
     uint8_t *bank2;                  /* WS_BANK2_PAD bytes: the party's 16 x 16 sprites */
     size_t bank2_len;
+    uint8_t *puff;                   /* RPG.LCP 0x1a4cc decoded: five 16 x 16 frames of an enemy going up in smoke, at [bp-0xba] + 0xe90a */
+    size_t puff_len;
     size_t song_pos, song_len;       /* where the scene's song is in MUC.ALL (read, not played here) */
     int events;                      /* scene records of kind 0x10 that fired (a cut scene starts; not modelled) */
 } walk_scene_t;

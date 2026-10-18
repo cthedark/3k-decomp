@@ -13,13 +13,17 @@ With a keyboard port value per pass (`run_pass(screen, port60)`) it also models 
 (0x135f0-0x13ad9), the four walking handlers with the walkable-tile test (0x2bf02), the bump shake, the party trail (0x2bfd5) and what the
 loop does when the hero stands on a scene record (0x2c098 and the re-entry at 0x113c4). Not modelled, and reported in `self.unbuilt`:
 other keys, the mouse, the sliding round corners (needs the setting at [bp-0x76], toggled by the A key), scene-record events other than
-the music change a roof makes (0x1c68e), and hero-villager contact (0x2c0da).
+the music change a roof makes (0x1c68e), the battle a touched enemy starts (the run ends there), and the sound effects (0x1c68e).
+
+Space fires the party's shots (findings.md "WALK.SL step 11"): the shot list, the sparks, the enemy hit test (0x2bb5e), the smoke and the
+enemy coming back (0x13356), the coin count; touching an enemy ends the model's run where the original leaves the loop for a battle.
 
 Usage: work/venv/bin/python tools/walk_idle.py check TRACE.pkl [NPASSES]
        work/venv/bin/python tools/walk_idle.py cross build/walk_dump TRACE.pkl [NPASSES]     (the C port)
-       (TRACE.pkl from tools/walk_idle_trace.py)
+       (TRACE.pkl from tools/walk_idle_trace.py; WALK_DATA=DIR for a trace recorded with --data DIR, e.g. tools/walk_scene_data.py)
 """
 import pickle
+import os
 import sys
 import zlib
 from pathlib import Path
@@ -197,8 +201,9 @@ def animate_objects(table, omap):
 
 def listed(gmap, idx, lst):
     """repne scasw over the 100-word list of walkable tiles: found at index j leaves cx = 99 - j, and the game takes cx == 0
-    as 'not found', so an entry in the very last place does not count."""
-    word = gmap[idx] | gmap[idx + 1] << 8
+    as 'not found', so an entry in the very last place does not count.  A cell past the map's end reads as tile 0 (the port's
+    choice, as in src/walk.c tile_listed; the original reads whatever follows)."""
+    word = gmap[idx] | gmap[idx + 1] << 8 if idx + 2 <= len(gmap) else 0
     return word in lst[:99]
 
 
@@ -214,7 +219,7 @@ def villager_step(rec, gmap, lst, flag=1):
             rec[2] = 1
             rec[0xA] = 1
             return 0xC
-        return rec[0xA]
+        return 0      # 0x2bd15: while the smoke lasts the caller sees 0 (the timer would ask for a direction at 10)
     if flag == 0:
         return None
     rec[9] = (rec[9] + 1) & 0xFF
@@ -317,25 +322,122 @@ def find_record(ta, x, y):
 ARROWS = {0x48: 0, 0x50: 1, 0x4B: 2, 0x4D: 3}      # scan code -> direction (party byte 2)
 
 
+# ---- shots and sparks (findings.md "WALK.SL step 11") -------------------------------------------------------------------
+# One 60-byte list: 5 shots of (x, y, direction, zigzag phase), one slot per party member number, then 10 sparks of
+# (frame, x, y, direction).  The art is RPG.LCP from 0x9b8: ten 7 x 5 digits, the shot (a 4-byte header then 8 x 8), five 8 x 8 sparks.
+
+NSHOTS, NSPARKS = 5, 10
+ART_SHOT, ART_SPARKS = 0x15E, 0x15E + 0x44
+ART_LEN = 0x15E + 0x44 + 0x140
+GOLD_AT = 0x122        # the coins: a word in the party table, at most 60,000
+SCREEN_W = 320
+
+
+def shots_move(fx):
+    """0x2bac3: all five shots, used or not, step 2 along their direction and 2 across, alternately to either side."""
+    for i in range(NSHOTS):
+        o = 4 * i
+        d = fx[o + 2]
+        if d == 1:
+            along, step, across = o + 1, 2, o
+        elif d == 2:
+            along, step, across = o, -2, o + 1
+        elif d == 3:
+            along, step, across = o, 2, o + 1
+        else:
+            along, step, across = o + 1, -2, o
+        fx[along] = (fx[along] + step) & 0xFF
+        if fx[o + 3] == 1:
+            fx[across] = (fx[across] + 2) & 0xFF
+            fx[o + 3] = 0
+        else:
+            fx[across] = (fx[across] - 2) & 0xFF
+            fx[o + 3] = 1
+
+
+def shot_hit(shot, tab_a):
+    """0x2bb5e: 0 when the shot has reached no live enemy (byte 0x31 set, not in smoke); 1 for a hit (the enemy turns the shot's
+    way); 2 when the enemy's hit counter (byte 0x28) reaches twice its sprite set and it starts going up in smoke."""
+    sx, sy = shot[0], shot[1]
+    for k in range(20):
+        o = 50 * k
+        if tab_a[o + 2] == 0x61 or tab_a[o + 0x31] == 0:
+            continue
+        dl, dh = tab_a[o] & 0xFE, tab_a[o + 1] & 0xFE
+        dh1, dl2 = (dh + 1) & 0xFF, (dl + 2) & 0xFF
+        if (sx, sy) not in ((dl, dh), (dl, dh1), (dl2, dh1), (dl2, dh)):
+            continue
+        if tab_a[o + 0xB] != 6:
+            tab_a[o + 0x28] = (tab_a[o + 0x28] + 1) & 0xFF
+            if tab_a[o + 0x28] >= (tab_a[o + 0xB] << 1) & 0xFF:
+                tab_a[o + 0x28] = 0
+                tab_a[o + 2] = 0x61
+                tab_a[o + 0xA] = 0
+                return 2
+        tab_a[o + 2] = shot[2]
+        return 1
+    return 0
+
+
+def draw_gold(scr, value, digits):
+    """0x1bd6e: a 40 x 5 box of colour 0 at (273, 185), then the number right-aligned in 7 x 5 digits, 8 pixels apart."""
+    at, div = 0xE851, 10000
+    for lim, a, dv in ((10000, 0xE855, 1000), (1000, 0xE859, 100), (100, 0xE85D, 10), (10, 0xE861, 1)):
+        if value < lim:
+            at, div = a, dv
+    for r in range(5):
+        scr[0xE851 + r * SCREEN_W:0xE851 + r * SCREEN_W + 40] = bytes(40)
+    while div:
+        d = (value // div) & 0xFF
+        value -= d * div
+        div //= 10
+        for r in range(5):
+            if at + r * SCREEN_W + 7 <= len(scr) and d < 10:
+                scr[at + r * SCREEN_W:at + r * SCREEN_W + 7] = digits[d * 35 + r * 7:d * 35 + r * 7 + 7]
+        at += 8
+
+
+def blit_sprite(buf, pos, wd, ht, src):
+    """Colour 0 transparent, stride 224, nothing past the 224 x 200 buffer (0x26ad2 for the shot, 8 x 8 for the sparks)."""
+    for r in range(ht):
+        for c in range(wd):
+            v = src[r * wd + c]
+            p = pos + r * W + c
+            if v and p < W * 200:
+                buf[p] = v
+
+
 # ---- one pass ---------------------------------------------------------------------------------------------------------
 
 
 class Idle:
-    def __init__(self, ticks_base=0, tick_div=3, seed=0):
-        self.tiles, self.sprites, _g, self.bank1, self.bank2 = wf.load_world()
-        scene = wsc.load(DATA)
+    def __init__(self, ticks_base=0, tick_div=3, seed=0, data=DATA):
+        data = Path(data)
+        scene = wsc.load(data)       # the scene MAN_INFO.NOW names, as the loader builds it (tools/walk_scene.py)
+        self.tiles, self.sprites = scene.tiles, scene.sprites
+        # padded like the port's banks (src/walkscene.c) so a sprite near a bank's end reads zeros
+        self.bank1 = bytes(scene.bank1) + bytes(0x10000)
+        self.bank2 = bytes(scene.bank2) + bytes(0x10000)
+        rp = (data / "RPG.LCP").read_bytes()
+        self.puff = wf.rle(rp[0x1A4CC:0x1A4CC + 0x1EB])     # the smoke, at [bp-0xba] + 0xe90a (0x109cb)
+        self.art = rp[0x9B8:0x9B8 + ART_LEN]
         self.gmap = bytearray(scene.gmap)
         self.omap = bytearray(scene.omap)
         self.blockX = bytearray(scene.blockX)
         self.blockY = bytearray(scene.blockY)
         self.lstb = bytearray(scene.lst)
         self.trail = bytearray(scene.trail)
-        tab_a, tab_b = wf.load_state()
-        self.tab_a, self.tab_b = bytearray(tab_a), bytearray(tab_b)
-        rp = (DATA / "RPG.LCP").read_bytes()
+        self.tab_a, self.tab_b = bytearray(scene.tabA), bytearray(scene.tabB)
         self.pal = Palette(rp[:768])
         self.cls = rp[0]
-        self.weather = 1
+        self.weather = scene.weather
+        # 0x102fe then 0x11cee: the list all 0xfa, each shot's direction 4 (none flies), each spark's frame 9 (none shows)
+        self.fx = bytearray(b"\xfa" * (4 * (NSHOTS + NSPARKS)))
+        for i in range(NSHOTS):
+            self.fx[4 * i + 2] = 4
+        for j in range(NSPARKS):
+            self.fx[4 * NSHOTS + 4 * j] = 9
+        self.stopped = False  # the original left the loop (a battle)
         self.rnd = Rand(seed)
         self.drops = [self.rnd.next() for _ in range(75)]     # 0x10610, once, at start-up
         # 0x10641: a second list of 300 distinct words (rand() + 0xe10, a repeat is drawn again), 303 draws in all
@@ -384,19 +486,119 @@ class Idle:
         # writes into whatever follows; nothing in the window shows it, CHECKED over the passes below)
         buf = bytearray(W * 200 + 0x400)
         wl.draw_ground(buf, self.tiles, self.gmap, x, y)
-        we.draw_entities(buf, self.tab_a, self.tab_b, self.bank1, self.bank2, x, y, hero_frame=self.hero_frame)
+        we.draw_entities(buf, self.tab_a, self.tab_b, self.bank1, self.bank2, x, y, hero_frame=self.hero_frame, puff=self.puff)
         return buf
 
-    def draw_top(self, buf):
-        """Objects, then the specks or the rain; returns the rain stride."""
-        x, y = self.tab_b[0], self.tab_b[1]
-        wl.draw_objects(buf, self.sprites, self.omap, x, y)
-        if self.weather in (1, 2) and self.ticks() > 0xA000:
-            specks(buf, self.other)
-        stride = self.rain_stride()
-        if stride:
-            wf.draw_rain(buf, self.drops, stride)
-        return stride
+    def shots_pass(self, buf, scr, x, y):
+        """0x1208f .. 0x122d7: move the shots, draw each one that flies, and test what it has reached: a wall or a hit leaves a spark
+        (and a shake of 4), a destroyed enemy adds a coin, shown at once."""
+        fx = self.fx
+        shots_move(fx)
+        for i in range(NSHOTS):
+            o = 4 * i
+            if fx[o + 2] >= 4:
+                continue
+            pos = we.screen_pos(fx[o], fx[o + 1], x, y, 0, 1)
+            if pos >= 0xC350:
+                fx[o + 2] = 0xA
+                continue
+            spr = self.art[ART_SHOT:]
+            blit_sprite(buf, pos, spr[0] | spr[1] << 8, spr[2] | spr[3] << 8, spr[4:])
+            hit = shot_hit(fx[o:o + 4], self.tab_a)
+            idx = (fx[o + 1] >> 1) << 8 | fx[o]       # 0x2ba52: the tile under the shot
+            if not listed(self.gmap, idx, self.lst) or hit == 1:
+                for j in range(NSPARKS):
+                    sp = 4 * NSHOTS + 4 * j
+                    if fx[sp] > 4:
+                        fx[sp + 1:sp + 4] = fx[o:o + 3]
+                        fx[sp] = 0
+                        self.v48 = 4
+                        break
+                fx[o + 2] = 0xA
+            if hit == 2:                                # the sound effect (0x1c68e) is not modelled
+                g = min((self.tab_b[GOLD_AT] | self.tab_b[GOLD_AT + 1] << 8) + 1, 60000)
+                self.tab_b[GOLD_AT], self.tab_b[GOLD_AT + 1] = g & 0xFF, g >> 8
+                draw_gold(scr, g, self.art)
+                fx[o + 2] = 0xA
+
+    def sparks_pass(self, buf, x, y):
+        """0x12314 .. 0x12464, after the objects: from the third frame on a spark drifts one step; frames 0-4 are drawn, then it ends."""
+        fx = self.fx
+        for j in range(NSPARKS):
+            sp = 4 * NSHOTS + 4 * j
+            if fx[sp] >= 2:
+                k = {0: sp + 2, 1: sp + 2, 2: sp + 1}.get(fx[sp + 3], sp + 1)
+                fx[k] = (fx[k] + (-1 if fx[sp + 3] in (0, 2) else 1)) & 0xFF
+            f = fx[sp]
+            pos = we.screen_pos(fx[sp + 1], fx[sp + 2], x, y, 0, 1)
+            if f < 5 and pos < 0xC350:
+                blit_sprite(buf, pos, 8, 8, self.art[ART_SPARKS + f * 64:ART_SPARKS + f * 64 + 64])
+                fx[sp] += 1                             # the sound at frame 2 (0x1c68e) is not modelled
+            else:
+                fx[sp] = 0xA
+
+    def space(self):
+        """0x1424c: each party member who can shoot (word +8 not 0) and whose slot (by member number) is free fires the way he faces;
+        the followers then face a random way."""
+        tb, fx = self.tab_b, self.fx
+        for si in range(5):
+            p = 0x28 * si
+            n = tb[p + 3]
+            if n > 0x64:
+                break
+            if tb[p + 8] | tb[p + 9] << 8 == 0:
+                continue
+            if 4 * n + 4 > len(fx):
+                self.unbuilt.append(("a shot slot outside the shot list", self.n, n))
+                continue
+            o = 4 * n
+            if fx[o + 2] <= 3:
+                continue
+            fx[o:o + 3] = tb[p:p + 3]
+            fx[o + 3] = self.rnd.next() // 0x4000
+            fx[o] &= 0xFE
+            fx[o + 1] &= 0xFE
+            if tb[p + 2] == 0:
+                fx[o + 1] = (fx[o + 1] + 2) & 0xFF
+            if fx[o + 3] == 0:
+                if fx[o + 2] < 2:
+                    fx[o] = (fx[o] + 2) & 0xFF
+                else:
+                    fx[o + 1] = (fx[o + 1] + 2) & 0xFF
+            if si != 0:
+                tb[p + 2] = self.rnd.next() // 0x2000
+
+    def respawn(self, rec):
+        """0x13356: the smoke has cleared; the enemy comes back at a random open place (0x2c119: two cells) outside a box round the
+        view.  The box's far corner is kept in the hero's walk counter and frame ([bp-0x3c], [bp-0x5e]), which keep those values."""
+        hx, hy = self.tab_b[0], self.tab_b[1]
+        lo_x, hi_x = (hx - 0x16) & 0xFF, (hx + 0x30) & 0xFF
+        lo_y = ((hy >> 1) - 10) & 0xFF
+        hi_y = (lo_y + 0x15) & 0xFF
+        self.ctr, self.hero_frame = hi_x, hi_y
+        for _ in range(1000000):
+            rx = (((self.rnd.next() // 0x13C + 0xC) & 0xFF) * 2) & 0xFF
+            ry = (self.rnd.next() // 0x19A + 0xA) & 0xFF
+            if lo_x <= rx <= hi_x and lo_y <= ry <= hi_y:
+                continue
+            idx = ((ry + 1) & 0xFF) << 8 | rx
+            if listed(self.gmap, idx, self.lst) and listed(self.gmap, idx + 2, self.lst):
+                rec[0], rec[1] = rx, (ry * 2) & 0xFF
+                return
+        self.unbuilt.append(("no open place for an enemy to come back", self.n, 0))
+
+    def contact(self):
+        """0x12703 / 0x2c0da: the first villager record that is a live enemy at a party member's position (low bits cleared), or None."""
+        tb, ta = self.tab_b, self.tab_a
+        for i in range(5):
+            p = 0x28 * i
+            if tb[p + 3] > 0x64:
+                break
+            for k in range(20):
+                o = 50 * k
+                if ta[o + 2] != 0x61 and ta[o] & 0xFE == tb[p] & 0xFE and ta[o + 1] & 0xFE == tb[p + 1] & 0xFE and ta[o + 0x31] > 0:
+                    return k
+        return None
 
     def shake(self):
         """0x1252c: after a bump, for a few passes the window is copied from a little way into the buffer (0 to 2 pixels or 1 to 5 rows)."""
@@ -480,6 +682,9 @@ class Idle:
             return
         c2 = k
         self.c2 = c2
+        if k == 0x39:          # Space is read on every pass, not only every third
+            self.space()
+            return
         if k not in ARROWS and k != 0:
             self.unbuilt.append((f"key {k:#x}", self.n, 0))
             return
@@ -520,15 +725,29 @@ class Idle:
                 self.hit_record(si)
                 self.n += 1
                 return screen            # the rest of the pass, the window copy and the counters included, is skipped
-        stride = self.draw_top(buf)
-        a = self.shake()
+        x, y = self.tab_b[0], self.tab_b[1]
         scr = bytearray(screen)
+        self.shots_pass(buf, scr, x, y)
+        wl.draw_objects(buf, self.sprites, self.omap, x, y)
+        self.sparks_pass(buf, x, y)
+        if self.weather in (1, 2) and self.ticks() > 0xA000:
+            specks(buf, self.other)
+        stride = self.rain_stride()
+        if stride:
+            wf.draw_rain(buf, self.drops, stride)
+        a = self.shake()
         wf.copy_window(scr, buf[a:] if a else buf)
+        k = self.contact()
+        if k is not None:              # the original leaves the loop for a battle (not modelled)
+            self.unbuilt.append((f"a battle with villager record {k}", self.n, k))
+            self.stopped = True
+            self.n += 1
+            return scr
         for k in range(20):
             rec = self.tab_a[k * 50:k * 50 + 50]
             ret = villager_step(rec, self.gmap, self.lst)
             if ret == 0xC:
-                raise NotImplementedError("villager step returned 0xc (0x13356, not read)")
+                self.respawn(rec)
             if ret == 0xA:
                 decide(rec, self.rnd, self.ticks(), self.tab_b[0], self.tab_b[1], stride)
             self.tab_a[k * 50:k * 50 + 50] = rec
@@ -536,10 +755,12 @@ class Idle:
         if self.v98 > self.cls:
             self.v98 = 0
         self.keys(port60)
-        self.ctr += 1
+        self.ctr = (self.ctr + 1) & 0xFF
         if self.ctr > self.cls + self.v2e:
             self.ctr = 0
-            self.hero_frame = (self.hero_frame + 1) & 3
+            self.hero_frame += 1          # 0x172d7 (a respawn can leave any value here)
+            if self.hero_frame > 3:
+                self.hero_frame = 0
         self.n += 1
         return scr
 
@@ -558,10 +779,10 @@ def local(d, off):
     return d["locs"][0xE2 - off]
 
 
-def check(trace, npass=None):
+def check(trace, npass=None, data=DATA):
     rec = load_trace(trace)
     npass = min(npass or len(rec) - 1, len(rec) - 1)
-    m = Idle(ticks_base=rec[0]["ticks"], tick_div=3, seed=0)     # the trace's 'ticks' is the BIOS value at pass 0
+    m = Idle(ticks_base=rec[0]["ticks"], tick_div=3, seed=0, data=data)     # the trace's 'ticks' is the BIOS value at pass 0
     keys = rec[0].get("keys", {})
     screen = bytes(rec[0]["screen"])
     first_bad = {}
@@ -586,12 +807,29 @@ def check(trace, npass=None):
                 local(r, 0xC2))
         if "alt0" in r:
             checks["roof"] = (m.alt[0], m.weather) == (r["alt0"][0], local(r, 0xD8))
+        if "shots" in r:
+            checks["shots"] = bytes(m.fx) == r["shots"]
+            checks["coins"] = bytes(m.tab_b[GOLD_AT:GOLD_AT + 2]) == r["gold"]
         for k, v in checks.items():
             if not v and k not in first_bad:
                 first_bad[k] = n
+        if m.stopped:          # the model left the loop (a battle) after the previous pass: the trace must end there
+            if n != len(rec) - 1:
+                first_bad.setdefault("left the loop", n)
+            break
         screen = m.run_pass(screen, port_at(keys, n))
+    if not m.stopped and npass == len(rec) - 1:
+        # one pass past the trace's last record: where the original left the loop (a touch) the model must leave it too
+        m.run_pass(screen, port_at(keys, npass))
     print(f"passes compared: {npass}")
-    for k in ("villagers", "party", "trail", "hero locals", "roof", "drops", "rand", "palbuf", "dac", "other", "blockX", "blockY", "screen"):
+    if m.stopped:
+        print(f"  the model left the loop for a battle after pass {m.n - 1}")
+    for k in ("villagers", "party", "trail", "hero locals", "roof", "shots", "coins", "drops", "rand", "palbuf", "dac", "other",
+              "blockX", "blockY", "screen", "left the loop"):
+        if k == "left the loop" and k not in first_bad:
+            continue
+        if k in ("shots", "coins") and "shots" not in rec[0]:
+            continue
         if k == "trail" and "trail" not in rec[0]:
             continue
         if k == "hero locals" and "trail" not in rec[0]:
@@ -627,12 +865,16 @@ def cross(cbin, trace, npass=None, start="work/check_credits/start.raw", data="o
         parts += [("party", 200, "party"), ("trail", 39, "trail"), ("hero locals", 6, None)]
         if "alt0" in rec[0]:
             parts += [("roof", 2, "roof")]
+    if "shots" in rec[0]:
+        parts += [("shots", 60, "shots"), ("coins", 2, "gold")]
     keys = rec[0].get("keys", {})
     size = 64000 + 768 + sum(n for _, n, _ in parts)
     if not keyed:      # an older trace: the port's extra state (party, trail, locals) is in the dump but not compared
         size += 200 + 39 + 6
     if keyed and "alt0" not in rec[0]:
         size += 2
+    if "shots" not in rec[0]:   # a trace from before the shots: the port's 62 bytes are not compared
+        size += 62
     assert len(blob) == size * npass, (len(blob), size * npass)
     first = {}
     for i in range(npass):
@@ -661,7 +903,9 @@ def cross(cbin, trace, npass=None, start="work/check_credits/start.raw", data="o
 
 if __name__ == "__main__":
     if len(sys.argv) >= 4 and sys.argv[1] == "cross":
-        raise SystemExit(cross(sys.argv[2], sys.argv[3], int(sys.argv[4]) if len(sys.argv) > 4 else None))
+        raise SystemExit(cross(sys.argv[2], sys.argv[3], int(sys.argv[4]) if len(sys.argv) > 4 else None,
+                               data=os.environ.get("WALK_DATA", "original_bin")))
     if len(sys.argv) >= 3 and sys.argv[1] == "check":
-        raise SystemExit(check(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else None))
+        raise SystemExit(check(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else None,
+                               data=os.environ.get("WALK_DATA", "original_bin")))
     raise SystemExit(__doc__)

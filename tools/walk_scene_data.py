@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""Make a data directory that starts WALK.SL in another scene: a copy of the data with MAN_INFO.NOW byte 500 = SCENE and bytes 502, 503 =
+the hero's x and y / 2 (the units of the villager records: a hero at (104, 72) stands beside a record at (106, 72)).
+
+Usage: tools/walk_scene_data.py OUT_DIR SCENE X Y_HALF [--data original_bin]
+The source directory is only read; OUT_DIR is replaced."""
+import argparse
+import shutil
+from pathlib import Path
+
+ap = argparse.ArgumentParser()
+ap.add_argument("out")
+ap.add_argument("scene", type=int)
+ap.add_argument("x", type=int)
+ap.add_argument("y_half", type=int)
+ap.add_argument("--data", default="original_bin")
+a = ap.parse_args()
+for v, name in ((a.scene, "SCENE"), (a.x, "X"), (a.y_half, "Y_HALF")):
+    if not 0 <= v <= 255:
+        raise SystemExit(f"{name} must be 0 .. 255")
+out = Path(a.out)
+if out.exists():
+    shutil.rmtree(out)
+out.mkdir(parents=True)
+for p in Path(a.data).iterdir():
+    if p.is_file():
+        shutil.copy2(p, out / p.name)
+mi = bytearray((out / "MAN_INFO.NOW").read_bytes())
+mi[500], mi[502], mi[503] = a.scene, a.x, a.y_half
+(out / "MAN_INFO.NOW").write_bytes(bytes(mi))

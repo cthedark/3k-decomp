@@ -92,6 +92,7 @@ void walk_scene_free(walk_scene_t *s)
     free(s->sprites);
     free(s->bank1);
     free(s->bank2);
+    free(s->puff);
     free(s);
 }
 
@@ -283,7 +284,10 @@ walk_scene_t *walk_scene_load(void)
     /* Bank 2 (the party's sprites): RPG.LCP 0x1ae37, 0x2696 bytes. */
     s->bank2 = decode_block(rp + 0x1AE37, rp_len - 0x1AE37 < 0x2696 ? rp_len - 0x1AE37 : 0x2696, WS_BANK2_PAD,
                             &s->bank2_len);
-    if (!s->bank1 || !s->bank2) {
+    /* The smoke (0x109cb): RPG.LCP 0x1a4cc, 0x1eb bytes. */
+    if (rp_len > 0x1A4CC)
+        s->puff = decode_block(rp + 0x1A4CC, rp_len - 0x1A4CC < 0x1EB ? rp_len - 0x1A4CC : 0x1EB, 0x500, &s->puff_len);
+    if (!s->bank1 || !s->bank2 || !s->puff) {
         fprintf(stderr, "walk: a sprite bank does not decode\n");
         goto fail;
     }

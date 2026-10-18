@@ -36,7 +36,7 @@ static int read_raw(screen_t *scr, const char *path)
 }
 
 /* The keyboard port's value over the passes: --key style PASS:CODE arguments, the value set at pass P holds from P on. */
-static struct { int pass; unsigned code; } g_keys[256];
+static struct { int pass; unsigned code; } g_keys[4096];
 static int g_nkeys;
 
 static unsigned port_at(int pass)
@@ -82,7 +82,12 @@ int main(int argc, char **argv)
         /* build/walk_dump DATA idle OUT N TICKBASE TICKDIV START: N idle passes at clock TICKBASE + pass / TICKDIV, drawn
          * over START (after the interface); OUT gets, after each pass, 64,000 pixels then the 768-byte palette */
         static screen_t scr;
-        for (int a = 8; a < argc && g_nkeys < 256; a++) {
+        if (argc - 8 > (int)(sizeof g_keys / sizeof g_keys[0])) {
+            fprintf(stderr, "idle: at most %d key arguments\n", (int)(sizeof g_keys / sizeof g_keys[0]));
+            walk_free(w);
+            return 2;
+        }
+        for (int a = 8; a < argc; a++) {
             int p;
             unsigned c;
             if (sscanf(argv[a], "%d:%i", &p, &c) != 2) {

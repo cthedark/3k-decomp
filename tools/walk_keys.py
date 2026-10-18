@@ -3,6 +3,8 @@
 
 Usage: tools/walk_keys.py fuzz SEED NPASSES    random presses and releases of the four arrow keys (also the break code of a key that is not
                                                the held one, the 0xe0 prefix and break codes of other keys, and bumps into walls)
+       tools/walk_keys.py shoot SEED NPASSES   fuzz plus the Space bar (0x39) held or tapped now and then: the party shoots
+       tools/walk_keys.py volley SEED NPASSES  Space tapped every few passes with short turns and steps between: from above enemies, hits and respawns
        tools/walk_keys.py door SEED NPASSES    (SEED and NPASSES are ignored) right to x = 38, up through the house door to the top of the
                                                corridor and down again: the roof comes off and goes back (needs about 420 passes)
        tools/walk_keys.py route SEED NPASSES   (SEED and NPASSES are ignored) a tour of the streets planned with the model (tools/walk_route.py):
@@ -38,6 +40,42 @@ def fuzz(seed, n):
     return out
 
 
+def shoot(seed, n):
+    """fuzz with the Space bar: held for a few passes or tapped, now and then while walking."""
+    rng = random.Random(seed)
+    out = fuzz(seed, n)
+    t = 6
+    while t < n - 20:
+        out.append(f"--key {t}:0x39")
+        out.append(f"--key {t + rng.randint(1, 12)}:0xb9")
+        t += rng.randint(14, 60)
+    by = {}
+    for a in out:     # one code per pass; Space wins where both land on the same pass
+        p, c = a.split()[1].split(":")
+        if int(p) not in by or c in ("0x39", "0xb9"):
+            by[int(p)] = c
+    return [f"--key {p}:{c}" for p, c in sorted(by.items())]
+
+
+def volley(seed, n):
+    """Space tapped every few passes, with short turns or steps between (mostly down, then left and right): from a start above enemies
+    the shots hit, destroy and respawn them."""
+    rng = random.Random(seed)
+    out, t = [], 6
+    while t < n - 20:
+        out.append(f"--key {t}:0x39")
+        t += rng.randint(1, 3)
+        out.append(f"--key {t}:0xb9")
+        t += rng.randint(2, 8)
+        if rng.random() < 0.35:
+            k = rng.choice([0x50, 0x50, 0x4B, 0x4D, 0x48])
+            out.append(f"--key {t}:{k:#x}")
+            t += rng.randint(1, 9)
+            out.append(f"--key {t}:{k + 0x80:#x}")
+            t += rng.randint(1, 4)
+    return out
+
+
 def yoyo(seed, n):
     rng = random.Random(seed)
     t, side, out = 8, 0x4D, []
@@ -68,6 +106,6 @@ def route(seed, n):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4 or sys.argv[1] not in ("fuzz", "yoyo", "door", "route"):
+    if len(sys.argv) != 4 or sys.argv[1] not in ("fuzz", "shoot", "volley", "yoyo", "door", "route"):
         raise SystemExit(__doc__)
-    print(" ".join({"fuzz": fuzz, "yoyo": yoyo, "door": door, "route": route}[sys.argv[1]](int(sys.argv[2]), int(sys.argv[3]))))
+    print(" ".join({"fuzz": fuzz, "shoot": shoot, "volley": volley, "yoyo": yoyo, "door": door, "route": route}[sys.argv[1]](int(sys.argv[2]), int(sys.argv[3]))))

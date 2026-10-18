@@ -66,6 +66,8 @@ def cb(uc, address, size, user):
              other=bytes(uc.mem_read(far(uc, ss, bp, 0xdc), 600)),
              trail=bytes(uc.mem_read(far(uc, ss, bp, 0xc8), 39)),
              alt0=bytes(uc.mem_read(far(uc, ss, bp, 0x9e), 1)),
+             shots=bytes(uc.mem_read(far(uc, ss, bp, 0x62), 60)),      # 5 shots then the 10 sparks of [bp-0xcc]
+             gold=bytes(uc.mem_read(far(uc, ss, bp, 0xa8) + 0x122, 2)),
              rnd=bytes(uc.mem_read(ds * 16 + 0x2d4, 4)),
              palbuf=bytes(uc.mem_read(far(uc, ss, bp, 0xac), 768)),
              screen=bytes(uc.mem_read(VGA, 64000)), pal=bytes(emu.pal))

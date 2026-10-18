@@ -2414,3 +2414,38 @@ Scene 1 is outdoors (river, hills, trees); its records with byte 0x31 set are re
 **Still to read:** the battle (where the loop goes after a touch, and the battle's own loop and files); how a shot finds its target (the hit test and
 the switch of the record to direction 0x61); why one press can make several shots; the shot's sprites at `[bp-0xd4]`; whether shots or touches change
 the record bytes in `__1.NOW` (an enemy that stays dead).
+
+## WALK.SL step 11: shots, sparks, smoke and respawns (read, then checked through the port), 2026-10-17
+
+READ from the code, then CONFIRMED by the C port matching the oracle at every pass (`port.md` "Milestone 7f"). Corrections to step 10 and the
+"SEEN" notes above: the list at `[bp-0xcc]` is the **sparks**, not the shots; the shots are `[bp-0x62]`, and the two are one 60-byte block
+(`0x102fe` fills it with 0xfa; just before the loop `0x11cee` sets each spark's frame to 9 and each shot's direction to 4). What I saw "flying to the
+enemy" was the shot, not an entry of `[bp-0xcc]`; the entry I dumped there was a spark.
+
+- **Space** (`0x1424c`, read on **every** pass, not every third like the arrows): for party records 0-4 (stop at member number byte 3 > 0x64), if the
+  word at +8 is not 0 (the hero's: 600) and the shot slot **numbered by the member** (byte 3) is free (direction > 3): copy x, y, direction; phase =
+  rand() / 0x4000; x and y even; y += 2 when facing up; when the phase is 0, x += 2 (facing up or down) or y += 2. Followers (records 1-4) then face
+  rand() / 0x2000. So one shot per member at a time; a held Space fires again as soon as the shot ends.
+- **Shots** (`0x1208f`, after the scene-record check, before the objects): `0x2bac3` moves all five (used or not) 2 along the direction (unused ones
+  move as 'up') and 2 across, alternately to either side (the phase). Each used shot: off screen ends it (direction 0xa); else it is drawn (`RPG.LCP`
+  0xb16: a 4-byte header, 8 x 8), then `0x2bb5e` tests the 20 villager records (skipping smoke and byte 0x31 = 0) at the shot's position against the four
+  cells (x & ~1, y & ~1), (+0, +1), (+2, +1), (+2, +0): a hit adds 1 to byte 0x28 and, at twice the sprite set (byte 0xb, 6 excepted), sets direction
+  0x61, frame 0, counter 0 (result 2), else turns the enemy the shot's way (result 1). `0x2ba52` tests the tile under the shot at ((y >> 1) << 8 | x),
+  one row above where a foot test looks. A wall or result 1 starts a spark in the first free slot (frame > 4) at the shot, sets the shake to 4, and
+  ends the shot; result 2 adds a coin (party table word 0x122, at most 60,000), redraws the count (`0x1bd6e`: 40 x 5 box of 0 at (273, 185), digits
+  7 x 5 from `RPG.LCP` 0x9b8 right-aligned 8 apart) and ends the shot.
+- **Sparks** (`0x12314`, after the objects): from frame 2 on a spark drifts 1 a pass in its direction; frames 0-4 are drawn (`RPG.LCP` 0xb5a, 8 x 8)
+  and counted on, then it stays at 0xa.
+- **Smoke**: a villager in direction 0x61 is drawn from `[bp-0xba]` + 0xe80a + 0x100 * ((frame >> 2) + 1), i.e. five 16 x 16 frames decoded from
+  `RPG.LCP` 0x1a4cc (0x1eb bytes, to `[bp-0xba]` + 0xe90a by `0x109cb`). The port had guessed that region was the party bank (it is past its end).
+  `0x2bccd` returns **0** while the smoke lasts (the port returned the timer, so at 10 it chose a direction) and 0xc at 0x14.
+- **Respawn** (`0x13356`, on 0xc): bounds x from hero x - 0x16 to + 0x30, y / 2 from hero y / 2 - 10 to + 0x15 (bytes), kept in the hero's walk counter
+  `[bp-0x3c]` and frame `[bp-0x5e]` (the original reuses them; the frame advance then resets them, `> 3` gives 0); then repeat x = (rand() / 0x13c + 12) * 2,
+  y / 2 = rand() / 0x19a + 10 until the place is outside those bounds and its two cells (`0x2c119`, row y / 2 + 1) are walkable; the enemy goes there.
+- **Touching** (`0x12703`, after the window copy): for each party member, `0x2c0da` finds a record not in smoke, at the same position with the low bits
+  cleared, with byte 0x31 > 0. Then byte 0x2f of the record: 0 moves the enemy to a random walkable place (no view bounds) and fights a monster group
+  from `rpg[0x12] * 5 + set - 1`; not 0 runs `0x15fe:0` on the record's +0x11 and, if that returns non-zero, a dialog (`0x8c3:0x2380`), then the battle
+  with group byte 0x30. Only read; not built.
+- Not built: the sound effects (`0x1c68e`, at spark frame 2 when `[0x380]:0xc` = 0x81, and on a kill); the battle.
+- 2026-10-18: the Python model (`tools/walk_idle.py`) now has all of the above except the battle, and matches the oracle at every pass of the same six
+  scripts, so this step is CONFIRMED by both the model and the port. NOT SEEN: the followers' facing after Space (no start has a follower).

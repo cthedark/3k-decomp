@@ -922,3 +922,32 @@ music code: only `play_walk` in `src/main.c` starts and stops it.
   with the first screen, not 0.6 s earlier (the original starts it while the scene is still loading); the digital sound effect a roof makes on a machine with a
   Sound Blaster is not built (`findings.md` "WALK.SL step 9").
 - **Not looked at:** how loud the music is against the original (the player's level is the one the operator found right in the other scenes).
+
+## Milestone 7f: shots and enemies (C), built 2026-10-17
+
+`build/3k --scene walk` now fires with **Space**: each party member who can shoot sends a small shot the way he faces; it zigzags along its line, sparks
+where it hits a wall or an enemy, and an enemy hit often enough goes up in smoke, comes back at a random open place out of view, and adds a coin to
+the count at the bottom right. Touching an enemy starts a battle in the original; the port does not have battles, so it stops the pass there and reports
+it (`walk: not built: a battle: ...`). Scene 0 has no enemies; to try it, start in scene 1 with `tools/walk_scene_data.py DIR 1 106 33` and
+`build/3k --scene walk --data DIR`. What the original does is in `findings.md` "WALK.SL step 11".
+
+- **Code:** `src/walk.c`: `space`, `shots_pass` (before the objects), `sparks_pass` (after them), `walk_shots_move`, `walk_shot_hit`, `respawn`,
+  `walk_draw_gold`, the contact test after the window copy; `src/walkscene.c` loads the smoke frames (`RPG.LCP` `0x1a4cc`). Two fixes to earlier pieces:
+  the smoke timer returns 0 (it returned the timer, which asked for a new direction at 10), and the hero's frame wraps as in the original (`> 3` gives 0,
+  not `& 3`), because a respawn leaves its bounds in the hero's counter and frame.
+- **Checked:** `tools/check_walk.sh` part 4b (about 18 minutes, `SHOTS=0` skips it): six key scripts in the oracle from starts in scene 1 and scene 0
+  (`tools/walk_keys.py volley` and `shoot`, 600 to 1,500 passes, four clock readings) against the C port **at every pass: screen, palette, villagers,
+  party, trail, rand state, locals, the 60 bytes of shots and sparks and the coin count all identical**. Over the four volley runs the enemies' hit counters
+  changed 78 times and 12 enemies were destroyed, smoked and respawned (the start at (80, 52) never hits: its shots end on walls). Then a start on an enemy: the original leaves the loop after pass 0 and the port reports the battle at pass 0.
+  `make test` (new unit tests for the shot movement, the hit counter and the coin digits); ASan/UBSan clean over a 1,499-pass run.
+- **Not built:** the battle; the sound effects (spark frame 2 and a destroyed enemy, Sound Blaster only). `tools/mutate_walk.py` was not extended or re-run.
+- **The Python model too (2026-10-18):** `tools/walk_idle.py` now has the shots, sparks, hit test, smoke, respawn, coin count and the touch (its run ends
+  where the original leaves the loop), and `Idle(data=...)` takes the whole scene from `tools/walk_scene.py` (tiles, sprites, banks, tables, weather) instead of
+  scene 0's fixed offsets, so it runs in scene 1 (`WALK_DATA=DIR walk_idle.py check TRACE`). Part 4b now compares **both** the model and the C port with the
+  original: all six scripts identical at every pass, including the shots and coins, and the model leaves the loop at pass 0 on the touch start. The idle,
+  walking, door and route traces are still identical. Ten deliberate breaks of the model's shot code (zigzag phase, kill reported as a hit, the hit
+  turning the enemy, the coin value, the sprite position, spark drift, the respawn's clobbered counter and its rand draws, no smoke sprites, ...) were
+  all caught but one: the followers' random facing after Space, because every start has the hero alone in the party (the C port's checks have the
+  same gap).
+- **A harness bug found on the way:** `build/walk_dump` kept only the first 256 key arguments, silently; long key scripts lost their tail and the
+  port seemed to miss a Space press at pass 907. It now takes 4,096 and refuses more.

@@ -20,7 +20,13 @@ struct walk {
     char unbuilt[120];                  /* the last thing the original did that is not built, "" when none */
     int unbuilt_new;                    /* set when it changed during the current pass */
     uint8_t *buf;                       /* the world buffer, a little longer than WALK_W * WALK_H (see walk_draw_specks) */
+    /* [bp-0x62]: 5 shots (x, y, direction, zigzag phase; one per party member number), then [bp-0xcc]: 10 sparks
+     * (frame, x, y, direction). All 0xfa at the start (0x102fe). */
+    uint8_t fx[WALK_FX_BYTES];
+    uint8_t art[WALK_ART_BYTES];        /* RPG.LCP at 0x9b8: ten 7 x 5 digits, the shot (4-byte header, 8 x 8), five 8 x 8 sparks */
 };
+
+enum { ART_DIGITS = 0, ART_SHOT = 0x15E, ART_SPARKS = 0x15E + 0x44 };
 
 enum { WALK_BUF_LEN = WALK_W * WALK_H + 0x400, WALK_ALT_LEN = 1 + 256 * 256 };
 
@@ -47,6 +53,15 @@ int walk_reset(walk_t *w, uint32_t seed)
         return -1;
     }
     memcpy(w->palbuf, rpg, sizeof rpg);
+    if (assets_read_at("RPG.LCP", 0x9B8, w->art, sizeof w->art) != 0) {
+        fprintf(stderr, "walk: RPG.LCP is too short for the digits and the shot sprites\n");
+        return -1;
+    }
+    memset(w->fx, 0xFA, sizeof w->fx);
+    for (int i = 0; i < WALK_SHOTS; i++)     /* 0x11cee, just before the loop: no shot flies, no spark shows */
+        w->fx[4 * i + 2] = 4;
+    for (int j = 0; j < WALK_SPARKS; j++)
+        w->fx[4 * WALK_SHOTS + 4 * j] = 9;
     memset(w->pal_c, 0, sizeof w->pal_c);
     w->hero_frame = 0;
     w->ctr = 0;
@@ -241,7 +256,10 @@ void walk_draw_entities(uint8_t *buf, const walk_scene_t *s, unsigned x, unsigne
             if (pos >= 0xC350)
                 continue;
             unsigned off = walk_sprite_off_villager(r[2], r[0xA], r[0xB]);
-            src = off < 0x2800 ? s->bank1 + off : s->bank2 + ((off - 0x9470) & 0xFFFF);
+            if (off >= 0xE90A && off - 0xE90A + 256 <= s->puff_len)
+                src = s->puff + (off - 0xE90A);
+            else
+                src = off < 0x2800 ? s->bank1 + off : s->bank2 + ((off - 0x9470) & 0xFFFF);
         } else {
             const uint8_t *r = s->tab_b + (k - WS_VILLAGERS) * WS_PARTY_SIZE;
             if (r[3] >= 0x64)
@@ -431,7 +449,7 @@ int walk_villager_step(uint8_t rec[WS_VILLAGER_SIZE], const uint8_t *gmap, const
             rec[0xA] = 1;
             return 0xC;
         }
-        return rec[0xA];
+        return 0;   /* 0x2bd15: while the smoke lasts the caller sees 0 (not the timer, which would ask for a direction at 10) */
     }
     rec[9]++;
     if (rec[9] != rec[8])
@@ -626,6 +644,228 @@ static unsigned shake(walk_t *w)
     return a;
 }
 
+/* ---- shots and sparks ---- */
+
+void walk_shots_move(uint8_t fx[WALK_FX_BYTES])
+{
+    for (int i = 0; i < WALK_SHOTS; i++) {   /* 0x2bac3: all five, used or not; a shot zigzags across its line */
+        uint8_t *s = fx + 4 * i;
+        uint8_t *along, *across;
+        int step;
+        switch (s[2]) {
+        case 1: along = &s[1]; step = 2; across = &s[0]; break;
+        case 2: along = &s[0]; step = -2; across = &s[1]; break;
+        case 3: along = &s[0]; step = 2; across = &s[1]; break;
+        default: along = &s[1]; step = -2; across = &s[0]; break;
+        }
+        *along = (uint8_t)(*along + step);
+        if (s[3] == 1) {
+            *across = (uint8_t)(*across + 2);
+            s[3] = 0;
+        } else {
+            *across = (uint8_t)(*across - 2);
+            s[3] = 1;
+        }
+    }
+}
+
+int walk_shot_hit(const uint8_t shot[4], uint8_t *tab_a)
+{
+    for (int k = 0; k < WS_VILLAGERS; k++) {   /* 0x2bb5e */
+        uint8_t *r = tab_a + k * WS_VILLAGER_SIZE;
+        if (r[2] == 0x61 || r[0x31] == 0)
+            continue;
+        uint8_t dl = r[0] & 0xFE, dh = r[1] & 0xFE, dh1 = (uint8_t)(dh + 1), dl2 = (uint8_t)(dl + 2);
+        uint8_t sx = shot[0], sy = shot[1];
+        if (!((sx == dl && sy == dh) || (sx == dl && sy == dh1) || (sx == dl2 && sy == dh1) || (sx == dl2 && sy == dh)))
+            continue;
+        if (r[0xB] != 6) {
+            r[0x28]++;
+            if (r[0x28] >= (uint8_t)(r[0xB] << 1)) {   /* enough hits: the enemy goes up in smoke */
+                r[0x28] = 0;
+                r[2] = 0x61;
+                r[0xA] = 0;
+                return 2;
+            }
+        }
+        r[2] = shot[2];   /* a hit that does not destroy turns the enemy the way the shot flew */
+        return 1;
+    }
+    return 0;
+}
+
+void walk_draw_gold(screen_t *scr, unsigned value, const uint8_t digits[350])
+{
+    /* 0x1bd6e: a 40 x 5 box of colour 0 at (273, 185), then the number right-aligned in 7 x 5 digits 8 pixels apart */
+    unsigned at = 0xE851, div = 10000;
+    if (value < 10000) { at = 0xE855; div = 1000; }
+    if (value < 1000) { at = 0xE859; div = 100; }
+    if (value < 100) { at = 0xE85D; div = 10; }
+    if (value < 10) { at = 0xE861; div = 1; }
+    for (int r = 0; r < 5; r++)
+        memset(scr->pix + 0xE851 + r * SCREEN_W, 0, 40);
+    while (div) {
+        unsigned d = (value / div) & 0xFF;
+        value -= d * div;
+        div /= 10;
+        for (int r = 0; r < 5; r++)
+            if (at + r * SCREEN_W + 7 <= sizeof scr->pix && d < 10)
+                memcpy(scr->pix + at + r * SCREEN_W, digits + d * 35 + r * 7, 7);
+        at += 8;
+    }
+}
+
+/* A sprite with a 4-byte header (width, height as words), colour 0 transparent (0x26ad2). */
+static void blit_hdr(uint8_t *buf, unsigned pos, const uint8_t *spr)
+{
+    unsigned wd = w16(spr, 0), ht = w16(spr, 2);
+    for (unsigned r = 0; r < ht; r++)
+        for (unsigned c = 0; c < wd; c++) {
+            unsigned p = pos + r * WALK_W + c;
+            uint8_t v = spr[4 + r * wd + c];
+            if (v && p < (unsigned)(WALK_W * WALK_H))
+                buf[p] = v;
+        }
+}
+
+static void blit8(uint8_t *buf, unsigned pos, const uint8_t *src)
+{
+    for (unsigned r = 0; r < 8; r++)
+        for (unsigned c = 0; c < 8; c++) {
+            unsigned p = pos + r * WALK_W + c;
+            if (src[r * 8 + c] && p < (unsigned)(WALK_W * WALK_H))
+                buf[p] = src[r * 8 + c];
+        }
+}
+
+/* 0x1208f .. 0x122d7: move the shots, draw them, and test what each has reached. */
+static void shots_pass(walk_t *w, screen_t *scr, unsigned x, unsigned y)
+{
+    walk_scene_t *s = w->scene;
+    walk_shots_move(w->fx);
+    for (int i = 0; i < WALK_SHOTS; i++) {
+        uint8_t *sh = w->fx + 4 * i;
+        if (sh[2] >= 4)
+            continue;
+        unsigned pos = walk_screen_pos(sh[0], sh[1], x, y, 0, 1);
+        if (pos >= 0xC350) {
+            sh[2] = 0xA;
+            continue;
+        }
+        blit_hdr(w->buf, pos, w->art + ART_SHOT);
+        int hit = walk_shot_hit(sh, s->tab_a);
+        unsigned idx = ((unsigned)(sh[1] >> 1) << 8) | sh[0];   /* 0x2ba52: the tile under the shot (one row above a foot test) */
+        int open = tile_listed(s->gmap, idx, s->list);
+        if (!open || hit == 1) {
+            for (int j = 0; j < WALK_SPARKS; j++) {
+                uint8_t *sp = w->fx + 4 * WALK_SHOTS + 4 * j;
+                if (sp[0] > 4) {
+                    memcpy(sp + 1, sh, 3);
+                    sp[0] = 0;
+                    w->v48 = 4;
+                    break;
+                }
+            }
+            sh[2] = 0xA;
+        }
+        if (hit == 2) {   /* destroyed: one more coin, shown at once (the sound effect 0x1c68e is not built) */
+            unsigned g = w16(s->tab_b, WALK_GOLD_AT) + 1;
+            if (g > 60000)
+                g = 60000;
+            s->tab_b[WALK_GOLD_AT] = (uint8_t)g;
+            s->tab_b[WALK_GOLD_AT + 1] = (uint8_t)(g >> 8);
+            walk_draw_gold(scr, g, w->art + ART_DIGITS);
+            sh[2] = 0xA;
+        }
+    }
+}
+
+/* 0x12314 .. 0x12464: the sparks, after the objects. */
+static void sparks_pass(walk_t *w, unsigned x, unsigned y)
+{
+    for (int j = 0; j < WALK_SPARKS; j++) {
+        uint8_t *sp = w->fx + 4 * WALK_SHOTS + 4 * j;
+        if (sp[0] >= 2) {   /* 0x2ba82: from the third frame on it drifts one step */
+            switch (sp[3]) {
+            case 0: sp[2]--; break;
+            case 1: sp[2]++; break;
+            case 2: sp[1]--; break;
+            default: sp[1]++; break;
+            }
+        }
+        unsigned f = sp[0];
+        unsigned pos = walk_screen_pos(sp[1], sp[2], x, y, 0, 1);
+        if (f < 5 && pos < 0xC350) {
+            blit8(w->buf, pos, w->art + ART_SPARKS + f * 64);
+            sp[0]++;   /* the sound at frame 2 (0x1c68e) is not built */
+        } else {
+            sp[0] = 0xA;
+        }
+    }
+}
+
+/* 0x1424c: Space. Each party member that can shoot (word at +8 not 0) and whose shot slot (by member number) is free fires
+ * the way he faces; the followers then face a random way. */
+static void space(walk_t *w)
+{
+    uint8_t *tb = w->scene->tab_b;
+    for (int si = 0; si < 5; si++) {
+        uint8_t *p = tb + WS_PARTY_SIZE * si;
+        unsigned n = p[3];
+        if (n > 0x64)
+            break;
+        if (w16(p, 8) == 0)
+            continue;
+        if (4 * n + 4 > WALK_FX_BYTES) {
+            note_unbuilt(w, "a shot slot outside the shot list", n);
+            continue;
+        }
+        uint8_t *sh = w->fx + 4 * n;
+        if (sh[2] <= 3)
+            continue;
+        memcpy(sh, p, 3);
+        sh[3] = (uint8_t)(walk_rand(&w->rng) / 0x4000);
+        sh[0] &= 0xFE;
+        sh[1] &= 0xFE;
+        if (p[2] == 0)
+            sh[1] += 2;
+        if (sh[3] == 0) {
+            if (sh[2] < 2)
+                sh[0] += 2;
+            else
+                sh[1] += 2;
+        }
+        if (si != 0)
+            p[2] = (uint8_t)(walk_rand(&w->rng) / 0x2000);
+    }
+}
+
+/* 0x13356: an enemy's smoke has cleared; it comes back at a random open place outside the view. The original keeps the
+ * bounds in the hero's walk counter and frame ([bp-0x3c], [bp-0x5e]), which keep those values. */
+static void respawn(walk_t *w, uint8_t *rec, unsigned hx, unsigned hy)
+{
+    walk_scene_t *s = w->scene;
+    unsigned lo_x = (hx - 0x16) & 0xFF, hi_x = (hx + 0x30) & 0xFF;
+    unsigned lo_y = ((hy >> 1) - 10) & 0xFF, hi_y = (lo_y + 0x15) & 0xFF;
+    w->ctr = hi_x;
+    w->hero_frame = hi_y;
+    for (long tries = 0; tries < 1000000; tries++) {
+        unsigned rx = ((((unsigned)walk_rand(&w->rng) / 0x13C) + 0xC) & 0xFF) * 2 & 0xFF;
+        unsigned ry = (((unsigned)walk_rand(&w->rng) / 0x19A) + 0xA) & 0xFF;
+        if (rx >= lo_x && rx <= hi_x && ry >= lo_y && ry <= hi_y)
+            continue;
+        unsigned idx = (((ry + 1) & 0xFF) << 8) | rx;   /* 0x2c119: two cells must be open */
+        int ok = tile_listed(s->gmap, idx, s->list) && tile_listed(s->gmap, idx + 2, s->list);
+        ry = (ry * 2) & 0xFF;
+        if (ok) {
+            rec[0] = (uint8_t)rx;
+            rec[1] = (uint8_t)ry;
+            return;
+        }
+    }
+    note_unbuilt(w, "no open place for an enemy to come back", 0);
+}
+
 /* 0x135f0 .. 0x13ad9 and the four walking handlers. */
 static void walk_keys(walk_t *w, unsigned port60)
 {
@@ -655,6 +895,10 @@ static void walk_keys(walk_t *w, unsigned port60)
     c2 = k;
     w->c2 = c2;
     int arrow = k == 0x48 || k == 0x50 || k == 0x4B || k == 0x4D;
+    if (k == 0x39) {   /* Space is read on every pass, not only every third */
+        space(w);
+        return;
+    }
     if (!arrow && k != 0) {
         char what[32];
         snprintf(what, sizeof what, "key 0x%x", k);
@@ -686,7 +930,6 @@ int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60)
 {
     walk_scene_t *s = w->scene;
     unsigned x = s->tab_b[0], y = s->tab_b[1];
-    int event = 0;
     w->unbuilt_new = 0;
 
     walk_animate_ground(s->block_x, s->gmap);
@@ -704,7 +947,9 @@ int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60)
             return w->unbuilt_new ? WALK_PASS_UNBUILT : 0;   /* the rest of the pass, window copy and counters included, is skipped */
         }
     }
+    shots_pass(w, scr, x, y);
     walk_draw_objects(w->buf, s, x, y);
+    sparks_pass(w, x, y);
     int rainy = s->weather == 1 || s->weather == 2;
     if (rainy && (ticks & 0xFFFF) > 0xA000)
         walk_draw_specks(w->buf, WALK_BUF_LEN, w->specks);
@@ -713,22 +958,42 @@ int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60)
         walk_draw_rain(w->buf, w->drops, stride);
     walk_copy_window_at(scr, w->buf, shake(w));
 
+    /* 0x12703: a party member standing on a live enemy (0x2c0da: same position with the low bits cleared, byte 0x31 set, not in
+     * smoke) starts a battle. The original leaves the loop for it (SEEN: it loads MON.ALL and draws the battle in the window). */
+    for (int i = 0; i < 5; i++) {
+        const uint8_t *p = s->tab_b + WS_PARTY_SIZE * i;
+        if (p[3] > 0x64)
+            break;
+        for (int k = 0; k < WS_VILLAGERS; k++) {
+            const uint8_t *r = s->tab_a + k * WS_VILLAGER_SIZE;
+            if (r[2] != 0x61 && (r[0] & 0xFE) == (p[0] & 0xFE) && (r[1] & 0xFE) == (p[1] & 0xFE) && r[0x31] > 0) {
+                char what[80];
+                snprintf(what, sizeof what, "a battle: the party touched enemy %d (villager record)", k);
+                snprintf(w->unbuilt, sizeof w->unbuilt, "%s", what);
+                w->unbuilt_new = 1;
+                return WALK_PASS_UNBUILT;
+            }
+        }
+    }
+
     for (int k = 0; k < WS_VILLAGERS; k++) {
         uint8_t *rec = s->tab_a + k * WS_VILLAGER_SIZE;
         int ret = walk_villager_step(rec, s->gmap, s->list);
         if (ret == 0xC)
-            event = 1;
+            respawn(w, rec, s->tab_b[0], s->tab_b[1]);
         else if (ret == 0xA)
             walk_villager_decide(rec, &w->rng, ticks, s->tab_b[0], s->tab_b[1], stride);
     }
     if (++w->v98 > (unsigned)s->speed_class)
         w->v98 = 0;
     walk_keys(w, port60);
-    if (++w->ctr > (unsigned)s->speed_class + w->v2e) {
+    w->ctr = (w->ctr + 1) & 0xFF;
+    if (w->ctr > (unsigned)s->speed_class + w->v2e) {
         w->ctr = 0;
-        w->hero_frame = (w->hero_frame + 1) & 3;
+        if (++w->hero_frame > 3)   /* 0x172d7 (a respawn can leave any value here) */
+            w->hero_frame = 0;
     }
-    return (event ? WALK_PASS_VILLAGER_EVENT : 0) | (w->unbuilt_new ? WALK_PASS_UNBUILT : 0);
+    return w->unbuilt_new ? WALK_PASS_UNBUILT : 0;
 }
 
 void walk_state_dump(const walk_t *w, uint8_t out[WALK_STATE_BYTES])
@@ -765,6 +1030,10 @@ void walk_state_dump(const walk_t *w, uint8_t out[WALK_STATE_BYTES])
     out[o++] = (uint8_t)w->c2;
     out[o++] = w->alt[0];
     out[o++] = (uint8_t)s->weather;
+    memcpy(out + o, w->fx, WALK_FX_BYTES);
+    o += WALK_FX_BYTES;
+    out[o++] = s->tab_b[WALK_GOLD_AT];
+    out[o++] = s->tab_b[WALK_GOLD_AT + 1];
 }
 
 /* ---- the window ---- */

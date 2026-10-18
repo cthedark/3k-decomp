@@ -127,7 +127,8 @@ def blit16(buf, pos, src):
                 buf[pos + r * W + c] = p
 
 
-def draw_entities(buf, tab_a, tab_b, bank1, bank2, x, y, order=None, hero_frame=1):
+def draw_entities(buf, tab_a, tab_b, bank1, bank2, x, y, order=None, hero_frame=1, puff=None):
+    """`puff`: the smoke frames (RPG.LCP 0x1a4cc decoded), which the direction-0x61 offsets 0xe90a .. 0xee09 point into."""
     if order is None:
         order = build_list(tab_a, tab_b)[0]
     for k in order:
@@ -137,7 +138,9 @@ def draw_entities(buf, tab_a, tab_b, bank1, bank2, x, y, order=None, hero_frame=
             if pos >= 0xC350:
                 continue
             off = sprite_off_a(r[2], r[0xA], r[0xB])
-            if off < 0x2800:
+            if puff is not None and off >= 0xE90A and off - 0xE90A + 256 <= len(puff):
+                src = puff[off - 0xE90A:off - 0xE90A + 256]
+            elif off < 0x2800:
                 src = bank1[off:off + 256]
             else:
                 o2 = (off - 0x9470) & 0xFFFF

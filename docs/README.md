@@ -37,7 +37,7 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
 | Rebuild WALK.SL's start-up scene loader (maps, tiles, state patches) from the game files; compare every buffer with the oracle for all 53 scenes and random state files; negative controls | `walk_scene.py` (`show`, `check`, `scenes`, `fuzz`), `mutate_scene.py` (`findings.md` "WALK.SL step 4") |
 | Plan a key script through waypoints with the model (a route through the streets), to ask the oracle to walk it | `walk_route.py` (`walk_keys.py route` uses it) |
 | Make key scripts for the oracle (random arrow-key presses, or yo-yoing around the house door) | `walk_keys.py` (with `walk_idle_trace.py --key PASS:CODE`; `findings.md` "WALK.SL step 7") |
-| Check WALK.SL's idle main loop (animated tiles, palette cycle, weather clock, villagers, hero counter) pass by pass against the oracle: record, model, C port | `walk_idle_trace.py`, `walk_idle.py` (`check`, `cross`); `check_walk.sh` runs seven clock readings (`findings.md` "WALK.SL step 6") |
+| Check WALK.SL's main loop (animated tiles, palette cycle, weather clock, villagers, hero counter, walking, roofs, shots and enemies) pass by pass against the oracle: record, model, C port | `walk_idle_trace.py`, `walk_idle.py` (`check`, `cross`; `WALK_DATA=DIR` for another scene's data); `check_walk.sh` runs seven clock readings (`findings.md` "WALK.SL step 6") |
 | Mutation checks (do the tests fail when the code is wrong?) | `mutate_audio.sh`, `mutate_music.sh` (needs nothing), `mutate_menu.sh` (needs `check_menu.sh` run first), `mutate_credits.sh` (needs `check_credits.sh` run first), `mutate_walk.py` (needs `check_walk.sh` run first; 276 bugs, about 45 minutes; `ONLY=TEXT` runs the ones whose name contains TEXT) |
 
 ## Current state (update this section each session)
@@ -82,14 +82,14 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
 ## Next steps (ordered)
 The earlier list (formats, chaining, `TAB.TAB`, `TV.EXE`, the speed class) is done or folded into the port; the save format (`SAVEnn.000/.001/.002`)
 is still open. For the world, in the order the operator and Kiro agreed to work:
-1. The other keys of `WALK.SL`'s main loop: Space, 1-4, A (sliding) and the F-key actions (the operator's keyboard has no F-keys: use the
-   on-screen buttons with the mouse, so the mouse comes with them).
+1. The other keys of `WALK.SL`'s main loop: 1-4, A (sliding) and the F-key actions (the operator's keyboard has no F-keys: use the
+   on-screen buttons with the mouse, so the mouse comes with them). Space (shots) is built (`port.md` 7f).
 2. The scene-change block `0x172f0` .. `0x18b82` and the record kinds 1, 4, 5, 7, 8, 0xe, 0x11-0x14: doors to other scenes, then the scenes
    themselves (the loader already handles all 53, `walk_scene.py scenes`).
-3. Hero-villager contact (`0x2c0da`) and the villagers' special case (`0x13356`).
+3. The battle that touching an enemy starts (`0x12703`, read in `findings.md` step 11; the respawn `0x13356` is built).
 4. New game (writing `__1.NOW` / `MAN_INFO.NOW` from `__1.AL1`, `__1.AL2`, `MAN_INFO.ALL`) and loading a save from the slot picker.
 
-How to pick up the world work: `tools/check_walk.sh` checks everything built so far (about 3 minutes); `tools/walk_idle_trace.py --key` records
+How to pick up the world work: `tools/check_walk.sh` checks everything built so far (about 21 minutes; `SHOTS=0` about 3); `tools/walk_idle_trace.py --key` records
 the original's passes with any key script, `tools/walk_idle.py check` / `cross` compare the Python model / the C port with them, and
 `tools/walk_route.py` plans a walk through waypoints. Read `findings.md` "WALK.SL step 6" onward first.
 

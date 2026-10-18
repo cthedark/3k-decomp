@@ -691,12 +691,43 @@ static void test_villager(void)
     make_villager(r);
     r[7] = 10;
     CHECK(walk_villager_step(r, gmap, list) == 11 && r[7] == 0);
-    make_villager(r);                                /* direction 0x61 counts up and times out into the unbuilt case */
+    make_villager(r);                                /* direction 0x61 (smoke) counts up, returns 0 meanwhile, and times out into 0xc */
     r[2] = 0x61;
-    r[0xA] = 5;
-    CHECK(walk_villager_step(r, gmap, list) == 6 && r[0xA] == 6 && r[0] == 10);
+    r[0xA] = 9;                                      /* at 10 the old port returned 0xa and asked for a direction: 0x2bd15 returns 0 */
+    CHECK(walk_villager_step(r, gmap, list) == 0 && r[0xA] == 10 && r[0] == 10);
     r[0xA] = 0x13;
     CHECK(walk_villager_step(r, gmap, list) == 0xC && r[2] == 1 && r[0xA] == 1);
+
+    /* shots: a shot flying down zigzags 2 across each pass; an unused slot (direction 4) moves like 'up' */
+    uint8_t fx[WALK_FX_BYTES];
+    memset(fx, 0xFA, sizeof fx);
+    fx[0] = 100, fx[1] = 50, fx[2] = 1, fx[3] = 0;
+    fx[4] = 10, fx[5] = 10, fx[6] = 4, fx[7] = 1;
+    walk_shots_move(fx);
+    CHECK(fx[0] == 98 && fx[1] == 52 && fx[3] == 1 && fx[4] == 12 && fx[5] == 8 && fx[7] == 0);
+    walk_shots_move(fx);
+    CHECK(fx[0] == 100 && fx[1] == 54 && fx[3] == 0);
+    /* a hit on an enemy of sprite set 2 turns it the shot's way; the fourth destroys it (smoke, counter back to 0) */
+    uint8_t ta[WS_VILLAGERS * WS_VILLAGER_SIZE];
+    memset(ta, 0, sizeof ta);
+    ta[3 * 50 + 0] = 41, ta[3 * 50 + 1] = 21, ta[3 * 50 + 2] = 0, ta[3 * 50 + 0xB] = 2, ta[3 * 50 + 0x31] = 1;
+    const uint8_t shot[4] = {42, 21, 3, 0};          /* (x & ~1) + 2, (y & ~1) + 1: the fourth of the four cells tested */
+    const uint8_t miss[4] = {44, 21, 3, 0};
+    CHECK(walk_shot_hit(miss, ta) == 0);
+    CHECK(walk_shot_hit(shot, ta) == 1 && ta[3 * 50 + 2] == 3 && ta[3 * 50 + 0x28] == 1);
+    CHECK(walk_shot_hit(shot, ta) == 1 && walk_shot_hit(shot, ta) == 1);
+    CHECK(walk_shot_hit(shot, ta) == 2 && ta[3 * 50 + 2] == 0x61 && ta[3 * 50 + 0x28] == 0 && ta[3 * 50 + 0xA] == 0);
+    CHECK(walk_shot_hit(shot, ta) == 0);             /* in smoke it is not hit again */
+    /* the coin count: right-aligned (one digit at (289, 185); 307 starts at 281), 8 pixels apart, in a 40 x 5 box cleared to 0 */
+    static screen_t gs;
+    uint8_t digits[350];
+    for (int i = 0; i < 350; i++)
+        digits[i] = (uint8_t)(1 + i / 35);           /* digit d is all colour d + 1 */
+    memset(gs.pix, 0x55, sizeof gs.pix);
+    walk_draw_gold(&gs, 307, digits);
+    CHECK(gs.pix[185 * SCREEN_W + 273] == 0 && gs.pix[189 * SCREEN_W + 312] == 0 && gs.pix[185 * SCREEN_W + 313] == 0x55);
+    CHECK(gs.pix[185 * SCREEN_W + 281] == 4 && gs.pix[189 * SCREEN_W + 287] == 4 && gs.pix[185 * SCREEN_W + 288] == 0);
+    CHECK(gs.pix[185 * SCREEN_W + 289] == 1 && gs.pix[185 * SCREEN_W + 297] == 8 && gs.pix[184 * SCREEN_W + 297] == 0x55);
 }
 
 static void test_decide(void)
@@ -1047,20 +1078,20 @@ static void test_walking(void)
     run_walk(w, &scr, up, 1, 3, px, py, NULL);   /* the step is attempted in pass 2 */
     walk_state_dump(w, st);
     CHECK(px[2] == 36 && py[2] == 44 && s->tab_b[2] == 0);
-    CHECK(st[WALK_STATE_BYTES - 4] == 2);        /* [bp-0x48] = 2 */
-    CHECK(st[WALK_STATE_BYTES - 8] == 5);        /* [bp-0x2e] = 5 after a blocked step */
+    CHECK(st[WALK_STATE_BYTES - WALK_STATE_TAIL - 4] == 2);        /* [bp-0x48] = 2 */
+    CHECK(st[WALK_STATE_BYTES - WALK_STATE_TAIL - 8] == 5);        /* [bp-0x2e] = 5 after a blocked step */
     walk_pass(w, &scr, 21, 0x48);                    /* pass 3: the shake runs in it */
     walk_state_dump(w, st2);
-    CHECK(st2[WALK_STATE_BYTES - 4] == 1);
+    CHECK(st2[WALK_STATE_BYTES - WALK_STATE_TAIL - 4] == 1);
     uint32_t rand_before = (uint32_t)st[1000] | (uint32_t)st[1001] << 8 | (uint32_t)st[1002] << 16 | (uint32_t)st[1003] << 24;
     uint32_t rand_after = (uint32_t)st2[1000] | (uint32_t)st2[1001] << 8 | (uint32_t)st2[1002] << 16 | (uint32_t)st2[1003] << 24;
     CHECK(rand_after != rand_before);                /* the shake drew from rand() */
 
-    /* a key the port does not build is reported, once per pass it is seen */
-    const keyev space[] = {{0, 0x39}};
+    /* a key the port does not build is reported, once per pass it is seen (F1, 0x3b) */
+    const keyev f1[] = {{0, 0x3B}};
     CHECK(BEGIN());
-    int rc = run_walk(w, &scr, space, 1, 3, NULL, NULL, NULL);
-    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x39"));
+    int rc = run_walk(w, &scr, f1, 1, 3, NULL, NULL, NULL);
+    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x3b"));
 
     /* the keys 1, 2 and A are released while they repeat: reported on the first pass only */
     const keyev akey[] = {{3, 0x1E}};

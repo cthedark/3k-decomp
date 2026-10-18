@@ -6,7 +6,9 @@
 #      port's own menu screen, against the port's walk_first_screen over the same screen: pixels and palette.
 #   2. the loader: build/walk_dump's state for all 53 scene numbers and N randomised state files, against the model.
 #   3. the world in motion: 600 to 1500 idle passes of the original's main loop at seven BIOS clock readings, against the
-#      Python model and the port (tools/walk_idle.py); IDLE=0 skips this.
+#      Python model and the port (tools/walk_idle.py); IDLE=0 skips this (and parts 4 and 4b).
+#   4. walking; 4b. shots and enemies in scene 1 and scene 0 (the model and the port; about 18 of the run's 21 minutes; SHOTS=0 skips it);
+#   5. the scene's song (MUSIC=0 skips it).
 #
 # Needs the original's files in original_bin/, work/unpacked/WALK.SL.exe (docs/environment.md) and work/venv.
 # Usage: tools/check_walk.sh [N]       N = randomised state files for part 2 (default 60)
@@ -68,6 +70,37 @@ if [ "${IDLE:-1}" != 0 ]; then
         res=$($PY tools/walk_idle.py cross build/walk_dump "$T" "$((n - 1))") || fail=1
         echo "$kind $seed: $res"
     done
+
+    # ---- 4b. shots (Space) and enemies, outside the first town: a data directory per start (tools/walk_scene_data.py: scene, hero x,
+    #          y / 2), key scripts 'volley' (taps from above enemies: hits, smoke, respawns, the coin count) and 'shoot' (fuzz with Space).
+    #          Compared with the Python model (tools/walk_idle.py check) and the C port. Then a start on an enemy: the original leaves the loop
+    #          for a battle after pass 0, and the port and the model must stop at that pass.
+    if [ "${SHOTS:-1}" != 0 ]; then   # about 18 minutes; SHOTS=0 skips it
+    echo "== shots and enemies"
+    for spec in 1:106:33:volley:1:900:20 1:90:60:volley:6:1500:24576 1:70:62:volley:7:1500:45056 1:80:52:volley:5:1500:20 \
+                1:104:36:shoot:2:600:20 0:36:22:shoot:3:900:4096; do
+        IFS=: read -r sc hx hy kind seed n base <<EOF
+$spec
+EOF
+        D="$OUT/scene_${sc}_${hx}_${hy}"
+        $PY tools/walk_scene_data.py "$D" "$sc" "$hx" "$hy" || exit 2
+        T="$OUT/shots_${sc}_${kind}_$seed.pkl"
+        $PY tools/walk_idle_trace.py "$T" "$n" --tick-base "$base" --data "$D" --work "$OUT/shots_emu" $($PY tools/walk_keys.py "$kind" "$seed" "$n") \
+            > "$OUT/shots_${sc}_${kind}_$seed.log" 2>&1 || { echo "trace $spec failed"; exit 2; }
+        res=$(WALK_DATA="$D" $PY tools/walk_idle.py cross build/walk_dump "$T" "$((n - 1))") || fail=1
+        WALK_DATA="$D" $PY tools/walk_idle.py check "$T" "$((n - 1))" > "$OUT/shots_${sc}_${kind}_$seed.model" 2>&1 \
+            || { echo "model against the original, $spec: DIFFERENT"; fail=1; }
+        echo "scene $sc $kind $seed: $res"
+    done
+    D="$OUT/scene_1_106_36"
+    $PY tools/walk_scene_data.py "$D" 1 106 36 || exit 2
+    got=$($PY tools/walk_idle_trace.py "$OUT/touch.pkl" 5 --data "$D" --work "$OUT/shots_emu" | tail -1)
+    port=$(build/walk_dump "$D" idle "$OUT/touch.bin" 1 20 3 "$START" 2>&1)
+    model=$(WALK_DATA="$D" $PY tools/walk_idle.py check "$OUT/touch.pkl" | grep "left the loop" | sed 's/^ *//')
+    echo "start on an enemy: original '$got'; port '$port'; model '$model'"
+    case "$got:$port" in *"recorded 1 passes"*":idle: pass 0: a battle"*) ;; *) fail=1 ;; esac
+    case "$model" in *"left the loop for a battle after pass 0") ;; *) fail=1 ;; esac
+    fi
 fi
 
 # ---- 5. the scene's song. WALK.SL plays the song its map names (scene 0: MUC.ALL 0x1e085, 0x2593 bytes) through the same FM driver as the other
