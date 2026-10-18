@@ -2449,3 +2449,37 @@ enemy" was the shot, not an entry of `[bp-0xcc]`; the entry I dumped there was a
 - Not built: the sound effects (`0x1c68e`, at spark frame 2 when `[0x380]:0xc` = 0x81, and on a kill); the battle.
 - 2026-10-18: the Python model (`tools/walk_idle.py`) now has all of the above except the battle, and matches the oracle at every pass of the same six
   scripts, so this step is CONFIRMED by both the model and the port. NOT SEEN: the followers' facing after Space (no start has a follower).
+
+## WALK.SL step 12 (survey): the battle, 2026-10-18
+
+A survey to plan the build: the structure is READ from the code, the screens and controls are SEEN in the oracle. Nothing is built yet. Method: start on
+an enemy (`tools/walk_scene_data.py DIR 1 106 36`), run `tools/dosemu.py` with no `--loop-top` (the battle has its own loop, and a frozen pass clock
+would stop it), `--snap` at chosen ticks and `--key` scripts; code coverage from `work/battle/bcover.py` (scratch, git-ignored).
+
+- **Entry:** after the contact test the world loop sets up at `0x12aba`-`0x12e4e`: two `RPG.LCP` reads, `TAB.TAB`, `MON.ALL` at tick 24, a sound
+  (`0x1c68e`). Then it calls **`0x1cbb6`**, the battle, with 21 argument words (the world's buffers: party table, villagers, palette buffer, screen
+  buffers and more).
+- **Size:** `0x1cbb6`-`0x1fd06` is one function of 12.6 KB, with its own loop from `0x1d418` to `0x1f8e9`. It calls the helpers `0x1fd06` (1.5 KB),
+  `0x202e6`, `0x203b4`, and two big subroutines, `0x20412` (4.2 KB) and `0x21486` (3.4 KB). Further routines nearby have the same call profile and are
+  probably battle code too: `0x221d2` (2.7 KB) and `0x22c42` (5.8 KB). That is roughly 30 KB, more than all of `WALK0.SL`.
+- **Screen (SEEN, tick 30):** the play window shows the battle. At the top, the party strip has the hero's face, his HP (600) and four empty slots. Below
+  it is a red command strip, then a forest backdrop with three red monsters. The monsters animate while it waits: their frames change, but no input is
+  needed.
+- **Keys (SEEN):** the battle reads port 0x60 through `0x274b8`, like the world does. A key counts only after a break code has been seen (the latch
+  `[bp-0x38]`, set by a value above 0x7f), so a press needs its release before the next one is taken.
+  - Left (0x4b) and Right (0x4d) move the highlight along the command strip. The handlers clamp it at 0 and 3 (`[bp-0x82]`).
+  - Space (0x39) or Enter (0x1c) confirms. The first confirm on the first command puts a yellow box round the first monster (choosing a target). A
+    second Enter attacks it.
+  - Keys 1 and 2 have the world's music and sound toggles (`0x1c3ba` highlights the same buttons).
+  - The mouse path (`0x260c9`, hit boxes such as x 0x10c-0x13c, y 0x62-0x8a) runs only when a mouse driver is present (`es:[0x392]:4`).
+- **One round (SEEN, Enter then Enter):**
+  - **Hero's attack:** the hero's turn shows a shout, 送你們下地獄! ("I'll send you all to hell!"), over the field, and the target monster is drawn dark
+    (hit).
+  - **Monster's attack:** then a monster's attack is shown close up, with 別想過我這關! ("You won't get past me!") at the bottom. The hero's HP goes
+    600 → 590 → 560 in the strip.
+  - **Back to waiting:** the screen returns to the waiting state (three monsters, command strip) by tick 400.
+- **Not seen yet:**
+  - **Commands 2-4:** probably magic, items and flee or defend. The world's 施法, 物品 and 使用 suggest it, but that is not checked.
+  - **Damage:** the damage formula and where the shouts come from (probably `MES_TXT.LCC` or `MON.ALL`).
+  - **Results:** winning (coins, experience, the return to the world), losing, and the monster groups' data in `MON.ALL`.
+  - **Byte 0x2f:** the record's byte 0x2f paths (dialog before the battle).

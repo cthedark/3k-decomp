@@ -86,7 +86,8 @@ is still open. For the world, in the order the operator and Kiro agreed to work:
    on-screen buttons with the mouse, so the mouse comes with them). Space (shots) is built (`port.md` 7f).
 2. The scene-change block `0x172f0` .. `0x18b82` and the record kinds 1, 4, 5, 7, 8, 0xe, 0x11-0x14: doors to other scenes, then the scenes
    themselves (the loader already handles all 53, `walk_scene.py scenes`).
-3. The battle that touching an enemy starts (`0x12703`, read in `findings.md` step 11; the respawn `0x13356` is built).
+3. The battle that touching an enemy starts (`0x12703`, read in `findings.md` step 11; the respawn `0x13356` is built). Surveyed in `findings.md`
+   step 12: about 30 KB of code, so it is to be built in stages (first screen, command and target choice, one round, the other commands, win and loss).
 4. New game (writing `__1.NOW` / `MAN_INFO.NOW` from `__1.AL1`, `__1.AL2`, `MAN_INFO.ALL`) and loading a save from the slot picker.
 
 How to pick up the world work: `tools/check_walk.sh` checks everything built so far (about 21 minutes; `SHOTS=0` about 3); `tools/walk_idle_trace.py --key` records
