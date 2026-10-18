@@ -2363,3 +2363,26 @@ So the right-hand column of buttons is 位置/資料 on F9/F10 and 音樂/音效
 from the highlight offsets). 是/否 (yes/no) are the answers to the prompts; how they are given (keys or the mouse) is not read. The mouse: not read.
 
 **Not known:** what Space does; what F1-F3 and F8 do when there is something to act on; the dialogs' own input loops; the save file layout written by key 3.
+
+### Operator's account of Space and enemies, and what it explains (2026-10-17)
+
+The operator, from playing the original: **Space shoots a projectile. Outside the town, where there are enemies, a shot destroys an enemy; walking into
+an enemy starts a normal turn-based battle.** This matches several pieces read earlier and not understood (INFERRED from the operator's account plus the
+code; none of it has been run with enemies present, because scene 0 has none):
+- **The ten entries at `[bp-0xcc]`** (4 bytes: frame, x, y, direction), drawn as 8 x 8 sprites from `[bp-0xd4]` in the idle pass and moved one step a pass in
+  their direction by `0x2ba82` (step 6, "all switched off (frame 0xa) in an idle pass"), are very likely **the projectiles**. Space would start one at the
+  hero, facing his way (the Space handler at `0x14252` writes such an entry with `0x274da` and draws from `rand()`; READ). Up to ten at once.
+- **The villager-table records that are enemies** in other scenes: the step-6 decision rule (`0x134ba`) moves a record towards the hero when its byte 0x31 is
+  set; for an enemy that is "chase the hero". The special direction **0x61**, a 20-pass timer that then turns the record to direction 1 and returns 0xc
+  (`0x2bccd`), drawn with its own sprites (`0xe80a` + frame, the second bank), is very likely **an enemy being destroyed** (an explosion or fading
+  animation), and 0xc the "it is gone" case at `0x13356` (not read).
+- **`0x2c0da`**, called for each party member each pass (step 7, "hero-villager contact"), looks for a record at the same position (both coordinates with the low
+  bit cleared) that is not in direction 0x61 and has byte 0x31 above 0: that is **"did the hero touch a live enemy"**, the start of a battle. `0x18fdc`,
+  called from several key handlers and this path, is a candidate for the battle itself (not read).
+- Scene 0 (the first town) has no records with byte 0x31 set where the hero can reach them, which is why none of this ran in the oracle's traces.
+
+To check this: find a scene with enemies (byte 0x31 set in its villager records, `walk_scene.py scenes` loads all 53), start the oracle there (a state file with
+`MAN_INFO.NOW` byte 500 = that scene), press Space and walk into one, and trace `[bp-0xcc]`, the records and `0x18fdc`.
+- **Which scenes have them** (the loader on the shipped state, `MAN_INFO.NOW` byte 500 set to each scene; records with byte 0x31 set and a visible sprite
+  set): scenes 1, 3, 4, 7, 8, 9, 10, 11, 12, 24, 25, 29, 34, 40, 42 and 47 (7 to 20 such records each); scene 0 has none. So scene 1 is the obvious first place
+  to look. MEASURED with `walk_scene.load(..., mi_override=...)`; that these records are enemies is the inference above.
