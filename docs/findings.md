@@ -2388,3 +2388,29 @@ To check this: find a scene with enemies (byte 0x31 set in its villager records,
   to look. MEASURED with `walk_scene.load(..., mi_override=...)`; that these records are enemies is the inference above.
 - The operator agreed with this reading (2026-10-17): the projectile list, enemies chasing, the 0x61 timer as an enemy being destroyed, and 0x2c0da as the
   touch that starts a battle. Still to be seen running in the oracle (scene 1).
+
+### Shots and enemy contact SEEN in the oracle, scene 1 (2026-10-17)
+
+Method: a copy of `original_bin` with `MAN_INFO.NOW` byte 500 = 1 (scene 1) and bytes 502/503 = the hero's x and y/2, then `dosemu.py` with
+`--loop-top 0x11d36`, `--key-pass`, `--hit-pass`, `--dump-hit 0x11d36:N:-0xcc:16` and `--snap-pass` (scripts in `work/walk8/`, git-ignored:
+`run.sh NAME X YHALF ...`, `rawmont.py`). The hero position and the records use the **same units** (a hero at (104, 72) stands beside record 4 at (106, 72)).
+Scene 1 is outdoors (river, hills, trees); its records with byte 0x31 set are red creatures.
+
+- **Touching an enemy starts a battle, inside WALK.SL** (SEEN). With the hero placed on record 4 (106, 72), the main loop ran one pass and left; the
+  program then opened `rpg.lcp`, `tab.tab`, **`mon.all`** (monsters) and `rpg.lcp` again and drew a **battle screen in the play window**: the party
+  strip at the top (the hero's face, 600), a row of four red command icons, and three red monsters on a forest backdrop. It was still there at tick 119
+  (waiting for input). There was **no exec**: the battle code is in WALK.SL. `0x18fdc` was **not** reached, so my guess that it is the battle was wrong
+  (2026-10-17); where the loop goes on a touch is still to be read. `0x2c0da` itself runs every pass (the contact test); the touch is its result.
+- **Space fires a shot** (SEEN). Space pressed after pass 20 with the hero facing down at (106, 66): at pass 26 entry 0 of `[bp-0xcc]` was
+  `03 6c 49 01`, then `0a 6c 4d 01` (30), `0a 6c 51 01` (34), `0a 6c 57 01` (40), `0a 6c 61 01` (50). So the entry is (frame, x, y, direction) as read; the
+  shot starts at x + 2 (0x6c = 108, hero 106), moves **one unit a pass** in the hero's direction (1 = down), and its frame runs up to 0xa, which then
+  stays (0xa is the "flying" frame, not "off" as I wrote in step 6: the unused entries show 0a, a counter, fa fa). The other entries' second byte counts
+  up by one a pass. Earlier with three entries in use (pass 18) a single press made more than one shot; not read why.
+- **A shot destroys an enemy** (SEEN, the screen at passes 20, 27, 35, 44, 47): the shot flies down to the red creature, the creature turns into a
+  white puff of smoke, which shrinks to a speck and is gone. `0x13356` (the "return 0xc" case of `0x2bccd`, direction `0x61` running out) was reached
+  **after pass 45**, when the puff ended. So direction 0x61 is "being destroyed" and 0xc is "removed", as inferred.
+- In 757 passes with the hero beside record 4 (not on it) no touch happened: enemies here did not walk into the hero in that time.
+
+**Still to read:** the battle (where the loop goes after a touch, and the battle's own loop and files); how a shot finds its target (the hit test and
+the switch of the record to direction 0x61); why one press can make several shots; the shot's sprites at `[bp-0xd4]`; whether shots or touches change
+the record bytes in `__1.NOW` (an enemy that stays dead).
