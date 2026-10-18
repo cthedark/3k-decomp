@@ -2386,3 +2386,5 @@ To check this: find a scene with enemies (byte 0x31 set in its villager records,
 - **Which scenes have them** (the loader on the shipped state, `MAN_INFO.NOW` byte 500 set to each scene; records with byte 0x31 set and a visible sprite
   set): scenes 1, 3, 4, 7, 8, 9, 10, 11, 12, 24, 25, 29, 34, 40, 42 and 47 (7 to 20 such records each); scene 0 has none. So scene 1 is the obvious first place
   to look. MEASURED with `walk_scene.load(..., mi_override=...)`; that these records are enemies is the inference above.
+- The operator agreed with this reading (2026-10-17): the projectile list, enemies chasing, the 0x61 timer as an enemy being destroyed, and 0x2c0da as the
+  touch that starts a battle. Still to be seen running in the oracle (scene 1).
