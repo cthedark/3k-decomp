@@ -95,8 +95,9 @@ int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60);
 uint32_t *walk_rng(walk_t *w);
 /* The palette cycle of 0x1c284 (the battle runs it too, on the same counters). */
 void walk_palette_step(walk_t *w, screen_t *scr);
-/* The touch: the member's offset in the party table (0, 0x28, ...), the monster group, the enemy record's byte 0x2f. */
-void walk_battle_info(const walk_t *w, unsigned *member, unsigned *group, unsigned *boss);
+/* The touch: the member's offset in the party table (0, 0x28, ...), the monster group, the enemy record's byte 0x2f and the record's
+ * offset in the villager table. */
+void walk_battle_info(const walk_t *w, unsigned *member, unsigned *group, unsigned *boss, unsigned *rec);
 /* The world drawn again at the hero with walk frame 0 and its middle 96 x 84 doubled through `table` (0x2c658): the 192 x 168 picture
  * the battle's backdrop is made from. Uses (and overwrites) the world buffer. */
 void walk_battle_view(walk_t *w, const uint8_t table[256], uint8_t window[192 * 168]);

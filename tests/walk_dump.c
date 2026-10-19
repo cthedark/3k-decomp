@@ -127,7 +127,7 @@ int main(int argc, char **argv)
                         fprintf(stderr, "battle: pass %d: %s\n", i,
                                 bt ? (battle_unbuilt(bt) ? battle_unbuilt(bt) : "?") : (walk_unbuilt(w) ? walk_unbuilt(w) : "?"));
                     uint8_t st[1 + BATTLE_STATE_BYTES] = {0};
-                    st[0] = bt != NULL;
+                    st[0] = bt == NULL ? 0 : battle_over(bt) ? 2 : 1;
                     if (bt) {
                         battle_state_dump(bt, st + 1);
                     } else {

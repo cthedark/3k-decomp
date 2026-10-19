@@ -41,7 +41,10 @@ m("battle.c", "shading: second range from 0", "from[4] = {0, 1, 0, 0}", "from[4]
 m("battle.c", "face: other frame", "s->bank2 + m[3] * 0xC00 + 0x400", "s->bank2 + m[3] * 0xC00 + 0x300")
 m("battle.c", "HP colour", "num, 0xF0);     /* HP */", "num, 0xF1);     /* HP */")
 m("battle.c", "MP not drawn", "put(scr, at + 0x10, num, 20, 5);", "(void)num;")
-m("battle.c", "number: leading zeros shown", "if (d != 0 || shown) {", "if (1) {")
+m("battle.c", "number: leading zeros shown", "unsigned d = (value / div) & 0xFFFF;\n        value -= d * div;\n        div /= 10;\n        if (div == 0)\n            shown = 1;\n        if (d != 0 || shown) {",
+  "unsigned d = (value / div) & 0xFFFF;\n        value -= d * div;\n        div /= 10;\n        if (div == 0)\n            shown = 1;\n        if (1) {")
+m("battle.c", "floating number: leading zeros shown", "unsigned d = value / div;\n        value -= d * div;\n        div /= 10;\n        if (div == 0)\n            shown = 1;\n        if (d != 0 || shown) {",
+  "unsigned d = value / div;\n        value -= d * div;\n        div /= 10;\n        if (div == 0)\n            shown = 1;\n        if (1) {")
 m("battle.c", "slots: empty from 2", "if (t > 2)\n                t = 9;", "if (t > 1)\n                t = 9;")
 m("battle.c", "slots: no move to the front", "for (int sl = 2; sl < BATTLE_SLOTS; sl++) {\n        if (b->mon[4 * sl + 2] <= 2)",
   "for (int sl = 5; sl < BATTLE_SLOTS; sl++) {\n        if (b->mon[4 * sl + 2] <= 2)")
@@ -58,9 +61,52 @@ m("battle.c", "frame change: up threshold", "if (r > 0x7D00 && t < 2)", "if (r >
 m("battle.c", "back row: shaded once", "small[i] = b->table[b->table[small[i]]];", "small[i] = b->table[small[i]];")
 m("battle.c", "back row: full size", "if (sl < 2) {", "if (sl < 0) {")
 m("battle.c", "shrink: step", "xint = sw / dw,", "xint = sw / dw + 1,")
-m("battle.c", "monsters' turn: no pass over empty slots", "if (empty_turn)\n        b->v5e++;", "")
+m("battle.c", "monsters' turn: no pass over empty slots", "b->v5e++;   /* 0x1dbf3: an empty slot is passed over */", ";")
 m("battle.c", "palette cycle not run", "walk_palette_step(b->w, scr);\n    if (b->v28", "if (b->v28")
 m("battle.c", "field one row lower", "put(scr, FIELD_AT, b->field,", "put(scr, FIELD_AT + 320, b->field,")
+# stage 2: the command and target choice
+m("battle.c", "Left does not wrap to the last tab", "b->v82 = 4;\n            b->v82--;", "b->v82 = 1;\n            b->v82--;")
+m("battle.c", "Right wraps after the third tab", "if (k == 0x4D && ++b->v82 > 3)", "if (k == 0x4D && ++b->v82 > 2)")
+m("battle.c", "Enter not a confirm", "if (k == 0x39 || k == 0x1C) {    /* Space", "if (k == 0x39) {    /* Space")
+m("battle.c", "first target from the second front slot", "unsigned i = 8;\n                while (i < 0x14 && !can_target(b, i))",
+  "unsigned i = 12;\n                while (i < 0x14 && !can_target(b, i))")
+m("battle.c", "target of a dead slot", "return b->mon[i + 2] < 3 && b->mon[i + 3] == 0;", "return b->mon[i + 3] == 0;")
+m("battle.c", "Right past an empty last slot", "b->mon[(j < 0x11 ? j : i) + 3] = 0x96;", "b->mon[(j < 0x15 ? j : i) + 3] = 0x96;")
+m("battle.c", "Left does not move", "if (i > 8) {\n            b->mon[i + 3] = 0;", "if (i > 16) {\n            b->mon[i + 3] = 0;")
+m("battle.c", "Esc keeps the target", "for (unsigned i = 8; i < 0x14; i += 4)\n            b->mon[i + 3] = 0;", "")
+m("battle.c", "Esc keeps choosing", "if (k == 1) {   /* Esc: back to the commands */\n        b->choosing = 0;", "if (k == 1) {   /* Esc: back to the commands */")
+m("battle.c", "box: one outline fewer", "for (int i = 0; i < 3; i++)\n                    box_outline", "for (int i = 0; i < 2; i++)\n                    box_outline")
+m("battle.c", "box: outer colour", "{0xF4, 0xFF, 0xF8}", "{0xF5, 0xFF, 0xF8}")
+m("battle.c", "latch starts at 0", "b->latch = rec & 0xFF;", "b->latch = 0;")
+m("battle.c", "a held key counts again", "    b->latch = 0;\n    if (k == 2 || k == 3)", "    if (k == 2 || k == 3)")
+# stage 3: the attack and the monsters' turn
+m("battle.c", "blow: experience divisor", "(exp / 0x4B0) & 0xFF;", "(exp / 0x4B1) & 0xFF;")
+m("battle.c", "blow: back members full stat", "if (back)\n        s >>= 1;", "")
+m("battle.c", "blow: no minimum of 1", "if (d == 0)\n        d = 1;", "")
+m("battle.c", "blow: no reduction", "if (t < 0x11 && t != 0)\n        d = (d - d / t) & 0xFF;", "")
+m("battle.c", "kill: no experience", "unsigned x = (w16(party, m + 4) + b->mon[0x2C]) & 0xFFFF;", "unsigned x = w16(party, m + 4);")
+m("battle.c", "latch not the HP", "b->latch = hp;   /*", "b->latch = 0;   /*")
+m("battle.c", "hit size", "b->v8a = d / 7 + 0x14;", "b->v8a = d / 7 + 0x13;")
+m("battle.c", "next member skips the status test", "if (w16(party, b->v44 + 8) != 0 && party[b->v44 + 3] < 5) {", "if (w16(party, b->v44 + 8) != 0) {")
+m("battle.c", "party shout from 3", "unsigned r = walk_rand(walk_rng(b->w)) / 0x199A + 2;", "unsigned r = walk_rand(walk_rng(b->w)) / 0x199A + 3;")
+m("battle.c", "monster blow: back row full force", "if (back)\n        atk >>= 1;", "")
+m("battle.c", "monster blow: no defence", "return atk > def ? atk - def : 0;", "return atk;")
+m("battle.c", "monster blow: no field flash", "memset(b->field, 0x28, sizeof b->field);", "")
+m("battle.c", "close-up: frames two passes each", "if (++b->v10 > 3) {", "if (++b->v10 > 1) {")
+m("battle.c", "close-up: other place", "blit_masked(b->field, 0x24, b->closeup,", "blit_masked(b->field, 0x20, b->closeup,")
+m("battle.c", "doubling: second pixel", "d[1] = s[1];", "d[1] = s[0];")
+m("battle.c", "hit face: one pass each", "if (++b->v58 > 1) {", "if (++b->v58 > 0) {")
+m("battle.c", "shake: no rows", "unsigned r = walk_rand(walk_rng(b->w)) / 0x667;\n        if (r != 0", "unsigned r = walk_rand(walk_rng(b->w)) / 0x667;\n        if (0")
+m("battle.c", "numbers: not rising", "b->fxpos[i] = (uint16_t)(b->fxpos[i] - 0xC0);", "")
+m("battle.c", "numbers: count from the pixel", "blit_hdr(b->field, b->fxpos[i],", "blit_masked(b->field, b->fxpos[i],")
+m("battle.c", "flash colour", "b->field[d] = (uint8_t)(f + 0xF);", "b->field[d] = (uint8_t)(f + 0xE);")
+m("battle.c", "dying: masks in steps of 2", "((f - 0x3C) >> 2) * MON_W * MON_H", "((f - 0x3C) >> 3) * MON_W * MON_H")
+m("battle.c", "sparks: no new place", "if (fr > 4) {\n                        fr = 0;", "if (fr > 4 && 0) {\n                        fr = 0;")
+# "step forward: back HP kept" (b->mon[bh] instead of the full HP b->mon[0x28]) is left out: only front monsters can be hit until
+# commands 1 to 3 are built, so a back monster's HP is always the full HP and the two are the same.
+m("battle.c", "hit lands on the wrong slot", "if (col > 0x60)\n        k = 4;", "if (col > 0x70)\n        k = 4;")
+m("battle.c", "hit animation: frames two passes", "if (++b->v8c > 2) {", "if (++b->v8c > 1) {")
+m("battle.c", "stretch: rows from 1", "unsigned si = row, acc = 1;", "unsigned si = row, acc = 0;")
 
 
 def main():
@@ -99,7 +145,7 @@ def main():
                 print("caught by unit: " + name)
                 continue
             try:
-                r = subprocess.run(["sh", "tools/check_battle.sh"], cwd=ROOT, env={**os.environ, "PORT": str(out)},
+                r = subprocess.run(["sh", "tools/check_battle.sh"], cwd=ROOT, env={**os.environ, "PORT": str(out), "FIRST_FAIL_EXIT": "1"},
                                    capture_output=True, text=True, timeout=600)
                 caught = r.returncode != 0
             except subprocess.TimeoutExpired:

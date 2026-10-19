@@ -2560,3 +2560,91 @@ bugs, all caught (one by the unit tests); three more no start can show are liste
 way back to the world (the port stays in the battle), the dialog of byte-0x2f enemies, the Sound Blaster parts. The touched enemy's new place is
 computed but not seen until the battle returns. **Pace:** the original's battle loop is unpaced; the port runs it at the world's 35 passes a
 second. The monsters jitter and change frames at that rate. Not judged by eye yet.
+
+## WALK.SL step 14: choosing a command and a target (battle stage 2), 2026-10-18
+
+Built in C (`src/battle.c`: `keys`, the target box in `draw_monsters`) and compared with the original pass by pass: `tools/check_battle.sh`
+now also runs five key scripts from `tools/battle_keys.py` (tabs, targets, Esc, keys 2 and 3), and `tools/battle_check.py` compares the
+chosen command `[bp-0x82]`, the choosing flag `[bp-0x72]` and the key latch `[bp-0x38]` as well. READ from the code, then CONFIRMED by that
+comparison unless it says otherwise.
+
+- **When a key counts** (`0x1e7e3`): only in the party's turn (`[bp-0x44]` below 0xc8), when the monster routine reported nothing (`[bp-0x84]`
+  = 0) and the latch is set; a value above 0x7f (a release) sets the latch. Any value below 0x80, **0 included**, then clears the latch, so after
+  the first pass with no key a key needs a release before it counts.
+- **The latch's first value** is never set: it is what the stack holds there, the SI the world pushed for its copy at `0x199a8`, which is the
+  touched record's offset in the villager table (low byte; 0xc8 for record 4, 0xfa for record 5, 0 for record 0). Found with a write trace on
+  the stack slot (`work/b1/latch.py`), after three starts disagreed. So with a record offset that is not 0, a key held when the battle starts counts.
+- **Keys 2 and 3** (`0x1e82e`, `0x1e8f1`): music or sound effects on and off, with the right-hand button lit (`0x1c3ba`); each only when its
+  device is there (`[0x394]:5`, `[0x38e]:0xc` not 0). The oracle has neither, so there the keys do nothing; not built in the port (reported).
+- **Commands** (choosing flag 0): Left `0x4b` goes to the tab before, from the first round to the last; Right `0x4d` to the next, from the last to
+  the first. Space `0x39` or Enter `0x1c` sets the choosing flag. With the first command (attack) the first front slot (2, 3, 4) with a live frame
+  (below 3) and state 0 gets state 0x96, the target; with none the flag is cleared again.
+- **Choosing a target** (flag set, command 0): Left moves the 0x96 to the nearest live, state-0 front slot on the left, Right on the right; with
+  none in that direction it stays. Esc `0x01` clears the flag and the three front states. Space or Enter starts the attack (`0x1ec8f`: the mark
+  goes back to 0x1f, damage and pictures; **not built**, stage 3). With commands 1 to 3 the confirm goes straight on: command 1 runs the menu
+  routine `0x21486` (probably the magic list), 2 and 3 are at `0x1f6f6` on; **not built**.
+- **The target's box** (`0x20066`): the monster's picture copied (0x70a words, header included), three outlines drawn into the copy at its
+  edge and one and two pixels in (colours 0xf4, 0xff, 0xf8, `0x271d3`), then the copy drawn with colour 0 transparent.
+- **The mouse** (`0x1e472` .. `0x1e7e3`, used only with a mouse driver) is not read and not built.
+
+**Checked:** 15 runs, all identical at every pass (screen, palette, rand, monster table, sway, turn, command, choosing flag, latch): the 10
+earlier ones and key scripts of 400 to 450 passes in scenes 1 and 34, two of them in a battle whose third front slot is empty (a walk from
+(114, 72)). Over the scripts all four tabs are chosen and the target visits all three front slots. `tools/mutate_battle.py`: 43 deliberate bugs,
+all caught. ASan/UBSan clean. In the real-time program Esc no longer closes the window during a battle (`platform_escape_quits`).
+Not covered: a front gap in the middle (no start found has one), a confirm with no live front monster.
+
+## WALK.SL step 15: the attack and the monsters' turn (battle stage 3), 2026-10-18
+
+Built in C (`src/battle.c`: `party_attack`, `monster_blow`, the states in `draw_monsters`, the per-pass blocks of `battle_pass`) and compared
+with the original pass by pass, now including 16 battle locals, the party table and the floating numbers' list (`tools/battle_check.py`).
+`tools/check_battle.sh` plays six whole battles to their end with `tools/battle_keys.py --attack` (Space, Enter, Esc). READ from the code
+(`0x1d5de` .. `0x1e46f`, `0x1ec8f` .. `0x1f18d`, `0x1fd06`, `0x202e6`, `0x203b4`), then CONFIRMED by that comparison unless it says otherwise.
+Coverage of the round was found with `work/battle/bcover.py` and a key script.
+
+**Data** (all read once at the start): `RPG.LCP` 0x135e4 (0x12ad bytes): block 1, five 20 x 20 hit pictures; block 2 (+0x25e), the members'
+attack pictures with headers, at the offsets the set-up stores at +0x93be (0x7be6, 0x80fe, 0x859c, 0x8b13, 0x8fbb). `RPG.LCP` 0x14891: six 60 x 60
+masks (the world buffer's first 21,600 bytes in the battle). `RPG.LCP` 0xb5a: five 8 x 8 sparks (the world's). `RPG.LCP` 0xc9a: the floating
+numbers' digits. `RPG.LCP` 0x198d8: one-bit 136 x 14 pictures of shouts, 0xff apart (2 .. 6 the party's, 7 .. 11 the monsters'). Each was found by
+comparing the battle buffer with the files (`--dump-hit 0x1d418`).
+
+**The party's attack** (Space or Enter on a target), all at once:
+- The member's mark goes back (0x0f → 0x1f); the target's state becomes 0x32; the hit animation starts (frame 0 of 5).
+- **The blow:** `experience / 1200` (party word +4) plus `(byte 0x13 / 5) * 4` (halved for members 3 and 4), at least 1; then, with
+  `t = (2000 - word 0x10) / 128 + 2`, less `blow / t` when t is below 17. A blow at least the monster's HP kills it and adds monster stat 4
+  (table +0x2c) to the member's experience, capped at 60,000.
+- The key latch `[bp-0x38]` is used here for the monster's HP and keeps that value afterwards (so not 0 means armed).
+- Two floating numbers (`0x202e6`: the first free of 20 places, at most 999, rising a row a pass): the HP left (colour 0x23, 65 passes) and
+  the blow (0xf0, 50 passes) over the target. Their 12 x 5 pictures are rendered with the second font; the recolouring runs 0x68 bytes from each
+  picture, 40 bytes into the next (from the 20th, into the shouts).
+- The mark moves to the next member with HP and byte 3 below 5; with none left, the monsters' turn comes. Then a shout (`rand() / 0x199a + 2`)
+  appears at field (28, 10) for 45 passes.
+- **Over the next passes:** the hit pictures, grown to `blow / 7 + 20` pixels (`0x26de8`), three passes each over the target, with the member's
+  attack picture at the bottom of the field. When they end, the slot under them flashes: state 0x14 counting down, the monster drawn as a
+  silhouette of colour `state + 0xf`. At 0, with no HP it dies: states 0x3d .. 0x53 draw it through mask `(state - 0x3c) / 4`, with sparks;
+  at 0x54 the slot's frame becomes 5 (dead) and the monster routine returns 1. Any state other than 0 and 0x96 adds falling sparks (five frames,
+  two rows apart every third pass, then a new random place) and makes the routine return 2, which holds the keys and the turn.
+- **A death:** all monsters' HP 0 is the end (won). Otherwise each dead front slot takes the first live back monster with **full** HP (stat 0).
+
+**The monsters' turn** (the counter walks the slots 4 counts each, as in step 13):
+- At a live slot's first count it leaves the row (frame 4) and is shown doubled (`0x25cdc`, 120 x 110) at field (36, 0), its three frames four
+  passes each. Then the blow: the field fills with colour 0x28 for a pass; a member is chosen (`rand() / 0x2aab` among the first three for slots 0,
+  1 and 3, `rand() / 0x4000` (0 or 1, slot 4: 0 or 2) for the others, retried while the member is not in the party, ten tries at most; and with
+  `rand()` below 0x666, from the second slot on, one of the last two if member 3 is there); `blow = monster word 0x29` (halved from the back row)
+  less his byte 0x12, the HP goes down (to 0: he falls, his face darkened seven times), the strip shows the new HP; the blow floats over the
+  monster (colour 0x78, 80 passes); his word 0x10 grows by stat 5 (halved from the back row; at most 2000), shown too (colour 0x69) with a field
+  flash of colour 0x30. For the next 7 passes the field jumps up 0 .. 19 rows (`rand() / 0x667`, the bottom rows black); for 10 passes his face
+  shows the five hit pictures over it. A monster's shout (`rand() / 0x199a + 7`) for 46 passes.
+- Nobody left with HP is the end (lost). When the counter reaches 0x14 and the face animation is done, the turn goes to the first member with HP.
+
+**Checked:** 23 runs, all identical at every pass: the 17 earlier ones (the monsters-first walk now 300 passes: three blows and the turn back)
+and six battles fought to their end: in scene 1 against three groups, in scene 34, with a party of three (`walk_scene_data.py --join 1 --join 2`),
+and with a member of 40 HP who loses (`--hp 0:40`). At the end both stop at the same pass: the original leaves the battle loop, the port stands
+still. ASan/UBSan clean on three of the long runs. `tools/mutate_battle.py`: 69 deliberate bugs, all caught. The first run of the stage-3
+list (2026-10-18) missed five and had two stale patterns: the trace starts never give a member experience at a multiple of 1200, a word 0x10
+above 80, a defence above 0, or a hit column between 0x61 and 0x70, so the blow formulas and the slot pick are now separate functions
+(`battle_blow`, `battle_monster_blow`, `battle_hit_slot`) pinned by unit tests worked out from the code. The fifth, a monster stepping
+forward with its own HP instead of the full HP, cannot differ yet: only front monsters can be hit until commands 1 to 3 are built, so it
+is left out of the list with a note.
+
+**Not built:** what follows a win or a loss (`0x1f8ec` on: rewards, the end screen, the way back); commands 1 to 3; the mouse; keys 2 and 3;
+the Sound Blaster samples at each blow and death.

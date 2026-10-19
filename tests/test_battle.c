@@ -81,6 +81,27 @@ static void test_number(void)
     CHECK(out[20 * 2 + 1] == 0x21 && out[20 * 2 + 5] == 0x20 && out[20 * 2 + 9] == 0x22 && out[20 * 2 + 17] == 0x23);
 }
 
+static void test_blows(void)
+{
+    /* party blow: 2400 / 1200 = 2, plus (10 / 5) * 4 = 8 -> 10; word 0x10 = 0 gives t = 17, so no reduction */
+    CHECK(battle_blow(2400, 10, 0, 0) == 10);
+    CHECK(battle_blow(2399, 10, 0, 0) == 9);    /* the divisor is exactly 1200 */
+    CHECK(battle_blow(2400, 10, 0, 1) == 6);    /* the last two members get half the stat part */
+    CHECK(battle_blow(0, 0, 0, 0) == 1);        /* at least 1 */
+    /* word 0x10 = 81: t = (1919 >> 7) + 2 = 16, so 10 - 10 / 16 = 10; 2000: t = 2, 10 - 5 = 5 */
+    CHECK(battle_blow(2400, 10, 81, 0) == 10);
+    CHECK(battle_blow(2400, 10, 2000, 0) == 5);
+    CHECK(battle_blow(36000, 0, 1500, 0) == 30 - 30 / 5);   /* t = (500 >> 7) + 2 = 5 */
+    /* monster blow: halved from the back row, less defence, not below 0 */
+    CHECK(battle_monster_blow(30, 0, 0) == 30);
+    CHECK(battle_monster_blow(30, 0, 7) == 23);
+    CHECK(battle_monster_blow(30, 1, 7) == 8);
+    CHECK(battle_monster_blow(30, 0, 40) == 0);
+    /* the slot under a column */
+    CHECK(battle_hit_slot(0) == 2 && battle_hit_slot(0x1E) == 2 && battle_hit_slot(0x1F) == 3);
+    CHECK(battle_hit_slot(0x60) == 3 && battle_hit_slot(0x61) == 4 && battle_hit_slot(0x70) == 4 && battle_hit_slot(0xBF) == 4);
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -88,6 +109,7 @@ int main(void)
     test_shrink();
     test_sway();
     test_number();
+    test_blows();
     printf("%s: %d failure(s)\n", failures ? "FAILED" : "ok", failures);
     return failures ? 1 : 0;
 }

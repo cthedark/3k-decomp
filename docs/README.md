@@ -38,8 +38,8 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
 | Plan a key script through waypoints with the model (a route through the streets), to ask the oracle to walk it | `walk_route.py` (`walk_keys.py route` uses it) |
 | Make key scripts for the oracle (random arrow-key presses, or yo-yoing around the house door) | `walk_keys.py` (with `walk_idle_trace.py --key PASS:CODE`; `findings.md` "WALK.SL step 7") |
 | Check WALK.SL's main loop (animated tiles, palette cycle, weather clock, villagers, hero counter, walking, roofs, shots and enemies) pass by pass against the oracle: record, model, C port | `walk_idle_trace.py`, `walk_idle.py` (`check`, `cross`; `WALK_DATA=DIR` for another scene's data); `check_walk.sh` runs seven clock readings (`findings.md` "WALK.SL step 6") |
-| Check WALK.SL's battle pass by pass against the oracle (world loop and battle loop as one pass sequence) | `battle_check.py` (one start; `--cache` keeps the original's recording), `check_battle.sh` (10 starts, about 15 seconds), `walk_scene_data.py` (a start in any scene and place) |
-| Mutation checks (do the tests fail when the code is wrong?) | `mutate_audio.sh`, `mutate_music.sh` (needs nothing), `mutate_menu.sh` (needs `check_menu.sh` run first), `mutate_credits.sh` (needs `check_credits.sh` run first), `mutate_walk.py` (needs `check_walk.sh` run first; 276 bugs, about 45 minutes; `ONLY=TEXT` runs the ones whose name contains TEXT), `mutate_battle.py` (needs `check_battle.sh` run first; about 1 minute) |
+| Check WALK.SL's battle pass by pass against the oracle (world loop and battle loop as one pass sequence) | `battle_check.py` (one start; `--cache` keeps the original's recording), `check_battle.sh` (23 runs, six of them whole battles; about 40 seconds once recorded, about 3 minutes to record), `battle_keys.py` (key scripts for the command and target choice, `--attack` for whole battles), `walk_scene_data.py` (a start in any scene and place) |
+| Mutation checks (do the tests fail when the code is wrong?) | `mutate_audio.sh`, `mutate_music.sh` (needs nothing), `mutate_menu.sh` (needs `check_menu.sh` run first), `mutate_credits.sh` (needs `check_credits.sh` run first), `mutate_walk.py` (needs `check_walk.sh` run first; 276 bugs, about 45 minutes; `ONLY=TEXT` runs the ones whose name contains TEXT), `mutate_battle.py` (needs `check_battle.sh` run first; 69 bugs, about 6 minutes) |
 
 ## Current state (update this section each session)
 - Done: PKLITE unpacking of 5 programs; Ghidra loads MARK and TV; the original
@@ -71,14 +71,15 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
     roof of the first house coming off and going back (7d), the scene's song (7e), and shots, enemies and coins (7f, scene 1).
   - **Battle** (`WALK.SL`, milestone 8a, 2026-10-18): touching an enemy hands over to the battle's first screen (the doubled, perspective
     backdrop, the party strip with faces, HP and MP, the command tabs, the monsters) and its idle passes (sway, jitter, frame changes, the
-    battle song); `tools/check_battle.sh`. Nothing can be chosen yet and the battle does not end.
+    battle song); `tools/check_battle.sh`. Milestone 8b: the command tabs and choosing a target with the keys. Milestone 8c: attacks and the
+    monsters' turns, so a battle can be fought to its end; what follows a win or a loss, and commands 1 to 3, are not built.
   - The operator has confirmed by eye or ear: the title, intro pacing, voice and subtitle sync, the music balance, the menu and its opening,
     the credits' pace, the first screen of the world, the idle animation, and walking with collision (2026-10-17).
 - **Not built in the world** (`findings.md` "WALK.SL step 7"-"step 13", `port.md` 7c-8a): the keys 1-4, A and the F-key actions, the mouse,
   sliding round corners, the scene-change block at `0x172f0` (doors to other scenes, cut scenes, shops) and the record kinds it names, the
   doubled world of scenes whose map header byte 5 is 1 (9, 10, 11, 12, 24, 25, 29, 47), weather mode 2 (scene 3), loading a save, the
-  new-game step that writes the `.NOW` files, the Sound Blaster sound effects; in the battle everything after the idle passes (keys, the
-  monsters' actions, attacks, win, loss, the way back, the dialog of byte-0x2f enemies). A reached unbuilt case is printed on stderr
+  new-game step that writes the `.NOW` files, the Sound Blaster sound effects; in the battle the mouse, keys 2 and 3, commands 1 to 3, what follows a
+  win or a loss (rewards, the way back), the dialog of byte-0x2f enemies. A reached unbuilt case is printed on stderr
   (`walk: not built: ...`, `battle: not built: ...`).
 - Not done: no code analysed in the overlays; no function renamed or
   reconstructed; subtitle and picture formats unknown.
@@ -92,8 +93,8 @@ is still open. For the world, in the order the operator and Kiro agreed to work:
    on-screen buttons with the mouse, so the mouse comes with them). Space (shots) is built (`port.md` 7f).
 2. The scene-change block `0x172f0` .. `0x18b82` and the record kinds 1, 4, 5, 7, 8, 0xe, 0x11-0x14: doors to other scenes, then the scenes
    themselves (the loader already handles all 53, `walk_scene.py scenes`).
-3. The battle that touching an enemy starts, in stages (`findings.md` steps 12-13): stage 1, the first screen and idle passes, is built (`port.md`
-   8a). Next: the command and target choice (keys and mouse), one round (the party's attack, the monsters' actions, damage), the other commands,
+3. The battle that touching an enemy starts, in stages (`findings.md` steps 12-15): stage 1, the first screen and idle passes, stage 2, the command
+   and target choice with the keys, and stage 3, the attack and the monsters' turn, are built (`port.md` 8a-8c). Next: the other commands (magic, items, the fourth),
    win and loss and the way back to the world.
 4. New game (writing `__1.NOW` / `MAN_INFO.NOW` from `__1.AL1`, `__1.AL2`, `MAN_INFO.ALL`) and loading a save from the slot picker.
 

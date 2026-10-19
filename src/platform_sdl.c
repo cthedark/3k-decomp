@@ -295,6 +295,9 @@ int platform_mouse(int *x, int *y, unsigned *buttons)
 
 void platform_show_pointer(int on) { SDL_ShowCursor(on ? SDL_ENABLE : SDL_DISABLE); }
 
+static int g_escape_quits = 1;
+void platform_escape_quits(int on) { g_escape_quits = on; }
+
 int platform_poll(void)
 {
     /* Once the user has asked to quit it stays asked: scenes are chained, and every later loop
@@ -321,7 +324,7 @@ int platform_poll(void)
             quit = 1;
         if (e.type == SDL_MOUSEMOTION)
             g_mouse_moved = 1;
-        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE)
+        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE && g_escape_quits)
             quit = 1;
         if (e.type == SDL_KEYDOWN && !e.key.repeat && e.key.keysym.sym == SDLK_SPACE)
             g_space_hits++;

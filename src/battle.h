@@ -1,5 +1,6 @@
 /*
- * WALK.SL's battle, stage 1: the hand-over from the world and the battle's first screen, then its idle passes.
+ * WALK.SL's battle, stages 1 to 3: the hand-over from the world and the battle's first screen, its idle passes, choosing a command and
+ * a target, and whole rounds of attacks up to the end of the battle.
  *
  * What this reproduces (docs/findings.md, "WALK.SL step 13"; checked pass by pass against the original by tools/battle_check.py):
  *   - the world's side of a touch (0x1275e .. 0x12e4e): the enemy moved away (record byte 0x2f = 0), the monster group number,
@@ -10,10 +11,20 @@
  *     stats, who acts first (rand()), the mark on the first member able to act;
  *   - its idle pass (0x1d418 loop): the palette cycle the world uses, the four command tabs, the picture swaying row by row
  *     (0x2c6b9), the monsters (0x1fd06: the two at the back drawn at half size and shaded, each one jittering a pixel and changing
- *     its frame now and then from rand()), the window copy to (64, 74).
+ *     its frame now and then from rand()), the window copy to (64, 74);
+ *   - stage 2, the keys of the party's turn (0x1e7e3 .. 0x1f1c7, docs/findings.md "WALK.SL step 14"): Left and Right move along the
+ *     four command tabs (round), Space or Enter confirms; the first command then marks the first live front monster as the target
+ *     (a box of three outlines), Left and Right move it to the nearest live front monster, Esc goes back. A key counts only after a
+ *     release has been seen;
+ *   - stage 3, a round (docs/findings.md "WALK.SL step 15"): the party's attack (the blow from experience and two stats, the hit
+ *     pictures grown over the target with the member's attack picture, the target flashing, dying behind six masks, a monster from the
+ *     back stepping forward, the floating numbers, the shouts), the monsters' turn (each live one doubled in close-up for three frames,
+ *     then a blow on a member: the field flashes and jumps, the member's HP and face in the strip), and the turn passing back. Ends
+ *     when the monsters or the party are all down (battle_over); what comes after is not built.
  *
- * Not built (reported through battle_unbuilt): keys and the mouse (commands, targets), the monsters acting first, the effects
- * list, the dialog some enemies start with (record word 0x11), the Sound Blaster parts, winning, losing and the way back.
+ * Not built (reported through battle_unbuilt): the mouse, commands 1 to 3 once confirmed, keys 2 and 3 (music and sound), winning and
+ * losing (the rewards, the end screens, the way back to the world), the dialog some enemies start with (record word 0x11), the Sound
+ * Blaster sounds.
  */
 #ifndef TK_BATTLE_H
 #define TK_BATTLE_H
@@ -32,8 +43,8 @@ enum {
     BATTLE_FIELD_H = 110,
     BATTLE_BACK_W = 195,       /* the backdrop is 3 pixels wider than the field: the sway reads 0 .. 3 pixels into each row */
     /* the state that does not show on the screen, for comparing with the original: rand state (4, little-endian), the
-     * monster table, sway count and direction, who acts ([bp-0x44]) and the turn counter ([bp-0x5e]) */
-    BATTLE_STATE_BYTES = 4 + BATTLE_MON_BYTES + 4
+     * monster table, then 16 locals (see battle_state_dump), the party table (200) and the floating numbers' list (20 x 3) */
+    BATTLE_STATE_BYTES = 4 + BATTLE_MON_BYTES + 16 + 200 + 60
 };
 
 /* Start the battle the last walk_pass reported (WALK_PASS_BATTLE): does what the original does between the touch and the battle loop's
@@ -45,6 +56,8 @@ void battle_free(battle_t *b);
  * would have done something not built (battle_unbuilt says what), else 0. */
 int battle_pass(battle_t *b, screen_t *scr, unsigned port60);
 const char *battle_unbuilt(const battle_t *b);
+/* 0 while the battle goes on; 1 when the party has won, 2 when it has lost (what follows is not built: the battle stands still). */
+int battle_over(const battle_t *b);
 
 void battle_state_dump(const battle_t *b, uint8_t out[BATTLE_STATE_BYTES]);
 
@@ -60,5 +73,11 @@ void battle_shrink(const uint8_t *src, unsigned sw, unsigned sh, uint8_t *dst, u
 void battle_sway(const uint8_t *back, uint8_t *field, unsigned count, unsigned dir);
 /* (0x1c47c, mode 0) A number as a 20 x 5 picture of 3 x 5 digits 4 pixels apart, leading zeros left out, digit pixels in `colour`. */
 void battle_number(unsigned value, const uint8_t font[150], uint8_t out[100], uint8_t colour);
+/* (0x1ec8f, a party attack) The blow from experience (word 4), byte 0x13 and word 0x10; `back` for the last two members. */
+unsigned battle_blow(unsigned exp, unsigned stat13, unsigned word10, int back);
+/* (0x1d70f) A monster's blow from its attack word 0x29, halved for the back row, less the member's defence byte 0x12. */
+unsigned battle_monster_blow(unsigned atk, int back, unsigned def);
+/* (0x1dfc1) The front slot (2, 3 or 4) under a hit picture's column. */
+unsigned battle_hit_slot(unsigned col);
 
 #endif

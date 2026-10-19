@@ -31,4 +31,5 @@ int platform_pressed(void) { return 0; }
 int platform_space_hit(void) { return 0; }
 unsigned platform_port60(void) { return 0x9c; }
 void platform_show_pointer(int on) { (void)on; }
+void platform_escape_quits(int on) { (void)on; }
 int platform_mouse(int *x, int *y, unsigned *buttons) { (void)x; (void)y; (void)buttons; return 0; }

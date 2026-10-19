@@ -2,7 +2,9 @@
 """Make a data directory that starts WALK.SL in another scene: a copy of the data with MAN_INFO.NOW byte 500 = SCENE and bytes 502, 503 =
 the hero's x and y / 2 (the units of the villager records: a hero at (104, 72) stands beside a record at (106, 72)).
 
-Usage: tools/walk_scene_data.py OUT_DIR SCENE X Y_HALF [--data original_bin]
+Usage: tools/walk_scene_data.py OUT_DIR SCENE X Y_HALF [--data original_bin] [--join K ...] [--hp K:HP ...] [--word K:OFF:VALUE ...]
+--join K puts party member K (1 .. 4, with his own stats from the file) in the party; --hp K:HP sets a member's HP (to make a battle
+that is lost, for example).
 The source directory is only read; OUT_DIR is replaced."""
 import argparse
 import shutil
@@ -14,6 +16,10 @@ ap.add_argument("scene", type=int)
 ap.add_argument("x", type=int)
 ap.add_argument("y_half", type=int)
 ap.add_argument("--data", default="original_bin")
+ap.add_argument("--join", type=int, action="append", default=[], metavar="K", help="put party member K (1 .. 4) in the party")
+ap.add_argument("--hp", action="append", default=[], metavar="K:HP", help="set party member K's HP")
+ap.add_argument("--word", action="append", default=[], metavar="K:OFF:VALUE",
+                help="set the word at byte OFF of party member K's record (4 experience, 8 HP, 0x10 what a blow taken raises)")
 a = ap.parse_args()
 for v, name in ((a.scene, "SCENE"), (a.x, "X"), (a.y_half, "Y_HALF")):
     if not 0 <= v <= 255:
@@ -27,4 +33,12 @@ for p in Path(a.data).iterdir():
         shutil.copy2(p, out / p.name)
 mi = bytearray((out / "MAN_INFO.NOW").read_bytes())
 mi[500], mi[502], mi[503] = a.scene, a.x, a.y_half
+for k in a.join:   # member k (1 .. 4) in the party with his own sprite set: byte 3 of his record = k (shipped: 0xc8 + k, not joined)
+    mi[40 * k + 3] = k
+for spec in a.hp:
+    k, v = (int(x, 0) for x in spec.split(":"))
+    mi[40 * k + 8], mi[40 * k + 9] = v & 0xFF, v >> 8
+for spec in a.word:
+    k, o, v = (int(x, 0) for x in spec.split(":"))
+    mi[40 * k + o], mi[40 * k + o + 1] = v & 0xFF, v >> 8
 (out / "MAN_INFO.NOW").write_bytes(bytes(mi))

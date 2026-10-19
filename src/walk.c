@@ -25,7 +25,7 @@ struct walk {
     uint8_t fx[WALK_FX_BYTES];
     uint8_t art[WALK_ART_BYTES];        /* RPG.LCP at 0x9b8: ten 7 x 5 digits, the shot (4-byte header, 8 x 8), five 8 x 8 sparks */
     /* a touch (WALK_PASS_BATTLE): the member's party offset, the monster group, the record's byte 0x2f */
-    unsigned battle_member, battle_group, battle_boss;
+    unsigned battle_member, battle_group, battle_boss, battle_rec;
     int begin_result;                   /* what walk_begin's first pass returned */
 };
 
@@ -944,6 +944,7 @@ static int touch(walk_t *w, unsigned member, uint8_t *rec)
     walk_scene_t *s = w->scene;
     w->battle_member = member;
     w->battle_boss = rec[0x2F];
+    w->battle_rec = (unsigned)(rec - s->tab_a);
     int ret = WALK_PASS_BATTLE;
     if (rec[0x2F] == 0) {
         for (long tries = 0;; tries++) {
@@ -1203,11 +1204,12 @@ void walk_palette_step(walk_t *w, screen_t *scr)
     palette_cycle(w, scr);
 }
 
-void walk_battle_info(const walk_t *w, unsigned *member, unsigned *group, unsigned *boss)
+void walk_battle_info(const walk_t *w, unsigned *member, unsigned *group, unsigned *boss, unsigned *rec)
 {
     *member = w->battle_member;
     *group = w->battle_group;
     *boss = w->battle_boss;
+    *rec = w->battle_rec;
 }
 
 void walk_battle_view(walk_t *w, const uint8_t table[256], uint8_t window[192 * 168])

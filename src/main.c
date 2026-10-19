@@ -950,6 +950,7 @@ static int play_walk(screen_t *scr)
                 break;
             song_stop(song);
             song = song_start_at("battle", MUSIC_MENU_OFFSET, MUSIC_MENU_LENGTH);
+            platform_escape_quits(0);   /* Esc goes back from choosing a target; the window's close button still quits */
             platform_present(scr);
         }
         uint32_t now = platform_ticks_ms();
@@ -976,6 +977,7 @@ static int play_walk(screen_t *scr)
     }
     song_stop(song);
     battle_free(bt);
+    platform_escape_quits(1);
     walk_free(w);
     return 1;
 }

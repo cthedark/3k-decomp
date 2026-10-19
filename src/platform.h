@@ -48,6 +48,10 @@ int platform_mouse(int *x, int *y, unsigned *buttons);
 /* Show or hide the system's mouse pointer over the window. The menu draws its own arrow. */
 void platform_show_pointer(int on);
 
+/* Whether Esc closes the program (the default) or only reaches platform_port60 as scan code 0x01 (the battle uses it to go back
+ * from choosing a target). The window's close button always closes. */
+void platform_escape_quits(int on);
+
 /* True once for each time Space was pressed since the last call. The slideshow's loops react to
  * the Space key only (scan code 0x39), not to Enter or the mouse. */
 int platform_space_hit(void);

@@ -975,3 +975,37 @@ What the original does is in `findings.md` "WALK.SL step 13".
   to their first action and says so on stderr), attacks, winning and losing, the way back, enemies that start with a dialog, the Sound Blaster
   sounds. Scenes whose map header byte 5 is 1 draw their world doubled, which the port does not do yet.
 - **Pace:** 35 battle passes a second, the world's pace (the original paces neither). Not judged by eye yet.
+
+## Milestone 8b: choosing a command and a target (C), built 2026-10-18
+
+In the party's turn, Left and Right now move along the four command tabs, and Space or Enter on the first one (attack) puts a yellow box round
+the first monster in front; Left and Right move the box between the live front monsters, Esc takes it away again. Confirming the attack, or
+confirming one of the other three commands, is not built and is reported on stderr. What the original does is in `findings.md` "WALK.SL step 14".
+
+- **Code:** `src/battle.c` (`keys`, `target_slot`, `can_target`, `box_outline`, the 0x96 case of `draw_monsters`; the key latch starts at the
+  touched record's offset, as in the original); `src/walk.c` gives the record's offset (`walk_battle_info`); `src/platform*.c`
+  `platform_escape_quits`, which `play_walk` switches off for the battle.
+- **Checked:** `tools/check_battle.sh` (15 runs, about 15 seconds once recorded) identical at every pass, including the new command, choosing and
+  latch bytes; `tools/battle_keys.py` writes the key scripts. `tools/mutate_battle.py`: 43 deliberate bugs, all caught. `make test`; ASan/UBSan
+  clean. A real-time run under SDL's dummy drivers with scripted keys (`TK_TEST_INPUT`) chose a target, moved it, went back with Esc and
+  reached the unbuilt magic command without closing.
+- **Not built:** the mouse in the battle, keys 2 and 3 (music, sound), the attack, commands 1 to 3.
+
+## Milestone 8c: the attack and the monsters' turn (C), built 2026-10-18
+
+A battle can now be fought to its end with Space or Enter. A confirmed attack grows the hit pictures over the target with the member's attack
+picture, the target flashes and, out of HP, dies behind the six masks (a monster from the back steps forward), numbers float up, the member
+shouts; then the monsters take their turn one by one, each shown doubled in close-up before its blow, the field flashing and jumping, the hit
+member's HP and face changing in the strip. When the monsters or the party are all down the original goes on to what follows a battle, which is
+not built: the port stands still and says so on stderr (`battle: not built: the party has won ...` / `... lost ...`).
+
+- **Code:** `src/battle.c` (`party_attack`, `monster_blow`, `hit_lands`, `draw_monsters` with the flash, dying, target and spark states,
+  `double_up`, `stretch`, `add_number`, `set_shout`, and the pass in the original's order); `battle_over` in `src/battle.h`.
+- **Checked:** `tools/check_battle.sh`, 23 runs (40 seconds once recorded; recording them all takes about 3 minutes), identical at every pass in
+  screen, palette, rand, the monster table, 16 battle locals, the party table and the floating numbers; six of them are whole battles: three
+  monster groups in scene 1, scene 34, a party of three, and a lost one. `tools/battle_keys.py --attack` writes their key scripts;
+  `tools/walk_scene_data.py --join K --hp K:HP` makes the party. `tools/mutate_battle.py`: 69 deliberate bugs, all caught (the blow formulas
+  and the slot pick are pinned by unit tests, since no start reaches their edges). ASan/UBSan clean. A real-time run under SDL's dummy drivers attacked twice.
+- **Not built:** what follows a win or a loss, commands 1 to 3, the mouse, keys 2 and 3, the Sound Blaster samples.
+- **Pace:** the round's animations are counted in passes, so at 35 passes a second a party attack takes about half a second and a monster's
+  close-up about a third of a second. Not judged by eye yet.
