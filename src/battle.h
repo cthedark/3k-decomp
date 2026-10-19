@@ -1,6 +1,6 @@
 /*
- * WALK.SL's battle, stages 1 to 3: the hand-over from the world and the battle's first screen, its idle passes, choosing a command and
- * a target, and whole rounds of attacks up to the end of the battle.
+ * WALK.SL's battle, stages 1 to 4: the hand-over from the world and the battle's first screen, its idle passes, choosing a command and
+ * a target, whole rounds of attacks up to the end of the battle, and what follows a win.
  *
  * What this reproduces (docs/findings.md, "WALK.SL step 13"; checked pass by pass against the original by tools/battle_check.py):
  *   - the world's side of a touch (0x1275e .. 0x12e4e): the enemy moved away (record byte 0x2f = 0), the monster group number,
@@ -20,11 +20,15 @@
  *     pictures grown over the target with the member's attack picture, the target flashing, dying behind six masks, a monster from the
  *     back stepping forward, the floating numbers, the shouts), the monsters' turn (each live one doubled in close-up for three frames,
  *     then a blow on a member: the field flashes and jumps, the member's HP and face in the strip), and the turn passing back. Ends
- *     when the monsters or the party are all down (battle_over); what comes after is not built.
+ *     when the monsters or the party are all down (battle_over);
+ *   - what follows (docs/findings.md "WALK.SL step 16"): after a win the rewards bar (0x1f900 .. 0x1fcb5: "kills x coins each =
+ *     coins" in NUMBER.LCZ 0x359b's 13 x 13 digits, bobbing over the swaying field until Space, Esc or Enter; the coins added, at most
+ *     50,000), then the world's level-ups (0x130e2 .. 0x13291) with a message box each (0x1afb0: a MES_TXT.LCC text over the darkened
+ *     bottom of the screen, waiting for a key); after a loss nothing more here (the caller shows gameover.h).
  *
- * Not built (reported through battle_unbuilt): the mouse, commands 1 to 3 once confirmed, keys 2 and 3 (music and sound), winning and
- * losing (the rewards, the end screens, the way back to the world), the dialog some enemies start with (record word 0x11), the Sound
- * Blaster sounds.
+ * Not built (reported through battle_unbuilt): the mouse, commands 1 to 3 once confirmed (fleeing among them), keys 2 and 3 (music
+ * and sound), the dialog some enemies start with (record word 0x11) and what follows a battle with them (record byte 0x2f set), the
+ * Sound Blaster sounds.
  */
 #ifndef TK_BATTLE_H
 #define TK_BATTLE_H
@@ -56,8 +60,25 @@ void battle_free(battle_t *b);
  * would have done something not built (battle_unbuilt says what), else 0. */
 int battle_pass(battle_t *b, screen_t *scr, unsigned port60);
 const char *battle_unbuilt(const battle_t *b);
-/* 0 while the battle goes on; 1 when the party has won, 2 when it has lost (what follows is not built: the battle stands still). */
+/* 0 while the battle goes on; BATTLE_LOST when the whole party has fallen (the original then leaves WALK.SL for MARK.EXE's game-over
+ * screen); BATTLE_BACK once a won battle is over (rewards and level-ups seen): the caller then plays the scene's song again and ends
+ * the pass with walk_resume(w, ticks, port60, battle_result(b)), in the same pass. */
+enum { BATTLE_LOST = 2, BATTLE_BACK = 3 };
 int battle_over(const battle_t *b);
+/* Which loop the next pass is in, for comparing with the original's loop tops: the fight (0x1d418), the rewards bar (0x1fb7d) or a
+ * message box's wait (0x1b506). */
+enum { BATTLE_KIND_FIGHT = 1, BATTLE_KIND_REWARDS = 3, BATTLE_KIND_DIALOG = 4 };
+int battle_kind(const battle_t *b);
+/* What the battle returns: the number of slots whose monster died (0 after a loss). */
+unsigned battle_result(const battle_t *b);
+/* (0x2464a) A Big5 character's 28-byte glyph in NUMBER.LCZ; (size_t)-1 when its lead byte has none. */
+size_t battle_glyph_offset(unsigned hi, unsigned lo);
+/* (0x130e2 .. 0x13246) A party record's level-up after a won battle: when its experience (word 4) has reached the next level's
+ * (word 6) and is below 60,000, the experience becomes that, the next level 500 higher, the most HP (word 0xa) a twelfth more and the
+ * HP (word 8) full, each at most 60,000; returns 1. Otherwise nothing changes and it returns 0. */
+int battle_level_up(uint8_t member[0x28]);
+/* (0x1fb02 .. 0x1fb3b) The coins after a win: `kills` times `per` more (16-bit), at most 50,000. */
+unsigned battle_add_coins(unsigned coins, unsigned kills, unsigned per);
 
 void battle_state_dump(const battle_t *b, uint8_t out[BATTLE_STATE_BYTES]);
 

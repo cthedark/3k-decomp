@@ -1006,6 +1006,31 @@ not built: the port stands still and says so on stderr (`battle: not built: the 
   monster groups in scene 1, scene 34, a party of three, and a lost one. `tools/battle_keys.py --attack` writes their key scripts;
   `tools/walk_scene_data.py --join K --hp K:HP` makes the party. `tools/mutate_battle.py`: 69 deliberate bugs, all caught (the blow formulas
   and the slot pick are pinned by unit tests, since no start reaches their edges). ASan/UBSan clean. A real-time run under SDL's dummy drivers attacked twice.
-- **Not built:** what follows a win or a loss, commands 1 to 3, the mouse, keys 2 and 3, the Sound Blaster samples.
+- **Not built:** commands 1 to 3, the mouse, keys 2 and 3, the Sound Blaster samples. (What follows a win or a loss: milestone 8d.)
 - **Pace:** the round's animations are counted in passes, so at 35 passes a second a party attack takes about half a second and a monster's
   close-up about a third of a second. Not judged by eye yet.
+
+## Milestone 8d: what follows a win or a loss (C), built 2026-10-19
+
+A won battle now ends the way the original's does and goes back to the world; a lost one ends in MARK.EXE's game-over screen and then the
+title, as in the original.
+
+- **Win:** the rewards bar (`5 x 001 = 0005`: kills, coins per monster, coins) bobs over the swaying field until Space, Esc or Enter; the
+  coins are added at once (at most 50,000) and shown at the bottom right. Then each member who has reached his next level gets it (experience
+  set to the threshold, the next one 500 higher, most HP a twelfth more, HP full) with a message box (`恭喜!恭喜!桑得斯的生命力增強了。`)
+  that waits for a key. The scene's song starts again and the rest of the pass that touched the enemy runs (`walk_resume`); the world goes on.
+- **Loss:** `play_walk` returns 2; `play_gameover` shows the game-over screen (the last screen shaded, shrunk and tiled 4 x 4, rolling up
+  and left, with 全體陣亡) with song 24 until Space or Enter; `--scene game` then goes back to the title, `--scene walk` stops.
+- **Code:** `src/battle.c` (`start_rewards`, `rewards_pass`, `level_ups`, `battle_level_up`, `battle_add_coins`, `start_message`,
+  `message_char`, `dialog_pass`, `battle_glyph_offset`), `src/gameover.[ch]`, `walk_resume` / `walk_show_gold` in `src/walk.c`, `main.c`.
+- **Checked:** `tools/check_battle.sh` (now four loop tops: world, battle, rewards, message box; world passes also compare the villager and
+  party tables): the two won battles go on 1,276 and 1,699 world passes after the bar; level-ups with 1 and 3 message boxes (279 passes of
+  waiting, palette steps included); the bar held 100 passes; a walk-in win across a rain-strength change; and `tools/gameover_check.py`, 400
+  passes of the game-over screen from the screen a lost battle ends on. All identical. A walk-in at the clock 20300 also reaches a second
+  battle, which starts with the first one's leftover `[bp-0x84]` (`walk_battle_left`). Unit tests pin the level-up and coin edges and the
+  resumed pass's rain stride (`test_resume_stride` in `tests/test_walk.c`).
+  `tools/mutate_battle.py` (`SKIP=n` leaves out the first n): 111 mutations, all caught.
+- **Pace (choices, not measured):** the bar and the game-over screen run at the world's 35 passes a second (the original paces neither);
+  a message box's wait runs 41 rounds a pass, one palette step a pass.
+- **Not built:** fleeing (command 3's `rand() < 0x4000` path, which also reaches the bar), what follows a battle with a byte-0x2f enemy
+  (reported), the mouse, the Sound Blaster samples, ANI.LCP's message byte (the port passes the result directly).

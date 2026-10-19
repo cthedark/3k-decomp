@@ -2648,3 +2648,82 @@ is left out of the list with a note.
 
 **Not built:** what follows a win or a loss (`0x1f8ec` on: rewards, the end screen, the way back); commands 1 to 3; the mouse; keys 2 and 3;
 the Sound Blaster samples at each blow and death.
+
+## WALK.SL step 16: what follows a win or a loss, 2026-10-19
+
+Built in C (`src/battle.c`, `src/gameover.c`, `walk_resume` in `src/walk.c`, `main.c`) and compared with the original pass by pass:
+`tools/battle_check.py` now counts four loop tops as one sequence (world `0x11d36`, battle `0x1d418`, rewards bar `0x1fb7d`, message box
+wait `0x1b506`) and compares the villager and party tables in world passes; `tools/gameover_check.py` runs MARK.EXE. READ from the code
+(`0x1f8ec` .. `0x1fd01`, the world's `0x12e56` .. `0x13318`, `0x1afb0` .. `0x1b633`, `0x2464a`, MARK's `0x101ed` .. `0x1055f`), SEEN in
+oracle screenshots (method: `work/b4/probe.py`, scratch), then CONFIRMED by the comparisons unless it says otherwise.
+
+**Correction to step 15 (2026-10-19):** of the six whole battles in `check_battle.sh`, two are won (scene 1 record 4, the party of three) and
+four lost (scene 1 records 9 and 19, scene 34, the 40 HP member); step 15 implied five wins. The comparison could not tell won from lost then.
+
+**The battle's three ways out** (`0x1f8ec`): `[bp-0x84]` = 0x63 (set at `0x1dba1` when nobody in the party has HP) returns 0 at once; the
+win (`0x1dc42`, all monster HP 0) and a lucky flee (`0x1f8d9`: `rand() >= 0x4000` stays, below leaves; command 3, not built) go to the bar.
+
+**The rewards bar** (`0x1f900` .. `0x1fcb5`, SEEN: `5 x 001 = 0005` over the field):
+- NUMBER.LCZ chunk 0x359b decoded (`0x25eeb`): twelve 13 x 13 pictures without headers, x, =, then the digits 0 .. 9.
+- Into a 192 x 13 bar cleared to 0 (`0x25d82`, opaque): the kills digit at x 3 (kills = slots with frame 3 .. 8, i.e. dead), x at 0x16, the last
+  three digits of stat 3 (`mon[0x2b]`, coins per monster; `0x26450` makes five digits) from 0x29, = at 0x62, the last four of kills x stat 3 from
+  0x75, 0x13 apart.
+- Coins: party word 0x122 + that (16-bit), at most 50,000 (the shots' cap is 60,000), and `0x1bd6e` redraws them at once.
+- Loop: the sway, `0x1c284`, the bar moved by `[bp-0x64] - 0xc0` (start 0x1744, step 0x180) and, outside 0x1804 .. 0x2944, the step + 0x180,
+  reset to 0 above 0x180, so it bobs one row a pass between field rows 31 and 56 (offsets include the field picture's 4-byte header);
+  `0x26d52` copies it with 0 transparent; the field to (64, 74); then port 0x60: Space, Esc or Enter leave (no release needed). No monsters,
+  no numbers. Returns the kills (`[bp-0x66]`).
+
+**Back in the world** (`0x12e56`): the result goes to `[bp-0x3c]` (the hero's walk counter). Nobody with HP and byte 3 below 10: the game-over
+path. Otherwise `[bp-0x5e]` (the hero's frame), which the touch had set to the enemy's byte 0x2f: not 0 goes to a path for those enemies (all
+monsters killed: record word 0x11 = 0 and `0x2c158` on its map cell; else the party is put back; **not built**). Then for each of the five
+records (`0x130e2`): experience (word 4) at least the next level's (word 6) and below 60,000: experience = word 6, word 6 + 500 (at most
+60,000), word 0xa + word 0xa / 12 (at most 60,000) into words 0xa and 8, and the message box with text 0x2e2 + byte 3 (SEEN: `恭喜!恭喜!桑得斯的
+生命力增強了。` for the hero). Then the mouse pointer, the scene's song from its start if music is on, and `0x13318`: the rest of the touching
+pass (villagers' steps with the rain stride of that pass, keys, walk frame).
+
+**The message box** (`0x1afb0`, called with colour 0x70 and the wait flag):
+- Text: 0x78 bytes of MES_TXT.LCC at (n - 1) * 0x80 + 6, up to `#`. Below 40 bytes: row 150, centred by 8 pixels per missing byte pair; below 80:
+  row 142; else 135. Each 8 x 14 ASCII character comes from RPG.LCP 0x1a6b7 (15 bytes each, one bit a pixel; `@` is drawn as a small circle),
+  each 16 x 14 Big5 one from NUMBER.LCZ (`0x2464a`: 28 bytes at 0x3b20 + 30 * cell, lead bytes 0xa4 .. 0xc6 then 0xc9 on after 0x1519 cells,
+  through a 292-entry cache that changes nothing visible). Rows recoloured colour + 1 and + 2 from byte 0x26 / 0x50 of the picture, a shadow of
+  colour + 6 one row down at x and x + 1. A Big5 character at x 0x138 wraps first; x 0x140 wraps after.
+- The box (the wait flag makes it 320 x 46 at row 134): `0x2723c` takes the screen into the world buffer, `0x27503` copies it 5 bytes on but
+  4 bytes short, so the copy's last 4 pixels are the world buffer's 0x7305 .. 0x7308 (in a battle the backdrop's 0x1ea5 .. 0x1ea8); shaded
+  twice through the table, rows 1 .. 44 twice more, drawn, text over it.
+- Wait (`0x1b506`): a counter (colour + 3 after the text) steps the palette when it passes 0x28; port 0x60 above 0x7f clears the wait for a
+  release, then a value below 0x80 ends it; the screen under the box goes back.
+
+**The game over** (WALK.SL `0x12ebc`): sound and music stopped, 0x3e written at ANI.LCP 0x2ff (`0x26ccf` seek, one byte), the buffers freed, and
+MARK.EXE started (DS:0xe0). In the oracle the exec is not taken, so the world runs on there; the comparison stops at the loss. MARK
+(`0x101ed`, SEEN): the screen left by WALK.SL (MARK sets no palette on this path) shaded four times through RPG.LCP 0x340, shrunk to 80 x 50
+(`0x11a76`, the same stepping as `0x26f72`) and tiled 4 x 4; song 24 (MUC.ALL 0x2d76b, 0x7b1 bytes) if music is on; then each pass (`0x1040a`)
+the tiles roll up a row and left a pixel (both wrapping) and the lettering 全體陣亡 (TITLE1.LCZ 0x3e73, 93 x 26; the read asks for one byte past
+the file's end) is drawn at row 87, column 114 for the screen only (the call is given the picture with its header, so 0x6d36 lands 4 pixels
+left). Space or Enter (or a click) end it; MARK then sets its message to 0x3f and goes on with its normal start, the title (SEEN: with Space
+still held the title passed straight to WALK0.SL's menu).
+
+**Checked:** `tools/check_battle.sh`: all earlier runs, the two won battles continued 1,276 and 1,699 world passes after the bar, level-ups
+with one message box (hero) and three (party of three, long waits, 279 box passes), the bar held 100 passes then walking, a walk-in win across
+tick 1024 (rain stride change), and 400 game-over passes. All identical. Unit tests: `battle_level_up`, `battle_add_coins`,
+`battle_glyph_offset`.
+
+**A second battle** (FOUND by the comparison, 2026-10-19): the same walk-in start at the clock 20300 wins, and then the hero walks into a
+second enemy (pass 1148). Everything matched there except `[bp-0x84]` after the second battle's first pass: 1 in the original, 0 in the port.
+The battle routine never sets it before its loop's first call of the monster routine (which overwrites it before anything reads it), so it is
+what the stack held, and the first battle had left 1 there (a won battle ends on a death, which returns 1). The port now carries it from one
+battle to the next (`walk_battle_left`), 0 before the first. INFERRED from this one run: that the 451 world passes between the two battles
+never write that stack word. Invisible on screen; `walkwin_20300` in `check_battle.sh` covers it.
+
+**Mutations:** `tools/mutate_battle.py` now has 111, all caught (the full run caught 107 of 109 with two stale patterns, which now match once
+each, plus a rewards-loop twin of each; those four re-run and caught). It also runs `tests/test_walk.c` for mutations in `walk.c`. Two
+survivors of the run before:
+- "resume: the new pass's rain stride" shows only when an enemy asks for a direction on the very pass after a battle that began in rain and
+  ended dry; no recorded start does (ten clock readings tried, 20150 .. 20460). It is now pinned by a unit test (`test_resume_stride`: twelve
+  enemies one step from asking, the battle touched at clock 20, resumed at 0x6000).
+- "game over: tiles not shrunk the same way" is dropped: 320 / 80 and 200 / 50 are whole, so `battle_shrink` takes every 4th pixel too and the
+  two cannot differ.
+
+**Not built:** fleeing; what follows a battle with a byte-0x2f enemy; the mouse in the bar, the box and the game over; the Sound Blaster
+samples; the ANI.LCP byte itself (the port hands the result over directly). **Pace:** the bar and the game over at 35 passes a second, the
+box's wait 41 rounds a pass: choices, the original paces none of them.

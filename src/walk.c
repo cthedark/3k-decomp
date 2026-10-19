@@ -26,6 +26,8 @@ struct walk {
     uint8_t art[WALK_ART_BYTES];        /* RPG.LCP at 0x9b8: ten 7 x 5 digits, the shot (4-byte header, 8 x 8), five 8 x 8 sparks */
     /* a touch (WALK_PASS_BATTLE): the member's party offset, the monster group, the record's byte 0x2f */
     unsigned battle_member, battle_group, battle_boss, battle_rec;
+    unsigned battle_left;               /* the battle frame's [bp-0x84] as the last battle left it on the stack (0 before any) */
+    unsigned stride;                    /* the rain stride of the pass that touched (the rest of that pass runs after the battle) */
     int begin_result;                   /* what walk_begin's first pass returned */
 };
 
@@ -972,6 +974,8 @@ static int touch(walk_t *w, unsigned member, uint8_t *rec)
     return ret;
 }
 
+static int pass_tail(walk_t *w, uint32_t ticks, unsigned port60, unsigned stride);
+
 int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60)
 {
     walk_scene_t *s = w->scene;
@@ -1012,11 +1016,19 @@ int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60)
             break;
         for (int k = 0; k < WS_VILLAGERS; k++) {
             uint8_t *r = s->tab_a + k * WS_VILLAGER_SIZE;
-            if (r[2] != 0x61 && (r[0] & 0xFE) == (p[0] & 0xFE) && (r[1] & 0xFE) == (p[1] & 0xFE) && r[0x31] > 0)
+            if (r[2] != 0x61 && (r[0] & 0xFE) == (p[0] & 0xFE) && (r[1] & 0xFE) == (p[1] & 0xFE) && r[0x31] > 0) {
+                w->stride = stride;
                 return touch(w, (unsigned)(WS_PARTY_SIZE * i), r);
+            }
         }
     }
+    return pass_tail(w, ticks, port60, stride);
+}
 
+/* 0x13318 on: the villagers' steps, the key handlers and the hero's walk frame; after a battle the pass that touched ends here. */
+static int pass_tail(walk_t *w, uint32_t ticks, unsigned port60, unsigned stride)
+{
+    walk_scene_t *s = w->scene;
     for (int k = 0; k < WS_VILLAGERS; k++) {
         uint8_t *rec = s->tab_a + k * WS_VILLAGER_SIZE;
         int ret = walk_villager_step(rec, s->gmap, s->list);
@@ -1202,6 +1214,25 @@ uint32_t *walk_rng(walk_t *w)
 void walk_palette_step(walk_t *w, screen_t *scr)
 {
     palette_cycle(w, scr);
+}
+
+void walk_show_gold(walk_t *w, screen_t *scr)
+{
+    walk_draw_gold(scr, w16(w->scene->tab_b, WALK_GOLD_AT), w->art + ART_DIGITS);
+}
+
+int walk_resume(walk_t *w, uint32_t ticks, unsigned port60, unsigned result)
+{
+    /* the touch left the enemy record's byte 0x2f in the hero's frame ([bp-0x5e]); the battle's result lands in [bp-0x3c] */
+    w->hero_frame = w->battle_boss & 0xFF;
+    w->ctr = result & 0xFF;
+    w->unbuilt_new = 0;
+    return pass_tail(w, ticks, port60, w->stride);
+}
+
+unsigned *walk_battle_left(walk_t *w)
+{
+    return &w->battle_left;
 }
 
 void walk_battle_info(const walk_t *w, unsigned *member, unsigned *group, unsigned *boss, unsigned *rec)

@@ -8,6 +8,7 @@ not notice is printed as MISSED. ONLY=text runs the mutations whose name contain
   work/venv/bin/python tools/mutate_battle.py
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -15,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WORK = ROOT / "work" / "mut_battle"
-SOURCES = ["src/walk.c", "src/battle.c", "src/walkscene.c", "src/assets.c", "src/lcz.c", "src/screen.c"]
+SOURCES = ["src/walk.c", "src/battle.c", "src/gameover.c", "src/walkscene.c", "src/assets.c", "src/lcz.c", "src/screen.c"]
 
 M = []
 
@@ -55,7 +56,9 @@ m("battle.c", "tabs: chosen tab fill", "fill(scr, q + 0x141, 0x2C, 2, 0x10);", "
 # returns to the world, not built), the 0x3e80 threshold of who starts (no recorded rand value falls between 0x3000 and 0x3e80),
 # the tabs' outer outline height (the party strip's picture already has those pixels).
 m("battle.c", "sway: bounce at 2", "} else if (++ax == 3) {", "} else if (++ax == 2) {")
-m("battle.c", "sway count: no change", "if (++b->count == 3)\n            b->dir = 0;", "if (b->count == 3)\n            b->dir = 0;")
+m("battle.c", "sway count: no change", "b->v28 = b->v82;\n    }\n    if (b->dir) {\n        if (++b->count == 3)", "b->v28 = b->v82;\n    }\n    if (b->dir) {\n        if (b->count == 3)")
+m("battle.c", "rewards: sway count no change", "if (b->dir) {\n        if (++b->count == 3)\n            b->dir = 0;\n    } else if (--b->count == 0) {\n        b->dir = 1;\n    }\n    battle_sway(b->back, b->field, b->count, b->dir);\n    walk_palette_step",
+  "if (b->dir) {\n        if (b->count == 3)\n            b->dir = 0;\n    } else if (--b->count == 0) {\n        b->dir = 1;\n    }\n    battle_sway(b->back, b->field, b->count, b->dir);\n    walk_palette_step")
 m("battle.c", "jitter: one side only", "if (r > 0x7447)\n            at = (at + 1) & 0xFFFF;", "")
 m("battle.c", "frame change: up threshold", "if (r > 0x7D00 && t < 2)", "if (r > 0x7C00 && t < 2)")
 m("battle.c", "back row: shaded once", "small[i] = b->table[b->table[small[i]]];", "small[i] = b->table[small[i]];")
@@ -63,7 +66,9 @@ m("battle.c", "back row: full size", "if (sl < 2) {", "if (sl < 0) {")
 m("battle.c", "shrink: step", "xint = sw / dw,", "xint = sw / dw + 1,")
 m("battle.c", "monsters' turn: no pass over empty slots", "b->v5e++;   /* 0x1dbf3: an empty slot is passed over */", ";")
 m("battle.c", "palette cycle not run", "walk_palette_step(b->w, scr);\n    if (b->v28", "if (b->v28")
-m("battle.c", "field one row lower", "put(scr, FIELD_AT, b->field,", "put(scr, FIELD_AT + 320, b->field,")
+m("battle.c", "field one row lower", "b->shout_h);\n    put(scr, FIELD_AT, b->field,", "b->shout_h);\n    put(scr, FIELD_AT + 320, b->field,")
+m("battle.c", "rewards: field one row lower", "b->field[b->bar_at - 4 + i] = b->bar[i];\n    put(scr, FIELD_AT, b->field,",
+  "b->field[b->bar_at - 4 + i] = b->bar[i];\n    put(scr, FIELD_AT + 320, b->field,")
 # stage 2: the command and target choice
 m("battle.c", "Left does not wrap to the last tab", "b->v82 = 4;\n            b->v82--;", "b->v82 = 1;\n            b->v82--;")
 m("battle.c", "Right wraps after the third tab", "if (k == 0x4D && ++b->v82 > 3)", "if (k == 0x4D && ++b->v82 > 2)")
@@ -108,16 +113,63 @@ m("battle.c", "hit lands on the wrong slot", "if (col > 0x60)\n        k = 4;", 
 m("battle.c", "hit animation: frames two passes", "if (++b->v8c > 2) {", "if (++b->v8c > 1) {")
 m("battle.c", "stretch: rows from 1", "unsigned si = row, acc = 1;", "unsigned si = row, acc = 0;")
 
+# what follows a win and a loss (step 16)
+m("walk.c", "resume: frame not from byte 0x2f", "w->hero_frame = w->battle_boss & 0xFF;", "")
+m("walk.c", "resume: counter not the result", "w->ctr = result & 0xFF;", "")
+m("walk.c", "resume: the new pass's rain stride", "return pass_tail(w, ticks, port60, w->stride);",
+  "return pass_tail(w, ticks, port60, walk_rain_stride(w->scene->weather, ticks));")
+m("battle.c", "second battle: [bp-0x84] from 0", "b->v84 = *walk_battle_left(w);", "b->v84 = 0;")
+m("battle.c", "kills: frame 5 not dead", "if (b->mon[i] > 2 && b->mon[i] < 9)", "if (b->mon[i] > 2 && b->mon[i] < 5)")
+m("battle.c", "bar: kills glyph", "bar_glyph(b, 3, 2 + kills);", "bar_glyph(b, 3, 1 + kills);")
+m("battle.c", "bar: x one right", "bar_glyph(b, 0x16, 0);", "bar_glyph(b, 0x17, 0);")
+m("battle.c", "bar: per from the 4th digit", "for (int i = 2; i < 5; i++)", "for (int i = 3; i < 5; i++)")
+m("battle.c", "bar: total digits closer", "bar_glyph(b, 0x75 + 0x13 *", "bar_glyph(b, 0x75 + 0x12 *")
+m("battle.c", "bar: per from the next stat", "unsigned per = b->mon[0x2B]", "unsigned per = b->mon[0x2C]")
+m("battle.c", "coins not shown", "walk_show_gold(b->w, scr);", "(void)scr;")
+m("battle.c", "coins: cap", "return g > 0xC350 ? 0xC350 : g;", "return g > 0xEA60 ? 0xEA60 : g;")
+m("battle.c", "bar starts a row lower", "b->bar_at = 0x1744;", "b->bar_at = 0x1804;")
+m("battle.c", "bar: step kept at the bottom", "if (b->bar_step > 0x180)\n            b->bar_step = 0;", "if (b->bar_step > 0x300)\n            b->bar_step = 0;")
+m("battle.c", "bar: lower bound", "if (b->bar_at > 0x2944 || b->bar_at < 0x1804)", "if (b->bar_at > 0x2A04 || b->bar_at < 0x1804)")
+m("battle.c", "bar: opaque", "if (b->bar[i] && b->bar_at - 4 + i", "if (b->bar_at - 4 + i")
+m("battle.c", "rewards: Esc does not end", "if (k == 0x39 || k == 1 || k == 0x1C) {   /* the Sound", "if (k == 0x39 || k == 0x1C) {   /* the Sound")
+m("battle.c", "rewards: no palette step", "walk_palette_step(b->w, scr);\n    b->bar_at", "b->bar_at")
+m("battle.c", "rewards: no sway", "battle_sway(b->back, b->field, b->count, b->dir);\n    walk_palette_step(b->w, scr);\n    b->bar_at",
+  "walk_palette_step(b->w, scr);\n    b->bar_at")
+m("battle.c", "message: short text a row higher", "if (n < 0x28) {\n        row += 15;", "if (n < 0x28) {\n        row += 14;")
+m("battle.c", "message: padding", "x += 8 * ((0x28 - n) / 2);", "x += 8 * ((0x29 - n) / 2);")
+m("battle.c", "message: last 4 pixels kept", "memcpy(box + sizeof box - 4, b->back + 0x1EA5, 4);", "")
+m("battle.c", "message: shaded once less", "for (int t = 0; t < 2; t++)\n        for (unsigned i = 0; i < sizeof box", "for (int t = 0; t < 1; t++)\n        for (unsigned i = 0; i < sizeof box")
+m("battle.c", "message: inner rows from row 0", "for (unsigned i = SCREEN_W; i < SCREEN_W * 45; i++)", "for (unsigned i = 0; i < SCREEN_W * 45; i++)")
+m("battle.c", "message: shadow colour", "(uint8_t)(colour + 6);", "(uint8_t)(colour + 5);")
+m("battle.c", "message: one shadow", "shadow[2] = {SCREEN_W + 1, SCREEN_W};", "shadow[2] = {SCREEN_W, SCREEN_W};")
+m("battle.c", "message: ASCII recolour later", "unsigned from = w == 8 ? 0x26 : 0x50", "unsigned from = w == 8 ? 0x27 : 0x50")
+m("battle.c", "message: Big5 recolour later", "unsigned from = w == 8 ? 0x26 : 0x50", "unsigned from = w == 8 ? 0x26 : 0x51")
+m("battle.c", "message: ASCII 9 wide", "x += 8;\n        } else {", "x += 9;\n        } else {")
+m("battle.c", "message: palette every 40th", "if (++b->dlg_count > 0x28) {", "if (++b->dlg_count > 0x27) {")
+m("battle.c", "message: no release needed", "if (b->dlg_wait)\n        k = 0x80;", "")
+m("battle.c", "message: not taken away", "memcpy(scr->pix + 0xA780, b->under, sizeof b->under);   /* 0x27328", "(void)0;   /* 0x27328")
+m("battle.c", "level-up: next message", "unsigned msg = m[3] + 0x2E2u;", "unsigned msg = m[3] + 0x2E3u;")
+m("battle.c", "level-up: first member only", "for (; b->lu < 5; b->lu++) {", "for (; b->lu < 1; b->lu++) {")
+m("battle.c", "level-up: HP not full", "m[0xA] = m[8] = (uint8_t)hp;\n    m[0xB] = m[9] = (uint8_t)(hp >> 8);", "m[0xA] = (uint8_t)hp;\n    m[0xB] = (uint8_t)(hp >> 8);")
+m("gameover.c", "game over: shaded three times", "for (int t = 0; t < 4; t++)", "for (int t = 0; t < 3; t++)")
+# "game over: tiles not shrunk the same way" (every 4th pixel instead of battle_shrink) is left out: 320 / 80 and 200 / 50 are whole,
+# so battle_shrink's fractions are 0 and it takes exactly every 4th pixel too; the two cannot differ.
+m("gameover.c", "game over: no roll up", "memmove(g->pic, g->pic + W, (size_t)W * (H - 1));\n    memcpy(g->pic + (size_t)W * (H - 1), row, W);", "(void)row;")
+m("gameover.c", "game over: roll right", "memmove(p, p + 1, W - 1);\n        p[W - 1] = first;", "(void)first;\n        uint8_t last = p[W - 1];\n        memmove(p + 1, p, W - 1);\n        p[0] = last;")
+m("gameover.c", "game over: lettering a pixel right", "WORDS_AT = 0x6D36 - 4 }", "WORDS_AT = 0x6D36 - 3 }")
+m("gameover.c", "game over: lettering opaque", "if (v && WORDS_AT + r * W + x", "if (WORDS_AT + r * W + x")
+
 
 def main():
     if not (ROOT / "work/check_battle").exists():
         print("run tools/check_battle.sh first")
         return 2
     only = os.environ.get("ONLY", "")
+    skip = int(os.environ.get("SKIP", "0"))   # SKIP=n leaves out the first n mutations of the list
     missed = bad = ran = 0
     WORK.mkdir(parents=True, exist_ok=True)
     try:
-        for f, name, old, new in M:
+        for f, name, old, new in M[skip:]:
             if only and only not in name:
                 continue
             ran += 1
@@ -144,6 +196,19 @@ def main():
             if subprocess.run([str(WORK / "test_battle")], capture_output=True).returncode != 0:
                 print("caught by unit: " + name)
                 continue
+            if f == "walk.c":   # the world's own unit tests (tests/test_walk.c) pin parts of the resumed pass
+                core = re.search(r"^CORE_SRC\s*:=\s*(.*)$", (ROOT / "Makefile").read_text(), re.M).group(1).split()
+                opl = sorted(str(p) for p in (ROOT / "build/opl").glob("*.o"))
+                r = subprocess.run(["cc", "-std=c99", "-O1", "-w", "-I", str(src)] + [str(WORK / s) for s in core] +
+                                   [str(ROOT / "tests/test_walk.c")] + opl + ["-o", str(WORK / "test_walk"), "-lc++" if sys.platform == "darwin" else "-lstdc++"],
+                                   capture_output=True, text=True)
+                if r.returncode != 0:
+                    print(f"DOES NOT BUILD: {name}: {r.stderr.strip()[:200]}")
+                    bad += 1
+                    continue
+                if subprocess.run([str(WORK / "test_walk"), str(ROOT / "original_bin")], capture_output=True).returncode != 0:
+                    print("caught by unit: " + name)
+                    continue
             try:
                 r = subprocess.run(["sh", "tools/check_battle.sh"], cwd=ROOT, env={**os.environ, "PORT": str(out), "FIRST_FAIL_EXIT": "1"},
                                    capture_output=True, text=True, timeout=600)

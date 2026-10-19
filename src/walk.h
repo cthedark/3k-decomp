@@ -98,9 +98,18 @@ void walk_palette_step(walk_t *w, screen_t *scr);
 /* The touch: the member's offset in the party table (0, 0x28, ...), the monster group, the enemy record's byte 0x2f and the record's
  * offset in the villager table. */
 void walk_battle_info(const walk_t *w, unsigned *member, unsigned *group, unsigned *boss, unsigned *rec);
+/* The battle routine's [bp-0x84] is never set before its loop's first monster pass, so a battle starts with what the last one left
+ * there (0 before any): the battle keeps it here when it is freed. */
+unsigned *walk_battle_left(walk_t *w);
 /* The world drawn again at the hero with walk frame 0 and its middle 96 x 84 doubled through `table` (0x2c658): the 192 x 168 picture
  * the battle's backdrop is made from. Uses (and overwrites) the world buffer. */
 void walk_battle_view(walk_t *w, const uint8_t table[256], uint8_t window[192 * 168]);
+/* (0x1bd6e) The coin count (party table word 0x122) drawn again. */
+void walk_show_gold(walk_t *w, screen_t *scr);
+/* After a won battle (0x13300 on): the rest of the pass that touched the enemy, from the villagers' steps (0x13318), with the clock
+ * `ticks` and the key `port60` of the pass in which the battle ended. `result` is what the battle returned (the monsters it killed);
+ * like the original, it is left in the hero's walk counter, and the enemy record's byte 0x2f in his frame. Returns as walk_pass. */
+int walk_resume(walk_t *w, uint32_t ticks, unsigned port60, unsigned result);
 
 /* Shots ([bp-0x62]: 5 of x, y, direction, zigzag phase) and sparks ([bp-0xcc]: 10 of frame, x, y, direction), kept as one list. */
 enum { WALK_SHOTS = 5, WALK_SPARKS = 10, WALK_FX_BYTES = 4 * (WALK_SHOTS + WALK_SPARKS), WALK_ART_BYTES = 0x15E + 0x44 + 0x140,

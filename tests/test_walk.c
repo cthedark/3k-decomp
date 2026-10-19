@@ -884,6 +884,57 @@ static void test_pass_wiring(void)
     walk_free(w);
 }
 
+static void test_resume_stride(void)
+{
+    printf("the pass resumed after a battle decides with the rain stride of the pass that touched, not the clock's\n");
+    if (!assets_exists("__2.ALL") || !assets_exists("NUMBER.LCZ")) {
+        printf("  skipped (no data)\n");
+        skipped++;
+        return;
+    }
+    walk_t *w = walk_create();
+    CHECK(w != NULL);
+    if (!w)
+        return;
+    static screen_t scr;
+    CHECK(walk_begin(w, &scr, 0, 20) == 0);   /* scene 0 rains at clock 20; the battle ends at 0x6000, which is dry */
+    walk_scene_t *s = (walk_scene_t *)walk_scene(w);
+    unsigned hx = s->tab_b[0], hy = s->tab_b[1];
+    CHECK(s->weather == 1 && walk_rain_stride(1, 20) != 0 && walk_rain_stride(1, 0x6000) == 0);
+    for (int k = 0; k < 13; k++) {   /* twelve enemies one step from asking for a direction, and a thirteenth on the hero */
+        uint8_t *r = s->tab_a + k * WS_VILLAGER_SIZE;
+        r[0] = k < 12 ? (uint8_t)(38 + k % 4) : (uint8_t)hx;
+        r[1] = k < 12 ? (uint8_t)(40 + 3 * (k % 5)) : (uint8_t)hy;
+        r[2] = 3;
+        r[3] = 1; r[4] = 1; r[5] = 200; r[6] = 200;
+        r[7] = 9; r[8] = 1; r[9] = 0;
+        r[0xB] = 1;
+        r[0x11] = r[0x12] = 0;
+        r[0x2F] = 1;   /* not 0: the enemy stays where it is */
+        r[0x31] = 1;
+    }
+    CHECK(walk_pass(w, &scr, 20, 0) & WALK_PASS_BATTLE);
+    uint8_t st[WALK_STATE_BYTES];
+    walk_state_dump(w, st);
+    uint32_t rng = (uint32_t)st[1000] | (uint32_t)st[1001] << 8 | (uint32_t)st[1002] << 16 | (uint32_t)st[1003] << 24;
+    uint8_t exp[WS_VILLAGERS * WS_VILLAGER_SIZE];
+    memcpy(exp, s->tab_a, sizeof exp);
+    int asked = 0;
+    for (int k = 0; k < WS_VILLAGERS; k++) {
+        uint8_t *r = exp + k * WS_VILLAGER_SIZE;
+        if (walk_villager_step(r, s->gmap, s->list) == 0xA) {
+            walk_villager_decide(r, &rng, 0x6000, hx, hy, walk_rain_stride(1, 20));
+            asked++;
+        }
+    }
+    CHECK(asked >= 12);
+    walk_resume(w, 0x6000, 0, 0);
+    CHECK(memcmp(exp, s->tab_a, sizeof exp) == 0);
+    walk_state_dump(w, st);
+    CHECK(((uint32_t)st[1000] | (uint32_t)st[1001] << 8 | (uint32_t)st[1002] << 16 | (uint32_t)st[1003] << 24) == rng);
+    walk_free(w);
+}
+
 /* ---- the hero ---- */
 
 static void test_foot(void)
@@ -1282,6 +1333,7 @@ int main(int argc, char **argv)
     test_decide();
     test_motion_whole();
     test_pass_wiring();
+    test_resume_stride();
     test_foot();
     test_trail_and_records();
     test_walking();

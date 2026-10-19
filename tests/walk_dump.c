@@ -16,8 +16,10 @@
 
 #include "assets.h"
 #include "battle.h"
+#include "gameover.h"
 #include "walk.h"
 
+enum { DUMP_STATE = 4 + 1000 + 0x124 };   /* "battle" mode: the state after each pass (see below); at least BATTLE_STATE_BYTES */
 static int read_raw(screen_t *scr, const char *path)
 {
     uint8_t *b = malloc(64768);
@@ -114,8 +116,8 @@ int main(int argc, char **argv)
             rc = f ? 0 : 2;
             for (int i = 0; f && i < n; i++) {
                 if (battle_mode) {
-                    int ev = bt ? battle_pass(bt, &scr, port_at(i))
-                                : walk_pass(w, &scr, (uint32_t)(base + (unsigned long)i / div), port_at(i));
+                    uint32_t tk = (uint32_t)(base + (unsigned long)i / div);
+                    int ev = bt ? battle_pass(bt, &scr, port_at(i)) : walk_pass(w, &scr, tk, port_at(i));
                     if (!bt && (ev & WALK_PASS_BATTLE)) {
                         bt = battle_begin(w, &scr);
                         if (!bt) {
@@ -123,17 +125,27 @@ int main(int argc, char **argv)
                             break;
                         }
                     }
+                    if (bt && battle_over(bt) == BATTLE_BACK) {   /* the same pass goes on in the world */
+                        ev = walk_resume(w, tk, port_at(i), battle_result(bt));
+                        battle_free(bt);
+                        bt = NULL;
+                    }
                     if (ev & WALK_PASS_UNBUILT)
                         fprintf(stderr, "battle: pass %d: %s\n", i,
                                 bt ? (battle_unbuilt(bt) ? battle_unbuilt(bt) : "?") : (walk_unbuilt(w) ? walk_unbuilt(w) : "?"));
-                    uint8_t st[1 + BATTLE_STATE_BYTES] = {0};
-                    st[0] = bt == NULL ? 0 : battle_over(bt) ? 2 : 1;
+                    /* the kind of the next arrival: 0 world, 1 battle, 2 lost (the end), 3 the rewards bar, 4 a message box; then the rand
+                     * state and, in the battle, BATTLE_STATE_BYTES - 4, in the world the villager table (1000) and the party table to
+                     * the coins (0x124); zeros after */
+                    uint8_t st[1 + DUMP_STATE] = {0};
+                    st[0] = bt == NULL ? 0 : battle_over(bt) == BATTLE_LOST ? 2 : (uint8_t)battle_kind(bt);
                     if (bt) {
                         battle_state_dump(bt, st + 1);
                     } else {
                         uint32_t r = *walk_rng(w);
                         for (int j = 0; j < 4; j++)
                             st[1 + j] = (uint8_t)(r >> (8 * j));
+                        memcpy(st + 5, walk_scene(w)->tab_a, 1000);
+                        memcpy(st + 1005, walk_scene(w)->tab_b, 0x124);
                     }
                     if (fwrite(scr.pix, 1, sizeof scr.pix, f) != sizeof scr.pix || fwrite(scr.pal, 1, sizeof scr.pal, f) != sizeof scr.pal ||
                         fwrite(st, 1, sizeof st, f) != sizeof st)
@@ -156,6 +168,26 @@ int main(int argc, char **argv)
                 fclose(f);
         }
         battle_free(bt);
+    } else if (!strcmp(mode, "gameover") && argc >= 6) {
+        /* build/walk_dump DATA gameover OUT N START: MARK.EXE's game-over screen from the screen START (64,000 pixels then the
+         * palette); OUT gets the screen after each of N passes */
+        static screen_t scr;
+        gameover_t *g = NULL;
+        if (read_raw(&scr, argv[5]) != 0 || !(g = gameover_begin(&scr))) {
+            fprintf(stderr, "gameover: cannot start\n");
+            rc = 1;
+        } else {
+            FILE *f = fopen(out, "wb");
+            rc = f ? 0 : 2;
+            for (int i = 0; f && i < atoi(argv[4]); i++) {
+                gameover_pass(g, &scr);
+                if (fwrite(scr.pix, 1, sizeof scr.pix, f) != sizeof scr.pix || fwrite(scr.pal, 1, sizeof scr.pal, f) != sizeof scr.pal)
+                    rc = 2;
+            }
+            if (f)
+                fclose(f);
+        }
+        gameover_free(g);
     } else if (!strcmp(mode, "first") && argc >= 5) {
         static screen_t scr;
         if (read_raw(&scr, argv[4]) != 0) {

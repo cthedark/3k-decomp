@@ -39,6 +39,7 @@
 #include "timing.h"
 #include "title.h"
 #include "battle.h"
+#include "gameover.h"
 #include "walk.h"
 
 #define MAX_DUMPS 512
@@ -941,10 +942,11 @@ static int play_walk(screen_t *scr)
      * paces neither). The scene's song stops and the battle's starts: MUC.ALL 0x2bad9, the menu's song, which the loader had read
      * (the original's register writes match the player for 3,119 song ticks). The battle does not end yet. */
     battle_t *bt = NULL;
-    int got = walk_begin_result(w);
+    int got = walk_begin_result(w), result = 1;
     platform_present(scr);
     while (platform_poll()) {
         if (!bt && (got & WALK_PASS_BATTLE)) {
+            got = 0;
             bt = battle_begin(w, scr);
             if (!bt)
                 break;
@@ -959,13 +961,33 @@ static int play_walk(screen_t *scr)
             continue;
         }
         next = next_due(next, now, TK_WALK_PASS_HZ);
+        uint32_t ticks = clock0 + (uint32_t)((unsigned long long)(now - start) * TK_BIOS_TICKS_PER_SEC_NUM /
+                                             TK_BIOS_TICKS_PER_SEC_DEN / 1000u);
         if (bt) {
-            battle_pass(bt, scr, platform_port60());   /* what is not built is said on stderr, once per new case */
+            /* The rewards bar runs at the world's pace (the original paces neither). A message box's wait is a tight loop in the
+             * original that steps the palette every 41st round; 41 rounds a pass here give one step a pass, like the world's cycle
+             * (a choice: how fast the original's loop ran was not measured). */
+            int rounds = battle_kind(bt) == BATTLE_KIND_DIALOG ? 41 : 1;
+            for (int i = 0; i < rounds && !battle_over(bt); i++)
+                battle_pass(bt, scr, platform_port60());   /* what is not built is said on stderr, once per new case */
+            if (battle_over(bt) == BATTLE_LOST) {   /* the original writes 0x3e into ANI.LCP and starts MARK.EXE (play_gameover) */
+                result = 2;
+                break;
+            }
+            if (battle_over(bt) == BATTLE_BACK) {   /* 0x132cb: the scene's song again from its start, and the rest of the pass */
+                printf("walk: the battle is won (%u killed); back in the world\n", battle_result(bt));
+                song_stop(song);
+                song = song_start_at("walk", sc->song_pos, sc->song_len);
+                platform_escape_quits(1);
+                got = walk_resume(w, ticks, platform_port60(), battle_result(bt));
+                battle_free(bt);
+                bt = NULL;
+                if ((got & WALK_PASS_UNBUILT) && walk_unbuilt(w))
+                    fprintf(stderr, "walk: not built: %s\n", walk_unbuilt(w));
+            }
             platform_present(scr);
             continue;
         }
-        uint32_t ticks = clock0 + (uint32_t)((unsigned long long)(now - start) * TK_BIOS_TICKS_PER_SEC_NUM /
-                                             TK_BIOS_TICKS_PER_SEC_DEN / 1000u);
         got = walk_pass(w, scr, ticks, platform_port60());
         if ((got & WALK_PASS_VILLAGER_EVENT) && !event_reported) {
             fprintf(stderr, "walk: a villager reached the case where the original starts an event (not built)\n");
@@ -979,7 +1001,36 @@ static int play_walk(screen_t *scr)
     battle_free(bt);
     platform_escape_quits(1);
     walk_free(w);
-    return 1;
+    return result;
+}
+
+/* MARK.EXE's game-over screen (gameover.h) over what WALK.SL left on `scr`, with its song, until Space or Enter. The original's loop
+ * is unpaced; it runs at the world's pace here (a choice, not measured). Returns 0 after the key, 1 when the window was closed. */
+static int play_gameover(screen_t *scr)
+{
+    gameover_t *g = gameover_begin(scr);
+    if (!g)
+        return 1;
+    music_t *song = song_start_at("gameover", GAMEOVER_SONG_OFFSET, GAMEOVER_SONG_LENGTH);
+    uint32_t next = platform_ticks_ms();
+    int rc = 1;
+    while (platform_poll()) {
+        uint32_t now = platform_ticks_ms();
+        if ((int32_t)(now - next) < 0) {
+            platform_sleep_ms(1);
+            continue;
+        }
+        next = next_due(next, now, TK_WALK_PASS_HZ);
+        gameover_pass(g, scr);
+        platform_present(scr);
+        if (gameover_key(platform_port60())) {
+            rc = 0;
+            break;
+        }
+    }
+    song_stop(song);
+    gameover_free(g);
+    return rc;
 }
 
 /* The world headless: --step-dump N:FILE writes the screen after pass N (raw: 64,000 pixels then the 768-byte
@@ -999,7 +1050,7 @@ static int run_walk_stepped(screen_t *scr, int ndump, const int *dump_pass, cons
     for (int i = 0; i < ndump; i++)
         if (dump_pass[i] > last)
             last = dump_pass[i];
-    int rc = 0;
+    int rc = 0, lost_said = 0;
     battle_t *bt = NULL;
     int got = walk_begin_result(w);
     for (int n = 0; n <= last && rc == 0; n++) {
@@ -1013,6 +1064,15 @@ static int run_walk_stepped(screen_t *scr, int ndump, const int *dump_pass, cons
                 }
             if (bt) {
                 battle_pass(bt, scr, port60);
+                if (battle_over(bt) == BATTLE_BACK) {
+                    got = walk_resume(w, clock0 + (uint32_t)n / 3, port60, battle_result(bt));
+                    battle_free(bt);
+                    bt = NULL;
+                    got &= ~WALK_PASS_BATTLE;
+                } else if (battle_over(bt) == BATTLE_LOST && !lost_said) {
+                    fprintf(stderr, "walk: pass %d: the party has lost (the original goes to MARK.EXE's game-over screen)\n", n);
+                    lost_said = 1;
+                }
             } else {
                 got = walk_pass(w, scr, clock0 + (uint32_t)n / 3, port60);
                 if ((got & WALK_PASS_UNBUILT) && walk_unbuilt(w))
@@ -1083,7 +1143,7 @@ static int run_game(screen_t *scr, int scale, int faithful)
 {
     if (init_platform(scale) != 0)
         return 1;
-    int rc = 0, rounds = 0;
+    int rc = 0, rounds = 0, again = 0;
     for (;;) {
         printf("game: title (round %d)\n", rounds);
         title_result r = play_title(scr);
@@ -1110,9 +1170,15 @@ static int run_game(screen_t *scr, int scale, int faithful)
                     }
                     continue;
                 }
-                if (c == MENU_NEW_GAME) {   /* WALK.SL: only its first screen is built */
-                    printf("game: new game (WALK.SL's first screen; nothing runs after it yet)\n");
+                if (c == MENU_NEW_GAME) {   /* WALK.SL */
+                    printf("game: new game (WALK.SL)\n");
                     int q = play_walk(scr);
+                    if (q == 2) {   /* the party fell: MARK.EXE's game-over screen, then its title as after any start */
+                        printf("game: the party has lost: game over\n");
+                        if (play_gameover(scr) == 0)
+                            again = 1;
+                        break;
+                    }
                     rc = q < 0 ? 1 : 0;
                     break;
                 }
@@ -1120,6 +1186,10 @@ static int run_game(screen_t *scr, int scale, int faithful)
                     printf("game: slot %d picked\n", slot);
                 printf("game: the menu chose %s; that part is not built yet, stopping\n", menu_item_name(c));
                 stop = 1;
+            }
+            if (again) {
+                again = 0;
+                continue;
             }
             break;
         }
@@ -1400,6 +1470,11 @@ int main(int argc, char **argv)
         int rc = walk_start_screen(&screen);
         if (rc == 0)
             rc = play_walk(&screen);
+        if (rc == 2) {   /* lost: MARK.EXE's game-over screen; its title is not started from here */
+            printf("walk: the party has lost\n");
+            play_gameover(&screen);
+            rc = 1;
+        }
         printf("walk: %s\n", rc == 1 ? "closed" : "could not start");
         shutdown_platform();
         return rc < 0 ? 1 : 0;

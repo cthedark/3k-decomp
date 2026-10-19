@@ -65,7 +65,17 @@ struct battle {
     unsigned v10, v78;                 /* the monster's close-up: pass counter, frame */
     unsigned vc, v58, v54;             /* the hit face: frame (5 = none), pass counter, its screen place */
     unsigned v14;                      /* the field's shaking after a monster's blow */
-    int over;                          /* won or lost: not built, the battle stops */
+    int over;                          /* 0 while fighting; BATTLE_LOST, or BATTLE_BACK once the world takes over */
+    /* what follows a win (0x1f900 .. 0x1fd01, then the world's 0x12e56 .. 0x132f1) */
+    int phase;                         /* BATTLE_KIND_FIGHT, _REWARDS or _DIALOG */
+    unsigned kills;                    /* [bp-0x66]: what the battle returns, the slots whose monster died */
+    uint8_t glyphs[12 * 169];          /* NUMBER.LCZ 0x359b: 13 x 13 pictures of x, = and the digits 0 .. 9 ([bp-0x4c]) */
+    uint8_t bar[BATTLE_FIELD_W * 13];  /* [bp-0x24]: "kills x per monster = coins", drawn over the field */
+    unsigned bar_at, bar_step;         /* [bp-0x56] (from the field picture's header), [bp-0x64] */
+    unsigned lu;                       /* the next party member whose level is looked at */
+    uint8_t font8[128 * 15];           /* RPG.LCP 0x1a6b7: the message box's 8 x 15 one-bit ASCII characters (font buffer + 0x223e) */
+    uint8_t under[SCREEN_W * 46];      /* what the message box covers (screen rows 134 .. 179) */
+    unsigned dlg_count, dlg_wait;      /* [bp-0x16] (a palette step when it passes 0x28), [bp-0x18] (a release must come first) */
     char unbuilt[120];
     int unbuilt_new;
 };
@@ -94,6 +104,16 @@ const char *battle_unbuilt(const battle_t *b)
 int battle_over(const battle_t *b)
 {
     return b->over;
+}
+
+int battle_kind(const battle_t *b)
+{
+    return b->phase;
+}
+
+unsigned battle_result(const battle_t *b)
+{
+    return b->kills;
 }
 
 /* ---- screen pieces (0x270e0, 0x27123, 0x27328) ---- */
@@ -346,11 +366,27 @@ battle_t *battle_begin(walk_t *w, screen_t *scr)
         assets_read_at("RPG.LCP", 0xD30, b->font, sizeof b->font) != 0 ||
         assets_read_at("RPG.LCP", 0xC9A, b->font2, sizeof b->font2) != 0 ||
         assets_read_at("RPG.LCP", 0xB5A, b->sparks, sizeof b->sparks) != 0 ||
-        assets_read_at("RPG.LCP", 0x198D8, b->fxmem + FX_N * 64, SHOUTS * 0xFF) != 0) {
+        assets_read_at("RPG.LCP", 0x198D8, b->fxmem + FX_N * 64, SHOUTS * 0xFF) != 0 ||
+        assets_read_at("RPG.LCP", 0x1A6B7, b->font8, sizeof b->font8) != 0) {
         fprintf(stderr, "battle: RPG.LCP is too short\n");
         free(b);
         return NULL;
     }
+    {   /* NUMBER.LCZ 0x359b (0x25eeb at the win): x, = and the ten digits, 13 x 13 each, no headers */
+        uint8_t head[3];
+        size_t len = 0;
+        uint8_t *g = assets_read_at("NUMBER.LCZ", 0x359B, head, 3) == 0 ? read_unpack("NUMBER.LCZ", 0x359B, w16(head, 1), &len, NULL) : NULL;
+        int ok = g && len >= sizeof b->glyphs;
+        if (ok)
+            memcpy(b->glyphs, g, sizeof b->glyphs);
+        free(g);
+        if (!ok) {
+            fprintf(stderr, "battle: the reward digits in NUMBER.LCZ are missing or too short\n");
+            free(b);
+            return NULL;
+        }
+    }
+    b->phase = BATTLE_KIND_FIGHT;
     {   /* RPG.LCP 0x135e4: the hit pictures, then (at +0x25e) the members' attack pictures; 0x14891: the six dying masks */
         uint8_t *raw = NULL;
         size_t len = 0, mlen = 0;
@@ -458,6 +494,7 @@ battle_t *battle_begin(walk_t *w, screen_t *scr)
     /* [bp-0x38] is never set before the loop: it holds what the stack had there, the SI the world pushed for its copy at 0x199a8,
      * the touched record's offset in the villager table (low byte). Not 0 means a held key counts at once. */
     b->latch = rec & 0xFF;
+    b->v84 = *walk_battle_left(w);   /* seen 1 after a won battle (2026-10-19, walk at clock 20300); never read before it is set */
     b->choosing = 0;
     b->v42 = 5;   /* 0x1d3e4, 0x1d3e8: no hit picture, no hit face running */
     b->vc = 5;
@@ -468,8 +505,10 @@ battle_t *battle_begin(walk_t *w, screen_t *scr)
 
 void battle_free(battle_t *b)
 {
-    if (b)
+    if (b) {
+        *walk_battle_left(b->w) = b->v84;
         free(b->atk);
+    }
     free(b);
 }
 
@@ -900,9 +939,9 @@ static void monster_blow(battle_t *b, screen_t *scr)
     unsigned o = 3;
     while (o < 0xC8 && !(w16(party, o + 5) != 0 && party[o] < 0xA))
         o += 0x28;
-    if (o == 0xCB) {
-        b->over = 2;
-        note(b, "the party has lost (the end of a battle)");
+    if (o == 0xCB) {   /* 0x1dba1: nobody left: the battle returns 0 and the world sends the game to MARK.EXE's game-over screen */
+        b->over = BATTLE_LOST;
+        b->kills = 0;
         return;
     }
     r = walk_rand(rng) / 0x199A + 7;
@@ -998,11 +1037,265 @@ static void keys(battle_t *b, screen_t *scr, unsigned k)
     }
 }
 
+/* ---- what follows a win ---- */
+
+/* 0x25d82: a 13 x 13 picture into the bar at column x. */
+static void bar_glyph(battle_t *b, unsigned x, unsigned g)
+{
+    for (unsigned r = 0; r < 13; r++)
+        memcpy(b->bar + r * BATTLE_FIELD_W + x, b->glyphs + g * 169 + r * 13, 13);
+}
+
+/* 0x1f900 .. 0x1fb7a: the bar "kills x coins per monster = coins" (glyph 0 is x, 1 is =, 2 + d the digit d; numbers through the
+ * five-digit 0x26450, of which the last three and the last four are shown), the coins added (at most 50,000) and shown at once. */
+static void start_rewards(battle_t *b, screen_t *scr)
+{
+    unsigned kills = 0;
+    for (unsigned i = 2; i < 0x14; i += 4)
+        if (b->mon[i] > 2 && b->mon[i] < 9)
+            kills++;
+    unsigned per = b->mon[0x2B], total = (kills * per) & 0xFFFF;
+    b->kills = kills;
+    memset(b->bar, 0, sizeof b->bar);
+    bar_glyph(b, 3, 2 + kills);
+    bar_glyph(b, 0x16, 0);
+    char d[6];
+    snprintf(d, sizeof d, "%05u", per);
+    for (int i = 2; i < 5; i++)
+        bar_glyph(b, 0x29 + 0x13 * (unsigned)(i - 2), 2 + (unsigned)(d[i] - '0'));
+    bar_glyph(b, 0x62, 1);
+    snprintf(d, sizeof d, "%05u", total);
+    for (int i = 1; i < 5; i++)
+        bar_glyph(b, 0x75 + 0x13 * (unsigned)(i - 1), 2 + (unsigned)(d[i] - '0'));
+    uint8_t *party = party_of(b);
+    unsigned g = battle_add_coins(w16(party, WALK_GOLD_AT), kills, per);
+    party[WALK_GOLD_AT] = (uint8_t)g;
+    party[WALK_GOLD_AT + 1] = (uint8_t)(g >> 8);
+    walk_show_gold(b->w, scr);
+    b->bar_at = 0x1744;
+    b->bar_step = 0x180;
+    b->phase = BATTLE_KIND_REWARDS;
+}
+
+static void level_ups(battle_t *b, screen_t *scr);
+
+/* 0x1fb7d: the field sways on, the palette cycles, the bar bobs between rows 31 and 56; Space, Esc or Enter ends the battle. */
+static void rewards_pass(battle_t *b, screen_t *scr, unsigned port60)
+{
+    if (b->dir) {
+        if (++b->count == 3)
+            b->dir = 0;
+    } else if (--b->count == 0) {
+        b->dir = 1;
+    }
+    battle_sway(b->back, b->field, b->count, b->dir);
+    walk_palette_step(b->w, scr);
+    b->bar_at = (b->bar_at + b->bar_step - 0xC0) & 0xFFFF;
+    if (b->bar_at > 0x2944 || b->bar_at < 0x1804) {
+        b->bar_step = (b->bar_step + 0x180) & 0xFFFF;
+        if (b->bar_step > 0x180)
+            b->bar_step = 0;
+    }
+    for (unsigned i = 0; i < sizeof b->bar; i++)   /* 0x26d52: colour 0 is transparent */
+        if (b->bar[i] && b->bar_at - 4 + i < sizeof b->field)
+            b->field[b->bar_at - 4 + i] = b->bar[i];
+    put(scr, FIELD_AT, b->field, BATTLE_FIELD_W, BATTLE_FIELD_H);
+    unsigned k = port60 & 0xFF;
+    if (k == 0x39 || k == 1 || k == 0x1C) {   /* the Sound Blaster's sample is stopped here when there is one (not built) */
+        b->lu = 0;
+        level_ups(b, scr);
+    }
+}
+
+/* 0x2464a: a Big5 character's place in NUMBER.LCZ (30-byte cells from 0x3b20; lead bytes 0xa4 .. 0xc6, then 0xc9 on after 0x1519
+ * cells). (size_t)-1 for a lead byte outside both. */
+size_t battle_glyph_offset(unsigned hi, unsigned lo)
+{
+    if (lo >= 0x40 && lo <= 0x7E)
+        lo -= 0x40;
+    else if (lo >= 0xA1 && lo <= 0xFE)
+        lo -= 0x62;
+    size_t idx;
+    if (hi >= 0xA4 && hi <= 0xC6)
+        idx = (size_t)(hi - 0xA4) * 0x9D + lo;
+    else if (hi >= 0xC9)
+        idx = (size_t)(hi - 0xC9) * 0x9D + lo + 0x1519;
+    else
+        return (size_t)-1;
+    return 0x3B20 + 0x1E * idx;
+}
+
+/* The message box's character: `bits` (MSB first, `w` / 8 bytes a row, 14 rows) in `colour`, recoloured from data byte `split` on to
+ * colour + 1 and from 2 * split - 2 (the loop's 0x25 / 0x50 steps) to colour + 2; a shadow of colour + 6 one row down, at x and x + 1. */
+static void message_char(screen_t *scr, unsigned at, const uint8_t *bits, unsigned w, uint8_t colour)
+{
+    uint8_t px[16 * 14];
+    unsigned n = w * 14, bw = w / 8;
+    for (unsigned r = 0; r < 14; r++)
+        for (unsigned x = 0; x < w; x++)
+            px[r * w + x] = (bits[r * bw + x / 8] << (x % 8)) & 0x80 ? colour : 0;
+    /* 0x2741b twice: 8 wide from 0x26 (37 bytes each), 16 wide from 0x50 (80 bytes each) */
+    unsigned from = w == 8 ? 0x26 : 0x50, step = w == 8 ? 0x25 : 0x50;
+    for (unsigned k = 0; k < 2; k++)
+        for (unsigned i = from + k * step; i < from + (k + 1) * step && i < n; i++)
+            if (px[i] == colour)
+                px[i] = (uint8_t)(colour + 1 + k);
+    static const unsigned shadow[2] = {SCREEN_W + 1, SCREEN_W};
+    for (int s = 0; s < 2; s++)   /* 0x25b54 */
+        for (unsigned i = 0; i < n; i++)
+            if (px[i] && at + shadow[s] + (i / w) * SCREEN_W + i % w < SCREEN_W * SCREEN_H)
+                scr->pix[at + shadow[s] + (i / w) * SCREEN_W + i % w] = (uint8_t)(colour + 6);
+    for (unsigned i = 0; i < n; i++)   /* 0x27371 */
+        if (px[i] && at + (i / w) * SCREEN_W + i % w < SCREEN_W * SCREEN_H)
+            scr->pix[at + (i / w) * SCREEN_W + i % w] = px[i];
+}
+
+/* 0x1afb0 with the wait flag: message `msg` of MES_TXT.LCC (0x78 bytes at (msg - 1) * 0x80 + 6, up to '#') over the darkened bottom of
+ * the screen (rows 134 .. 179: shaded twice, rows 135 .. 178 twice more), in colour 0x70; then the box waits (dialog_pass). Returns -1 if
+ * the text cannot be read. */
+static int start_message(battle_t *b, screen_t *scr, unsigned msg)
+{
+    uint8_t text[0x78];
+    if (msg == 0 || assets_read_at("MES_TXT.LCC", (size_t)(msg - 1) * 0x80 + 6, text, sizeof text) != 0) {
+        note(b, "a message that MES_TXT.LCC does not have");
+        return -1;
+    }
+    unsigned n = 0;
+    while (n < sizeof text && text[n] != '#')
+        n++;
+    const uint8_t colour = 0x70;
+    unsigned x = 0, row = 0x87;
+    if (n < 0x28) {
+        row += 15;
+        x += 8 * ((0x28 - n) / 2);
+    } else if (n < 0x50) {
+        row += 7;
+    }
+    /* the box (the wait flag puts it at row 134, 320 x 46 whatever the text's length): 0x2723c takes the screen into the world buffer,
+     * 0x27503 copies it 5 bytes on, 4 bytes short: the copy's last 4 pixels are the world buffer's bytes 0x7305 .. 0x7308, which in a
+     * battle are the backdrop's 0x1ea5 .. 0x1ea8 */
+    memcpy(b->under, scr->pix + 0xA780, sizeof b->under);
+    uint8_t box[sizeof b->under];
+    memcpy(box, b->under, sizeof box);
+    memcpy(box + sizeof box - 4, b->back + 0x1EA5, 4);
+    for (int t = 0; t < 2; t++)
+        for (unsigned i = 0; i < sizeof box; i++)
+            box[i] = b->table[box[i]];
+    for (int t = 0; t < 2; t++)
+        for (unsigned i = SCREEN_W; i < SCREEN_W * 45; i++)
+            box[i] = b->table[box[i]];
+    memcpy(scr->pix + 0xA780, box, sizeof box);
+    for (unsigned i = 0; i < n; i++) {
+        unsigned at = SCREEN_W * row + x;
+        if (text[i] < 0x80) {
+            message_char(scr, at, b->font8 + text[i] * 15, 8, colour);
+            x += 8;
+        } else {
+            unsigned hi = text[i], lo = ++i < n ? text[i] : 0;
+            uint8_t g[28];
+            size_t off = battle_glyph_offset(hi, lo);
+            if (off == (size_t)-1 || assets_read_at("NUMBER.LCZ", off, g, sizeof g) != 0) {
+                note(b, "a character the message font does not have");
+                memset(g, 0, sizeof g);
+            }
+            if (x == 0x138) {
+                x = 0;
+                row += 15;
+            }
+            message_char(scr, SCREEN_W * row + x, g, 16, colour);
+            x += 16;
+        }
+        if (x == 0x140) {
+            x = 0;
+            row += 15;
+        }
+    }
+    b->dlg_count = colour + 3;   /* [bp-0x16] after the last recolouring loop */
+    b->dlg_wait = 1;
+    b->phase = BATTLE_KIND_DIALOG;
+    return 0;
+}
+
+/* 0x1b506: one round of the message box's wait: the palette steps every 41st; a key counts after a release has been seen. */
+static void dialog_pass(battle_t *b, screen_t *scr, unsigned port60)
+{
+    if (++b->dlg_count > 0x28) {
+        b->dlg_count = 0;
+        walk_palette_step(b->w, scr);
+    }
+    unsigned k = port60 & 0xFF;
+    if (k > 0x7F)
+        b->dlg_wait = 0;
+    if (b->dlg_wait)
+        k = 0x80;
+    if (k >= 0x80)
+        return;
+    memcpy(scr->pix + 0xA780, b->under, sizeof b->under);   /* 0x27328(0xa780, ...) */
+    level_ups(b, scr);
+}
+
+/* 0x130e2 .. 0x13291: each member whose experience (word 4) has reached the next level's (word 6, below 60,000) gets it as his
+ * experience, the next one 500 higher, his most HP (word 0xa) a twelfth more and full HP (each at most 60,000), and the message
+ * 0x2e2 + his number. Then the world goes on (BATTLE_BACK). An enemy with byte 0x2f set goes another way first (not built). */
+static void level_ups(battle_t *b, screen_t *scr)
+{
+    uint8_t *party = party_of(b);
+    unsigned member, group, boss, rec;
+    walk_battle_info(b->w, &member, &group, &boss, &rec);
+    if (boss && b->lu == 0)
+        note(b, "what follows a battle with an enemy whose byte 0x2f is set (0x12fc3)");
+    for (; b->lu < 5; b->lu++) {
+        uint8_t *m = party + 0x28 * b->lu;
+        if (!battle_level_up(m))
+            continue;
+        unsigned msg = m[3] + 0x2E2u;
+        b->lu++;
+        if (start_message(b, scr, msg) == 0)
+            return;
+    }
+    b->over = BATTLE_BACK;   /* the mouse pointer and the music are the caller's (0x1329d .. 0x132f1) */
+}
+
+int battle_level_up(uint8_t m[0x28])
+{
+    unsigned e = w16(m, 4), nx = w16(m, 6);
+    if (e < nx || e >= 0xEA60)
+        return 0;
+    m[4] = (uint8_t)nx;
+    m[5] = (uint8_t)(nx >> 8);
+    nx = (nx + 0x1F4) & 0xFFFF;
+    if (nx > 0xEA60)
+        nx = 0xEA60;
+    m[6] = (uint8_t)nx;
+    m[7] = (uint8_t)(nx >> 8);
+    unsigned hp = w16(m, 0xA);
+    hp = (hp + hp / 12) & 0xFFFF;
+    if (hp > 0xEA60)
+        hp = 0xEA60;
+    m[0xA] = m[8] = (uint8_t)hp;
+    m[0xB] = m[9] = (uint8_t)(hp >> 8);
+    return 1;
+}
+
+unsigned battle_add_coins(unsigned coins, unsigned kills, unsigned per)
+{
+    unsigned g = (coins + ((kills * per) & 0xFFFF)) & 0xFFFF;
+    return g > 0xC350 ? 0xC350 : g;
+}
+
 int battle_pass(battle_t *b, screen_t *scr, unsigned port60)
 {
     b->unbuilt_new = 0;
-    if (b->over)   /* won or lost: what follows is not built, the battle stands still */
-        return WALK_PASS_UNBUILT;
+    if (b->over)   /* lost, or back in the world */
+        return 0;
+    if (b->phase == BATTLE_KIND_REWARDS) {
+        rewards_pass(b, scr, port60);
+        return b->unbuilt_new ? WALK_PASS_UNBUILT : 0;
+    }
+    if (b->phase == BATTLE_KIND_DIALOG) {
+        dialog_pass(b, scr, port60);
+        return b->unbuilt_new ? WALK_PASS_UNBUILT : 0;
+    }
     uint8_t *party = party_of(b);
     walk_palette_step(b->w, scr);
     if (b->v28 != b->v82) {
@@ -1041,7 +1334,7 @@ int battle_pass(battle_t *b, screen_t *scr, unsigned port60)
                     b->v78 = 0;
                     monster_blow(b, scr);
                     if (b->over)
-                        return WALK_PASS_UNBUILT;
+                        return 0;
                 }
             }
         }
@@ -1051,10 +1344,9 @@ int battle_pass(battle_t *b, screen_t *scr, unsigned port60)
         for (int i = 0x32; i < 0x37; i++)
             if (b->mon[i])
                 left = 1;
-        if (!left) {
-            b->over = 1;
-            note(b, "the party has won (the end of a battle)");
-            return WALK_PASS_UNBUILT;
+        if (!left) {   /* 0x1dc42: won */
+            start_rewards(b, scr);
+            return b->unbuilt_new ? WALK_PASS_UNBUILT : 0;
         }
         unsigned fh = 0x34;   /* an empty front slot takes the first live one from the back, with full HP */
         for (unsigned o = 0xA; o < 0x14; o += 4, fh++) {

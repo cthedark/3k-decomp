@@ -102,6 +102,48 @@ static void test_blows(void)
     CHECK(battle_hit_slot(0x60) == 3 && battle_hit_slot(0x61) == 4 && battle_hit_slot(0x70) == 4 && battle_hit_slot(0xBF) == 4);
 }
 
+static void put16(uint8_t *m, int o, unsigned v)
+{
+    m[o] = (uint8_t)v;
+    m[o + 1] = (uint8_t)(v >> 8);
+}
+
+static unsigned get16(const uint8_t *m, int o)
+{
+    return m[o] | (unsigned)m[o + 1] << 8;
+}
+
+/* what follows a win: worked out from 0x130e2 .. 0x13246 and 0x1fb02 .. 0x1fb3b */
+static void test_after_win(void)
+{
+    uint8_t m[0x28] = {0};
+    put16(m, 4, 199), put16(m, 6, 200), put16(m, 8, 300), put16(m, 0xA, 600);
+    CHECK(battle_level_up(m) == 0 && get16(m, 4) == 199 && get16(m, 8) == 300);   /* one short */
+    put16(m, 4, 230);
+    CHECK(battle_level_up(m) == 1);
+    CHECK(get16(m, 4) == 200 && get16(m, 6) == 700 && get16(m, 0xA) == 650 && get16(m, 8) == 650);   /* the rest is lost; 600 / 12 */
+    put16(m, 4, 59900), put16(m, 6, 59800), put16(m, 0xA, 59000);
+    CHECK(battle_level_up(m) == 1 && get16(m, 6) == 60000 && get16(m, 0xA) == 60000);   /* both capped */
+    put16(m, 4, 60000), put16(m, 6, 100);
+    CHECK(battle_level_up(m) == 0 && get16(m, 4) == 60000);   /* 60,000 or more: never again */
+    put16(m, 4, 65535), put16(m, 6, 65400), put16(m, 0xA, 11);
+    CHECK(battle_level_up(m) == 0);
+    put16(m, 4, 0), put16(m, 6, 0), put16(m, 0xA, 11);
+    CHECK(battle_level_up(m) == 1 && get16(m, 6) == 500 && get16(m, 0xA) == 11 && get16(m, 8) == 11);   /* 11 / 12 = 0 */
+    put16(m, 4, 0xFF00), put16(m, 6, 0xFF00);
+    CHECK(battle_level_up(m) == 0);
+    put16(m, 4, 59999), put16(m, 6, 59999), put16(m, 0xA, 0xFFF0);
+    CHECK(battle_level_up(m) == 1 && get16(m, 0xA) == (0xFFF0 + 0xFFF0 / 12) - 0x10000);   /* 16-bit, wraps below the cap */
+    CHECK(battle_add_coins(0, 5, 1) == 5 && battle_add_coins(100, 0, 9) == 100);
+    CHECK(battle_add_coins(49999, 1, 1) == 50000 && battle_add_coins(49999, 2, 1) == 50000 && battle_add_coins(60000, 0, 0) == 50000);
+    CHECK(battle_add_coins(65535, 1, 1) == 0);   /* the sum is 16-bit */
+    /* the message font: Big5 lead bytes 0xa4 .. 0xc6, then 0xc9 on after 0x1519 cells (0x2464a) */
+    CHECK(battle_glyph_offset(0xA4, 0x40) == 0x3B20 && battle_glyph_offset(0xA4, 0x7E) == 0x3B20 + 0x1E * 0x3E);
+    CHECK(battle_glyph_offset(0xA4, 0xA1) == 0x3B20 + 0x1E * 0x3F && battle_glyph_offset(0xA5, 0x40) == 0x3B20 + 0x1E * 157);
+    CHECK(battle_glyph_offset(0xC9, 0x40) == 0x3B20 + 0x1E * 0x1519u && battle_glyph_offset(0xC7, 0x40) == (size_t)-1);
+    CHECK(battle_glyph_offset(0xAE, 0xA5) == 0x3B20 + 0x1E * (10 * 157 + 0x43));   /* 恭 */
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -110,6 +152,7 @@ int main(void)
     test_sway();
     test_number();
     test_blows();
+    test_after_win();
     printf("%s: %d failure(s)\n", failures ? "FAILED" : "ok", failures);
     return failures ? 1 : 0;
 }
