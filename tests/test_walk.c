@@ -884,6 +884,36 @@ static void test_pass_wiring(void)
     walk_free(w);
 }
 
+/* 0x2c8a0: the key of a left press in the world. The places and keys were SEEN in the oracle (one press at pass 3 of scene 1, the key
+ * read back at 0x1372d after the call, 2026-10-19), the last key 0 (not an arrow). */
+static void test_mouse_key(void)
+{
+    static const struct { unsigned x, y, k; } seen[] = {
+        {20, 5, 0x3B}, {20, 25, 0x3C}, {20, 45, 0x3D}, {20, 65, 0x3E}, {20, 85, 0x3F}, {20, 105, 0x40}, {20, 125, 0x41},
+        {20, 150, 0x42}, {20, 165, 0x4B}, {20, 190, 0x1E}, {290, 60, 0x43}, {290, 85, 0x44}, {290, 100, 2}, {290, 120, 3},
+        {290, 140, 4}, {290, 170, 5}, {4, 50, 0x3D}, {50, 50, 0x3D}, {51, 50, 0x4B}, {269, 60, 0x43}, {300, 57, 0x4D},
+        {300, 178, 0x4D}, {100, 30, 0x48}, {230, 120, 0x4D}, {160, 150, 0x50}, {160, 100, 0x4D},
+    };
+    for (size_t i = 0; i < sizeof seen / sizeof seen[0]; i++)
+        CHECK(walk_mouse_key(seen[i].x, seen[i].y, 0) == seen[i].k);
+    /* read from the code: after an arrow the press is an arrow everywhere; the edges of the two button columns */
+    CHECK(walk_mouse_key(20, 5, 0x48) == 0x4B);
+    CHECK(walk_mouse_key(20, 5, 0x50) == 0x4B);
+    CHECK(walk_mouse_key(20, 5, 0x51) == 0x3B);
+    CHECK(walk_mouse_key(20, 5, 0x47) == 0x3B);
+    CHECK(walk_mouse_key(3, 50, 0) == 0x4B && walk_mouse_key(0x33, 50, 0) == 0x4B && walk_mouse_key(0x32, 50, 0) == 0x3D);
+    CHECK(walk_mouse_key(20, 0x15, 0) == 0x3B && walk_mouse_key(20, 0x16, 0) == 0x3C && walk_mouse_key(20, 0x8D, 0) == 0x41);
+    CHECK(walk_mouse_key(20, 0xA1, 0) == 0x42 && walk_mouse_key(20, 0xA2, 0) == 0x4B && walk_mouse_key(20, 0xAE, 0) == 0x4B);
+    CHECK(walk_mouse_key(20, 0xAF, 0) == 0x1E);
+    CHECK(walk_mouse_key(0x10C, 60, 0) == 0x4D && walk_mouse_key(0x10D, 60, 0) == 0x43 && walk_mouse_key(0x13C, 60, 0) == 0x4D);
+    CHECK(walk_mouse_key(290, 0x3A, 0) == 0x43 && walk_mouse_key(290, 0x4D, 0) == 0x43 && walk_mouse_key(290, 0x4E, 0) == 0x44);
+    CHECK(walk_mouse_key(290, 0x9D, 0) == 4 && walk_mouse_key(290, 0x9E, 0) == 5 && walk_mouse_key(290, 0xB1, 0) == 5);
+    CHECK(walk_mouse_key(290, 0xB2, 0) == 0x4D);
+    CHECK(walk_mouse_key(0xA0, 0x64, 0) == 0x4D && walk_mouse_key(0x9F, 0x64, 0) == 0x4B);   /* equal distances: across */
+    CHECK(walk_mouse_key(0xA0, 0x63, 0) == 0x48 && walk_mouse_key(0xA0, 0x65, 0) == 0x50);
+    CHECK(walk_mouse_key(0xA5, 0x5F, 0) == 0x4D && walk_mouse_key(0xA5, 0x5E, 0) == 0x48);
+}
+
 static void test_resume_stride(void)
 {
     printf("the pass resumed after a battle decides with the rain stride of the pass that touched, not the clock's\n");
@@ -1138,11 +1168,11 @@ static void test_walking(void)
     uint32_t rand_after = (uint32_t)st2[1000] | (uint32_t)st2[1001] << 8 | (uint32_t)st2[1002] << 16 | (uint32_t)st2[1003] << 24;
     CHECK(rand_after != rand_before);                /* the shake drew from rand() */
 
-    /* a key the port does not build is reported, once per pass it is seen (F1, 0x3b) */
-    const keyev f1[] = {{0, 0x3B}};
+    /* a key the port does not build is reported, once per pass it is seen (F2, 0x3c; F1 is built) */
+    const keyev f1[] = {{0, 0x3C}};
     CHECK(BEGIN());
     int rc = run_walk(w, &scr, f1, 1, 3, NULL, NULL, NULL);
-    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x3b"));
+    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x3c"));
 
     /* the keys 1, 2 and A are released while they repeat: reported on the first pass only */
     const keyev akey[] = {{3, 0x1E}};
@@ -1334,6 +1364,7 @@ int main(int argc, char **argv)
     test_motion_whole();
     test_pass_wiring();
     test_resume_stride();
+    test_mouse_key();
     test_foot();
     test_trail_and_records();
     test_walking();

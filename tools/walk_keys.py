@@ -11,6 +11,8 @@ Usage: tools/walk_keys.py fuzz SEED NPASSES    random presses and releases of th
                                                to (60, 46), to (86, 73) and back to (40, 46); about 470 passes
        tools/walk_keys.py yoyo SEED NPASSES    right and left in turn with short holds and now and then a vertical nudge; it keeps the hero
                                                around the house door (x 34 .. 44), so scene records are stepped on again and again
+       tools/walk_keys.py talk SEED NPASSES    short walks with the arrows, each followed by F1 (talk) one time in two, then Space or Enter
+                                               every 30 to 90 passes (a message box takes a key after a release)
 Codes: 0x48 up, 0x50 down, 0x4b left, 0x4d right; the break code is the make code + 0x80.
 """
 import random
@@ -98,6 +100,26 @@ def door(seed, n):
     return [f"--key {p}:{c:#x}" for p, c in ((10, 0x4D), (16, 0xCD), (30, 0x48), (130, 0xC8), (150, 0x50), (260, 0xD0))]
 
 
+def talk(seed, n):
+    rng = random.Random(seed)
+    make = [0x48, 0x50, 0x4B, 0x4D]
+    t, out = 8, []
+    while t < n - 120:
+        k = rng.choice(make)
+        hold = rng.randint(1, 12)
+        out += [f"--key {t}:{k:#x}", f"--key {t + hold}:{k + 0x80:#x}"]
+        t += hold + rng.randint(1, 6)
+        if rng.random() < 0.5:
+            out += [f"--key {t}:0x3b", f"--key {t + 2}:0xbb"]
+            t += 4
+            for _ in range(rng.randint(1, 3)):
+                t += rng.randint(30, 90)
+                c = rng.choice([0x39, 0x1C])
+                out += [f"--key {t}:{c:#x}", f"--key {t + 2}:{c + 0x80:#x}"]
+            t += 4
+    return out
+
+
 def route(seed, n):
     import walk_route
     events, end, _m = walk_route.plan([(60, 46), (86, 73), (40, 46)])
@@ -106,6 +128,6 @@ def route(seed, n):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4 or sys.argv[1] not in ("fuzz", "shoot", "volley", "yoyo", "door", "route"):
+    if len(sys.argv) != 4 or sys.argv[1] not in ("fuzz", "shoot", "volley", "yoyo", "door", "route", "talk"):
         raise SystemExit(__doc__)
-    print(" ".join({"fuzz": fuzz, "shoot": shoot, "volley": volley, "yoyo": yoyo, "door": door, "route": route}[sys.argv[1]](int(sys.argv[2]), int(sys.argv[3]))))
+    print(" ".join({"fuzz": fuzz, "shoot": shoot, "volley": volley, "yoyo": yoyo, "door": door, "route": route, "talk": talk}[sys.argv[1]](int(sys.argv[2]), int(sys.argv[3]))))

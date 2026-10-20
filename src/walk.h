@@ -93,6 +93,24 @@ int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60);
 /* ---- for battle.c: a pass that returns WALK_PASS_BATTLE has left the loop where the original leaves it for a battle (after the
  * window copy, before the villagers' steps), with the touched enemy already moved away when its byte 0x2f is 0. ---- */
 uint32_t *walk_rng(walk_t *w);
+/* The mouse: `on` when a driver is there (the original asks INT 33h once at its start), and what it reports (function 3: x and y in
+ * screen pixels, the buttons, bit 0 the left one). The battle reads it through walk_mouse, which returns `on`. */
+void walk_set_mouse(walk_t *w, int on, int x, int y, unsigned buttons);
+int walk_mouse(const walk_t *w, int *x, int *y, unsigned *buttons);
+/* The pointer's 6 x 10 pictures: grab from the screen, put (with `clear`, colour 0 transparent); the shared buffer kept under it, the
+ * pointer itself (RPG.LCP 0x300); hide puts back what is under it (0x1287a, at a touch); reset keeps the corner (0x132b0, after a
+ * battle). Pixels past the screen's end are dropped (they are read as 0). */
+void walk_mouse_grab(const screen_t *scr, unsigned at, uint8_t out[60]);
+void walk_mouse_put(screen_t *scr, unsigned at, const uint8_t px[60], int clear);
+uint8_t *walk_mouse_under(walk_t *w);
+const uint8_t *walk_mouse_pic(const walk_t *w);
+void walk_mouse_hide(walk_t *w, screen_t *scr);
+void walk_mouse_reset(walk_t *w, screen_t *scr);
+/* (0x2c8a0) The key a left press at (x, y) stands for in the world, `last` the key of the pass before. */
+unsigned walk_mouse_key(unsigned x, unsigned y, unsigned last);
+/* Which loop the world's next pass is in, for comparing with the original's loop tops: 0 the world (0x11d36), 4 a talk's message box
+ * (0x1b506). */
+int walk_kind(const walk_t *w);
 /* The palette cycle of 0x1c284 (the battle runs it too, on the same counters). */
 void walk_palette_step(walk_t *w, screen_t *scr);
 /* The touch: the member's offset in the party table (0, 0x28, ...), the monster group, the enemy record's byte 0x2f and the record's

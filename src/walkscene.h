@@ -83,6 +83,8 @@ int walk_scene_apply_records(walk_scene_t *s);
 /* The flag test of the original (0x2c158, mode 0): bit `bit` of byte `idx` of the flag table, with the shift count
  * bit + 1 masked to 5 bits as the CPU does; a count of 0 leaves the carry as the compare before it set it, i.e. 1. */
 int walk_flag_test(const uint8_t *tab_b, unsigned idx, unsigned bit);
+/* (0x2c158, mode 1) Set flag bit `bit` of byte `idx` of the flag table (a bit number of 8 or more sets nothing). */
+void walk_flag_set(uint8_t *tab_b, unsigned idx, unsigned bit);
 
 /* Write the whole loaded state to `path` as the concatenation, in this order: gmap, omap, tab_a, tab_b, list, trail,
  * tiles (tiles_len), sprites (sprites_len), bank1 (bank1_len), bank2 (bank2_len), then a text line with

@@ -1,5 +1,6 @@
 /* WALK.SL's battle, stage 1: the hand-over from the world, the first screen and the idle passes. See battle.h. */
 #include "battle.h"
+#include "msgbox.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -74,8 +75,26 @@ struct battle {
     unsigned bar_at, bar_step;         /* [bp-0x56] (from the field picture's header), [bp-0x64] */
     unsigned lu;                       /* the next party member whose level is looked at */
     uint8_t font8[128 * 15];           /* RPG.LCP 0x1a6b7: the message box's 8 x 15 one-bit ASCII characters (font buffer + 0x223e) */
-    uint8_t under[SCREEN_W * 46];      /* what the message box covers (screen rows 134 .. 179) */
-    unsigned dlg_count, dlg_wait;      /* [bp-0x16] (a palette step when it passes 0x28), [bp-0x18] (a release must come first) */
+    msgbox_t box;                      /* a level-up's message box (msgbox.h) */
+    /* command 1, the magic list (0x21486), and the member picker it opens (0x1a8a4) */
+    uint8_t mg_bar[0x8A8];             /* RPG.LCP 0xe95 decoded: the 96 x 15 row with its header, then the icons, 48 wide */
+    uint8_t mg_tab[100];               /* the field + 0x7d0: per spell MAGICT.LCC bytes 0xc .. 0x13 (level, heal, defence, revive, result) */
+    unsigned mg_cur, mg_prev, mg_idx;  /* [bp-0xa], [bp-0x10]: the highlighted row's screen place; [bp-0x22]: 10 x the spell */
+    unsigned mg_latch, mg_count;       /* [bp-0x1e]; [bp-0x1c] (a palette step when it passes 0x28) */
+    unsigned pk_sel, pk_prev, pk_m;    /* the picker's box [bp-0x14], the box drawn last, the member [bp-0x1a] */
+    unsigned pk_latch, pk_count, pk_faces, pk_dead;   /* [bp-0x1c], [bp-0x16]; its two flags (faces drawn, a fallen one may be chosen) */
+    unsigned v66;                      /* [bp-0x66] in the fight: a spell's flashes are running */
+    unsigned last_gw;                  /* the width of the last character 0x243ec drew (an argument it left on the stack) */
+    /* command 2, the item list (0x20412) */
+    uint8_t it_tab[26 * 30];           /* the field + 0x7d0: OBJECT.LCC records of the member's 20 items, then of his 6 worn things */
+    unsigned it_cur, it_prev, it_idx;  /* [bp-0xc], [bp-0x12], [bp-0x24] (0 .. 9) */
+    unsigned it_page, it_redraw;       /* [bp-4]: 0x14 the first ten items, 0x1e the next ten; [bp-0x26]: the rows are drawn again */
+    unsigned it_latch, it_count;       /* [bp-0x20]; [bp-0x1e] (a palette step when it passes 0x28) */
+    /* the mouse (only with a driver): the pointer's place on screen in the fight ([bp-0x7e]), the lists ([bp-0x24], [bp-0x28]) and the
+     * picker ([bp-0x18]), all keeping what is under it in the world's buffer (walk_mouse_under); what the fight's first read gave
+     * ([bp-0xe], [bp-0x2a]); and each loop's "a button is still down" flag */
+    unsigned mptr, mx, my, mlatch;
+    unsigned mg_ptr, mg_mlatch, pk_ptr, pk_mlatch, it_ptr, it_mlatch;
     char unbuilt[120];
     int unbuilt_new;
 };
@@ -257,6 +276,11 @@ static uint8_t *read_unpack(const char *name, size_t pos, size_t n, size_t *len,
     return d;
 }
 
+uint8_t *battle_read_unpack(const char *name, size_t pos, size_t n, size_t *len)
+{
+    return read_unpack(name, pos, n, len, NULL);
+}
+
 /* ---- the hand-over (0x1296e .. 0x12e4e) ---- */
 
 static void make_backdrop(battle_t *b, screen_t *scr)
@@ -357,6 +381,7 @@ static int load_group(battle_t *b, unsigned group)
 
 battle_t *battle_begin(walk_t *w, screen_t *scr)
 {
+    walk_mouse_hide(w, scr);   /* 0x1287a: the world's pointer comes off the screen */
     battle_t *b = calloc(1, sizeof *b);
     if (!b)
         return NULL;
@@ -387,6 +412,19 @@ battle_t *battle_begin(walk_t *w, screen_t *scr)
         }
     }
     b->phase = BATTLE_KIND_FIGHT;
+    {   /* RPG.LCP 0xe95 (0x264 bytes): the magic list's row and icons, decoded by 0x25eeb into the field picture when the list opens */
+        size_t len = 0;
+        uint8_t *g = read_unpack("RPG.LCP", 0xE95, 0x264, &len, NULL);
+        int ok = g && len >= sizeof b->mg_bar;
+        if (ok)
+            memcpy(b->mg_bar, g, sizeof b->mg_bar);
+        free(g);
+        if (!ok) {
+            fprintf(stderr, "battle: the magic list's pictures in RPG.LCP are missing or too short\n");
+            free(b);
+            return NULL;
+        }
+    }
     {   /* RPG.LCP 0x135e4: the hit pictures, then (at +0x25e) the members' attack pictures; 0x14891: the six dying masks */
         uint8_t *raw = NULL;
         size_t len = 0, mlen = 0;
@@ -417,6 +455,11 @@ battle_t *battle_begin(walk_t *w, screen_t *scr)
         battle_free(b);
         return NULL;
     }
+    /* 0x1cbfa (mouse or not): the pointer's place is 0 and the 6 x 10 at the corner is kept under it. [bp-0x5c] (a button still down)
+     * is never set: a release sets it, and a button held from the start counts only if the stack happened to hold a non-zero there
+     * (taken as 0 here, not seen) */
+    b->mptr = 0;
+    walk_mouse_grab(scr, 0, walk_mouse_under(w));
 
     /* 0x1ce03: each slot draws rand() / 0x199a (0 .. 4); above 2 it is empty (9); an enemy with byte 0x2f set brings frame 1 in every
      * slot. Again until one slot is filled. Then empty front slots (2 .. 4) take the first filled back one. */
@@ -813,6 +856,22 @@ static uint8_t *party_of(battle_t *b)
 
 /* 0x1ec8f .. 0x1f18d: the member who acts hits the chosen target. All of it is worked out at once; the pictures follow over the next
  * passes (the hit animation, the target's flashing, its dying). */
+/* The next member who can act gets the mark; none left: the monsters' turn comes (v44 reaches 0xc8). */
+static void next_member(battle_t *b, screen_t *scr)
+{
+    uint8_t *party = party_of(b);
+    unsigned at = box_at(b->v44) + 0x26;
+    b->v44 += 0x28;
+    while (b->v44 < 0xC8) {
+        if (w16(party, b->v44 + 8) != 0 && party[b->v44 + 3] < 5) {
+            mark(b, scr, at, 0x1F, 0x0F);
+            break;
+        }
+        at += 0x26;
+        b->v44 += 0x28;
+    }
+}
+
 static void party_attack(battle_t *b, screen_t *scr)
 {
     uint8_t *party = party_of(b);
@@ -852,17 +911,7 @@ static void party_attack(battle_t *b, screen_t *scr)
     b->choosing = 0;
     b->v8a = d / 7 + 0x14;
     b->v32 = (b->v32 - (b->v8a >> 1) * 0xC1) & 0xFFFF;
-    /* the next member who can act gets the mark; none left: the monsters' turn comes (F) */
-    unsigned at = box_at(b->v44) + 0x26;
-    b->v44 += 0x28;
-    while (b->v44 < 0xC8) {
-        if (w16(party, b->v44 + 8) != 0 && party[b->v44 + 3] < 5) {
-            mark(b, scr, at, 0x1F, 0x0F);
-            break;
-        }
-        at += 0x26;
-        b->v44 += 0x28;
-    }
+    next_member(b, scr);
     unsigned r = walk_rand(walk_rng(b->w)) / 0x199A + 2;
     set_shout(b, r, 0xF0, 0x79C, 0x2D);
 }
@@ -971,6 +1020,802 @@ static int can_target(const battle_t *b, unsigned i)
     return b->mon[i + 2] < 3 && b->mon[i + 3] == 0;
 }
 
+/* ---- the mouse pointer (with a driver only; the world keeps the pointer's picture and what is under it) ---- */
+
+static int mouse_on(const battle_t *b)
+{
+    int x, y;
+    unsigned bt;
+    return walk_mouse(b->w, &x, &y, &bt);
+}
+
+/* 0x27328: what is under the pointer back at `at` */
+static void ptr_hide(battle_t *b, screen_t *scr, unsigned at)
+{
+    if (mouse_on(b))
+        walk_mouse_put(scr, at, walk_mouse_under(b->w), 0);
+}
+
+/* 0x2723c + 0x27371: keep what is at `at`, draw the pointer there */
+static void ptr_show(battle_t *b, screen_t *scr, unsigned at)
+{
+    if (mouse_on(b)) {
+        walk_mouse_grab(scr, at, walk_mouse_under(b->w));
+        walk_mouse_put(scr, at, walk_mouse_pic(b->w), 1);
+    }
+}
+
+/* the place set to 0 and the corner kept (after a list, at a list's start) */
+static void ptr_corner(battle_t *b, screen_t *scr, unsigned *place)
+{
+    if (mouse_on(b)) {
+        *place = 0;
+        walk_mouse_grab(scr, 0, walk_mouse_under(b->w));
+    }
+}
+
+/* the pointer to `pos` if it is not there; returns 1 when it moved */
+static int ptr_move(battle_t *b, screen_t *scr, unsigned *place, unsigned pos)
+{
+    if (pos == *place)
+        return 0;
+    ptr_hide(b, scr, *place);
+    ptr_show(b, scr, pos);
+    *place = pos;
+    return 1;
+}
+
+/* A loop's buttons with its "still down" flag: a press counts once, until all are released. */
+static unsigned press(unsigned bt, unsigned *down)
+{
+    if (bt == 0)
+        *down = 0;
+    if (*down)
+        bt = 0;
+    if (bt)
+        *down = 1;
+    return bt;
+}
+
+/* ---- command 1: the magic list (0x21486) and the member picker (0x1a8a4) ---- */
+
+/* 0x25b54: a picture's pixels that are not 0, all in colour c. */
+static void silhouette(screen_t *scr, unsigned at, const uint8_t *px, unsigned w, unsigned h, uint8_t c)
+{
+    for (unsigned r = 0; r < h; r++)
+        for (unsigned x = 0; x < w; x++)
+            if (px[r * w + x] && at + r * SCREEN_W + x < SCREEN_W * SCREEN_H)
+                scr->pix[at + r * SCREEN_W + x] = c;
+}
+
+/* 0x27371: a picture with colour 0 transparent. */
+static void put_clear(screen_t *scr, unsigned at, const uint8_t *px, unsigned w, unsigned h)
+{
+    for (unsigned r = 0; r < h; r++)
+        for (unsigned x = 0; x < w; x++)
+            if (px[r * w + x] && at + r * SCREEN_W + x < SCREEN_W * SCREEN_H)
+                scr->pix[at + r * SCREEN_W + x] = px[r * w + x];
+}
+
+/* 0x243ec: `n` bytes of text as an (8 n) x 14 picture in `colour`. A byte from 0x20 to 0x7f is an 8 x 15 character of font8; any other
+ * byte starts a Big5 pair (16 x 14, NUMBER.LCZ). In each character the colour turns colour + 1 in the first 0x25 (Big5: 0x50) pixels and
+ * colour + 2 in the next as many. The 15th row of a character falls past the picture. */
+static void text_pic(battle_t *b, const uint8_t *s, unsigned n, uint8_t colour, uint8_t *px)
+{
+    unsigned w = 8 * n, x = 0;
+    memset(px, 0, (size_t)w * 14);
+    for (unsigned i = 0; i < n; i++) {
+        uint8_t g[16 * 15];
+        unsigned gw, split;
+        memset(g, 0, sizeof g);
+        if (s[i] > 0x1F && s[i] < 0x80) {
+            gw = 8, split = 0x25;
+            for (unsigned r = 0; r < 15; r++)
+                for (unsigned k = 0; k < 8; k++)
+                    g[r * 8 + k] = (b->font8[s[i] * 15 + r] << k) & 0x80 ? colour : 0;
+        } else {
+            gw = 16, split = 0x50;
+            unsigned hi = s[i], lo = i + 1 < n ? s[i + 1] : 0;
+            i++;
+            uint8_t bits[28];
+            size_t off = battle_glyph_offset(hi, lo);
+            if (off == (size_t)-1 || assets_read_at("NUMBER.LCZ", off, bits, sizeof bits) != 0) {
+                note(b, "a character the font does not have");
+                memset(bits, 0, sizeof bits);
+            }
+            for (unsigned r = 0; r < 14; r++)
+                for (unsigned k = 0; k < 16; k++)
+                    g[r * 16 + k] = (bits[r * 2 + k / 8] << (k % 8)) & 0x80 ? colour : 0;
+        }
+        for (unsigned j = 0; j < 2 * split; j++)
+            if (g[j] == colour)
+                g[j] = (uint8_t)(colour + 1 + j / split);
+        for (unsigned r = 0; r < 14; r++)   /* 0x26c04, colour 0 transparent, rows of the picture's width */
+            for (unsigned k = 0; k < gw; k++) {
+                size_t at = (size_t)r * w + x + k;
+                if (g[r * gw + k] && at < (size_t)w * 14)
+                    px[at] = g[r * gw + k];
+            }
+        x += gw;
+        b->last_gw = gw;
+    }
+}
+
+/* 0x2723c, 0x2741b, 0x27328: the 94 x 13 pixels inside a row of the list with its colours 7 .. 10 turned 0x74 .. 0x77 (or back). */
+static void list_row(screen_t *scr, unsigned at, int lit)
+{
+    for (unsigned r = 0; r < 0xD; r++)
+        for (unsigned x = 0; x < 0x5E; x++) {
+            if (at + r * SCREEN_W + x >= SCREEN_W * SCREEN_H)
+                continue;
+            uint8_t *p = scr->pix + at + r * SCREEN_W + x;
+            if (!lit && *p >= 7 && *p <= 0xA)
+                *p = (uint8_t)(*p + 0x6D);
+            else if (lit && *p >= 0x74 && *p <= 0x77)
+                *p = (uint8_t)(*p - 0x6D);
+        }
+}
+
+/* The picker's mark over a face: eight 2 x 2 squares down each diagonal of the 16 x 16 face at `at`, colours c, c + 1, ...; with `wrap`
+ * the colours go 7 .. 10 round. */
+static void pick_cross(screen_t *scr, unsigned at, unsigned c, int wrap)
+{
+    unsigned p = at, q = at + 0xE;
+    for (int s = 0; s < 8; s++) {
+        fill(scr, p, 2, 2, (uint8_t)c);
+        p += 0x282;
+        fill(scr, q, 2, 2, (uint8_t)c);
+        q += 0x27E;
+        if (++c > 0xA && wrap)
+            c = 7;
+    }
+}
+
+/* 0x1f60b / 0x1f780: each member's HP and MP in the strip again. */
+static void strip_numbers(battle_t *b, screen_t *scr)
+{
+    const uint8_t *party = party_of(b);
+    for (unsigned o = 0, at = FACE_AT; o < 0xC8 && party[o + 3] <= 4; o += 0x28, at += 0x26) {
+        uint8_t num[100];
+        battle_number(w16(party, o + 8), b->font, num, 0xF0);
+        put(scr, at + 0x1400, num, 20, 5);
+        battle_number(w16(party, o + 0xD), b->font, num, 0xB0);
+        put(scr, at + 0x10, num, 20, 5);
+    }
+}
+
+static void magic_end(battle_t *b, screen_t *scr, unsigned r);
+static void magic_picked(battle_t *b, screen_t *scr, unsigned m);
+
+/* 0x1a8a4 .. 0x1aa2d: the picker's boxes (18 x 18, from (70, 74), 18 apart), each member's face in his with `faces` (a fallen one
+ * crossed out in colours 0x10 .. 0x17), the first box lit. */
+static void pick_begin(battle_t *b, screen_t *scr, int faces, int dead)
+{
+    uint8_t *party = party_of(b);
+    const walk_scene_t *s = walk_scene(b->w);
+    unsigned pos = 0x5D06;
+    for (unsigned o = 0; o < 0xC8 && party[o + 3] <= 4; o += 0x28, pos += 0x12) {
+        if (faces) {
+            put(scr, pos + 0x141, s->bank2 + party[o + 3] * 0xC00 + 0x400, 16, 16);
+            if (w16(party, o + 8) == 0)
+                pick_cross(scr, pos + 0x141, 0x10, 0);
+        }
+        outline(scr, pos, 0x12, 0x12, 0x4E);
+    }
+    outline(scr, 0x5D06, 0x12, 0x12, 0x0F);
+    ptr_corner(b, scr, &b->pk_ptr);   /* 0x1a9f9 */
+    b->pk_mlatch = 0;
+    b->pk_sel = b->pk_prev = 0x5D06;
+    b->pk_m = 0;
+    b->pk_latch = 0;
+    /* [bp-0x16] is never set: the picker's frame has there the width argument (8 or 16) of the last character the list drew (0x26c04
+     * called from 0x243ec at the same depth). Found 2026-10-19 after two starts gave 8 and 0x10. */
+    b->pk_count = b->last_gw;
+    b->pk_faces = faces;
+    b->pk_dead = dead;
+    b->phase = BATTLE_KIND_PICK;
+}
+
+/* 0x1aa30 .. 0x1af67: a round of the picker. Left and Right go to the member before or after (round), Enter chooses, Esc gives up
+ * (0xc8). Only after a release. */
+static void pick_round(battle_t *b, screen_t *scr, unsigned port60)
+{
+    uint8_t *party = party_of(b);
+    if (++b->pk_count > 0x28) {
+        b->pk_count = 0;
+        walk_palette_step(b->w, scr);
+    }
+    if (b->pk_prev != b->pk_sel) {
+        for (unsigned o = 3, pos = 0x5D06; pos < 0x5D60 && party[o] <= 4; o += 0x28, pos += 0x12)
+            if (pos != b->pk_sel)
+                outline(scr, pos, 0x12, 0x12, 0x4E);
+        outline(scr, b->pk_sel, 0x12, 0x12, 0x0F);
+        b->pk_prev = b->pk_sel;
+    }
+    int done = 0;
+    int mx, my;
+    unsigned mb;
+    if (walk_mouse(b->w, &mx, &my, &mb)) {   /* 0x1ab18: the pointer over a box chooses it, a left press takes it, the right gives up */
+        unsigned bt = press(mb, &b->pk_mlatch), x = (unsigned)mx, y = (unsigned)my;
+        unsigned pos = y * SCREEN_W + x;
+        if (pos != b->pk_ptr) {   /* the boxes again; the loop's place variable is [bp-0xa], the box drawn last */
+            ptr_hide(b, scr, b->pk_ptr);
+            unsigned o = 3, p = 0x5D06;
+            for (; p < 0x5D60 && party[o] <= 4; o += 0x28, p += 0x12)
+                if (p != b->pk_sel)
+                    outline(scr, p, 0x12, 0x12, 0x4E);
+            outline(scr, b->pk_sel, 0x12, 0x12, 0x0F);
+            b->pk_prev = p;
+            ptr_show(b, scr, pos);
+            b->pk_ptr = pos;
+        }
+        if (y > 0x49 && y < 0x5C) {
+            static const unsigned lo[5] = {0x85, 0x97, 0xA9, 0xBB, 0xCD};
+            for (unsigned i = 0; i < 5 && !done; i++)
+                if (x > lo[i] && x < lo[i] + 0x13 && (i == 0 || party[0x28 * i + 3] < 5)) {
+                    b->pk_m = 0x28 * i;
+                    b->pk_sel = 0x5D06 + 0x12 * i;
+                    if (bt == 1)
+                        done = 1;
+                }
+        }
+        if (!done && bt == 2) {
+            b->pk_m = 0xC8;
+            done = 1;
+        }
+    }
+    unsigned k = port60 & 0xFF;
+    if (!done) {
+        if (k > 0x7F)
+            b->pk_latch = 1;
+        if (k >= 0x80 || !b->pk_latch)
+            return;
+        b->pk_latch = 0;
+    }
+    if (done) {
+    } else if (k == 1) {
+        b->pk_m = 0xC8;
+        done = 1;
+    } else if (k == 0x4B) {
+        b->pk_sel -= 0x12;
+        b->pk_m = (b->pk_m - 0x28) & 0xFF;
+        if (b->pk_sel < 0x5D06) {
+            b->pk_sel = 0x5D4E;
+            b->pk_m = 0xA0;
+        }
+        while (party[b->pk_m + 3] > 4) {
+            b->pk_m -= 0x28;
+            b->pk_sel -= 0x12;
+        }
+    } else if (k == 0x4D) {
+        b->pk_sel += 0x12;
+        b->pk_m += 0x28;
+        if (b->pk_sel > 0x5D4E) {
+            b->pk_sel = 0x5D06;
+            b->pk_m = 0;
+        }
+        if (party[b->pk_m + 3] > 4) {
+            b->pk_m = 0;
+            b->pk_sel = 0x5D06;
+        }
+    } else if (k == 0x1C) {
+        done = 1;
+    }
+    if (!done)
+        return;
+    ptr_hide(b, scr, b->pk_ptr);   /* 0x1ae98 */
+    outline(scr, b->pk_sel, 0x12, 0x12, 0x4E);
+    if (b->pk_m < 0xC8 && b->pk_faces)
+        pick_cross(scr, b->pk_sel + 0x141, 7, 1);
+    if (b->pk_m < 0xC8 && w16(party, b->pk_m + 8) == 0 && !b->pk_dead)
+        b->pk_m = 0xC8;
+    magic_picked(b, scr, b->pk_m);
+}
+
+/* 0x21486 .. 0x217a3 (in a battle): the list over the field: an icon at (84, 76), ten rows (two columns of five, 96 x 15, from
+ * (64, 102)), and in each the name of a spell the member's level (byte 0xc) has reached, as MAGICT.LCC lists them (20 bytes each, 200 a
+ * member): with a shadow of colour 0xfa, greyed (colour 0x16) and not to be cast when his MP is below twice the level it needs. */
+static void magic_begin(battle_t *b, screen_t *scr)
+{
+    uint8_t *party = party_of(b);
+    unsigned m = b->v44;
+    ptr_corner(b, scr, &b->mg_ptr);   /* 0x214a0 */
+    b->mg_mlatch = 0;
+    uint8_t icon[16 * 16];
+    for (unsigned r = 0; r < 16; r++)
+        memcpy(icon + 16 * r, b->mg_bar + 0x5A8 + 0x30 * r, 16);
+    put(scr, 0x5F54, icon, 16, 16);
+    unsigned bw = w16(b->mg_bar, 0), bh = w16(b->mg_bar, 2), at = 0x7FC0;
+    for (int k = 0; k < 10; k++) {
+        put(scr, at, b->mg_bar + 4, bw, bh);
+        at = k == 4 ? 0x8020 : at + 0x12C0;
+    }
+    unsigned level = party[m + 0xC], mp = w16(party, m + 0xD);
+    at = 0x7FC0;
+    for (unsigned i = 0; i < 10; i++) {
+        uint8_t rec[20], *t = b->mg_tab + 10 * i;
+        if (assets_read_at("MAGICT.LCC", (size_t)party[m + 3] * 200 + 20 * i, rec, sizeof rec) != 0) {
+            note(b, "a spell that MAGICT.LCC does not have");
+            memset(rec, 0, sizeof rec);
+        }
+        memcpy(t, rec + 0xC, 8);   /* 0x27503 copies five words: bytes 0x14 and 0x15 come from past the record, and nothing reads them */
+        t[8] = t[9] = 0;
+        if (level >= t[0]) {
+            uint8_t px[96 * 14];
+            text_pic(b, rec, 12, 0xF0, px);
+            silhouette(scr, at + 0x141, px, 96, 14, 0xFA);
+            silhouette(scr, at + 0x140, px, 96, 14, 0xFA);
+            if (mp >= t[0] * 2u) {
+                put_clear(scr, at, px, 96, 14);
+            } else {
+                silhouette(scr, at, px, 96, 14, 0x16);
+                t[0] = 0;
+            }
+        } else {
+            t[0] = 0;
+        }
+        at = i == 4 ? 0x8020 : at + 0x12C0;
+    }
+    b->mg_prev = 0x93C1;
+    b->mg_cur = 0x8101;
+    b->mg_idx = 0;
+    b->mg_latch = 0;
+    b->mg_count = 3;   /* never set: what the stack holds there, 3 in every start tried (INFERRED constant) */
+    b->phase = BATTLE_KIND_MAGIC;
+}
+
+/* 0x217a6 .. 0x22199: a round of the list. Up, Down, Left and Right move the lit row, Esc gives up, key 1 (scan code 2) casts the lit
+ * spell if it can be: one that heals or helps opens the picker, the others are cast at once on the monsters. Only after a release. */
+static void magic_round(battle_t *b, screen_t *scr, unsigned port60)
+{
+    if (++b->mg_count > 0x28) {
+        b->mg_count = 0;
+        walk_palette_step(b->w, scr);
+    }
+    if (b->mg_prev != b->mg_cur) {
+        ptr_hide(b, scr, b->mg_ptr);
+        list_row(scr, b->mg_prev, 0);
+        list_row(scr, b->mg_cur, 1);
+        b->mg_prev = b->mg_cur;
+        ptr_show(b, scr, b->mg_ptr);
+    }
+    unsigned k = port60 & 0xFF;
+    int mx, my;
+    unsigned mb;
+    if (walk_mouse(b->w, &mx, &my, &mb)) {   /* 0x2197b: a press on a row lights it, on the icon casts; the right button leaves */
+        unsigned bt = press(mb, &b->mg_mlatch), x = (unsigned)mx, y = (unsigned)my;
+        unsigned pos = y * SCREEN_W + x;
+        if (pos != b->mg_ptr) {   /* the lit row lit again; its loop leaves [bp-0x1c], the palette counter, at 0x78 */
+            ptr_hide(b, scr, b->mg_ptr);
+            list_row(scr, b->mg_cur, 1);
+            b->mg_count = 0x78;
+            ptr_show(b, scr, pos);
+            b->mg_ptr = pos;
+        }
+        if (bt == 1 && x > 0x3F && x < 0x100 && y > 0x65 && y < 0xB1) {
+            unsigned idx = (((x - 0x40) / 0x60) * 0x32 + ((y - 0x66) / 0xF) * 10) & 0xFF, i = 0;
+            b->mg_idx = idx;
+            b->mg_cur = 0x8101;
+            while (i < idx) {   /* its counter is the buttons' variable, so the button tests below see the row instead */
+                i += 10;
+                b->mg_cur += 0x12C0;
+                if (i == 0x32)
+                    b->mg_cur = 0x8161;
+            }
+            bt = i;
+        }
+        if (bt == 1 && x > 0x53 && x < 0x64 && y > 0x4B && y < 0x5C)
+            k = 2;
+        if (bt == 2) {
+            magic_end(b, scr, 0);
+            return;
+        }
+    }
+    if (k > 0x7F)
+        b->mg_latch = 1;
+    if (k >= 0x80 || !b->mg_latch)
+        return;
+    b->mg_latch = 0;
+    if (k == 1) {
+        magic_end(b, scr, 0);
+        return;
+    }
+    if (k == 0x48 && b->mg_idx > 0) {
+        b->mg_idx -= 10;
+        b->mg_cur -= 0x12C0;
+        if (b->mg_idx == 0x28)
+            b->mg_cur = 0xCC01;
+    }
+    if (k == 0x50 && b->mg_idx < 0x5A) {
+        b->mg_idx += 10;
+        b->mg_cur += 0x12C0;
+        if (b->mg_idx == 0x32)
+            b->mg_cur = 0x8161;
+    }
+    if (k == 0x4B && b->mg_idx > 0x28) {
+        b->mg_idx -= 0x32;
+        b->mg_cur -= 0x60;
+    }
+    if (k == 0x4D && b->mg_idx < 0x32) {
+        b->mg_idx += 0x32;
+        b->mg_cur += 0x60;
+    }
+    if (k != 2)
+        return;
+    const uint8_t *t = b->mg_tab + b->mg_idx;
+    if (t[0] == 0)
+        return;
+    if (t[1] | t[2] | t[3] | t[4] | t[5] | t[6]) {
+        ptr_hide(b, scr, b->mg_ptr);   /* 0x21d22 */
+        pick_begin(b, scr, 1, 1);
+        return;
+    }
+    uint8_t *party = party_of(b);   /* 0x22107: in a battle, the MP and the spell's strength (byte 0x13) */
+    unsigned mp = (w16(party, b->v44 + 0xD) - t[0] * 2u) & 0xFFFF;
+    party[b->v44 + 0xD] = (uint8_t)mp;
+    party[b->v44 + 0xE] = (uint8_t)(mp >> 8);
+    magic_end(b, scr, t[7]);
+}
+
+/* 0x21d71 .. 0x22101: the picker has given member m (0xc8: none, back to the list). The caster's MP goes down; the spell heals (the
+ * HP, not a fallen member's, up to word 0xa), lowers word 0x10, revives (HP up even from 0); the face in the picker flashes in the colour
+ * of the last of those (0x9f, 0x2f, 0x3f, 0x1f) counting down 16 steps, three times (only the last step is drawn here); a revived one's
+ * face is drawn again in the strip. */
+static void magic_picked(battle_t *b, screen_t *scr, unsigned m)
+{
+    ptr_corner(b, scr, &b->mg_ptr);   /* 0x21d74: the list's pointer starts again from the corner */
+    if (m >= 0xC8) {
+        b->phase = BATTLE_KIND_MAGIC;
+        return;
+    }
+    uint8_t *party = party_of(b);
+    const uint8_t *t = b->mg_tab + b->mg_idx;
+    unsigned mp = (w16(party, b->v44 + 0xD) - t[0] * 2u) & 0xFFFF;
+    party[b->v44 + 0xD] = (uint8_t)mp;
+    party[b->v44 + 0xE] = (uint8_t)(mp >> 8);
+    unsigned res = 2, v;
+    if ((v = w16(t, 1)) != 0) {
+        res = 0x9F;
+        unsigned hp = w16(party, m + 8);
+        if (hp != 0) {
+            hp = (hp + v) & 0xFFFF;
+            if (hp > w16(party, m + 0xA))
+                hp = w16(party, m + 0xA);
+            party[m + 8] = (uint8_t)hp;
+            party[m + 9] = (uint8_t)(hp >> 8);
+            res = 0x2F;
+        }
+    }
+    if ((v = w16(t, 3)) != 0) {
+        unsigned d = w16(party, m + 0x10);
+        d = d > v ? d - v : 0;
+        party[m + 0x10] = (uint8_t)d;
+        party[m + 0x11] = (uint8_t)(d >> 8);
+        res = 0x3F;
+    }
+    if ((v = w16(t, 5)) != 0) {
+        unsigned hp = (w16(party, m + 8) + v) & 0xFFFF;
+        if (hp > w16(party, m + 0xA))
+            hp = w16(party, m + 0xA);
+        party[m + 8] = (uint8_t)hp;
+        party[m + 9] = (uint8_t)(hp >> 8);
+        res = 0x1F;
+    }
+    const uint8_t *face = walk_scene(b->w)->bank2 + party[m + 3] * 0xC00 + 0x400;
+    unsigned k = m / 0x28;
+    uint8_t sil[16 * 16];
+    memcpy(sil, face, sizeof sil);
+    silhouette(scr, k * 0x12 + 0x5E47, sil, 16, 16, (uint8_t)(res - 15));   /* 0x25c18 */
+    if (res == 0x1F)
+        put(scr, FACE_AT + k * 0x26, face, 16, 16);
+    magic_end(b, scr, 1);
+}
+
+/* 0x1f247 .. 0x1f6f2: back from the list with r (0 nothing cast, 1 a member helped, else the strength of a spell on the monsters), which
+ * is also the key latch. The member's mark goes back; a spell on the monsters takes r HP from each live front one (a kill gives the
+ * caster the monsters' experience stat, with no cap), with the floating numbers, a shout, and the flashes (v66) over the next passes;
+ * then the next member's turn. The strip's HP and MP are drawn again. */
+static void magic_end(battle_t *b, screen_t *scr, unsigned r)
+{
+    uint8_t *party = party_of(b);
+    unsigned m = b->v44;
+    ptr_hide(b, scr, b->mg_ptr);    /* 0x2219c: the list's pointer off */
+    ptr_corner(b, scr, &b->mptr);   /* 0x1f24a: the fight's starts again from the corner */
+    b->phase = BATTLE_KIND_FIGHT;
+    b->latch = r & 0xFF;
+    if (r != 0)
+        mark(b, scr, box_at(m), 0x0F, 0x1F);
+    if (r > 1) {
+        unsigned n = party[m + 3];
+        static const unsigned pic_at[5] = {0x7BE6, 0x80FE, 0x859C, 0x8B13, 0x8FBB};
+        b->atk_pic = n < 5 ? pic_at[n] - 0x7BE6 : 0;
+        unsigned ph = b->atk_pic + 4 <= b->atk_len ? w16(b->atk, b->atk_pic + 2) : 0;
+        b->v92 = ((0x6E - ph) * 0xC0 + 0x47) & 0xFFFF;
+        unsigned pos = 0x30C5;
+        for (unsigned k = 0; k < 3; k++, pos += 0x3C) {
+            unsigned hp = b->mon[0x34 + k];
+            if (hp == 0)
+                continue;
+            if (hp > r) {
+                hp -= r;
+            } else {
+                hp = 0;
+                unsigned x = (w16(party, m + 4) + b->mon[0x2C]) & 0xFFFF;
+                party[m + 4] = (uint8_t)x;
+                party[m + 5] = (uint8_t)(x >> 8);
+            }
+            b->mon[0x34 + k] = (uint8_t)hp;
+            b->mon[8 + 4 * k + 3] = 0x32;
+            add_number(b, pos, r, 0x32, 0xF0);
+            add_number(b, pos + 0x3E8, hp, 0x41, 0x22);
+        }
+        b->v66 = 1;
+        b->v8a = 0x13;
+        b->v8c = 1;
+        set_shout(b, walk_rand(walk_rng(b->w)) / 0x4000, 0x30, 0x79C, 0x2D);
+    }
+    if (r != 0)
+        next_member(b, scr);
+    strip_numbers(b, scr);
+    b->choosing = 0;
+}
+
+/* ---- command 2: the item list (0x20412) ---- */
+
+/* 0x2723c, 0x2741b, 0x27328: a row of the item list lit (colours 0x74 .. 0x77 turned 0xb .. 0xe) or not; the grab is 94 x 15 but the
+ * recolouring stops 0x4ca bytes in, so its last two rows keep their colours. */
+static void item_row(screen_t *scr, unsigned at, int lit)
+{
+    for (unsigned i = 0; i < 0x4CA - 4; i++) {
+        unsigned o = at + (i / 0x5E) * SCREEN_W + i % 0x5E;
+        if (o >= SCREEN_W * SCREEN_H)
+            continue;
+        uint8_t *p = scr->pix + o;
+        if (lit && *p >= 0x74 && *p <= 0x77)
+            *p = (uint8_t)(*p - 0x69);
+        else if (!lit && *p >= 0xB && *p <= 0xE)
+            *p = (uint8_t)(*p + 0x69);
+    }
+}
+
+static void read_object(battle_t *b, unsigned id, uint8_t *rec)
+{
+    memset(rec, 0, 30);
+    if (assets_read_at("OBJECT.LCC", (size_t)(id - 1) * 30, rec, 30) != 0)
+        note(b, "an item that OBJECT.LCC does not have");
+}
+
+/* 0x20412 .. 0x207af (in a battle): the member's 20 item bytes (party record 0x14 ..) are packed to the front, the two icons at
+ * (84, 76), and the records of his items and of the six things he wears (party table 0x12c + 6 x his number) read from OBJECT.LCC
+ * (30 bytes each, item n at (n - 1) x 30). The rows are drawn in the first round. The caller first puts the mouse pointer's background
+ * back at the screen's corner (0x1f716, with no mouse too); it holds the corner as it is, so nothing changes there (seen once). */
+static void items_begin(battle_t *b, screen_t *scr)
+{
+    uint8_t *party = party_of(b);
+    unsigned m = b->v44, n = party[m + 3];
+    ptr_corner(b, scr, &b->it_ptr);   /* 0x204d4 */
+    b->it_mlatch = 0;
+    for (unsigned i = m + 0x14; i < m + 0x28; i++) {
+        unsigned v = party[i];
+        if (v == 0)
+            continue;
+        for (unsigned j = m + 0x14; j < i; j++)
+            if (party[j] == 0) {
+                party[i] = 0;
+                party[j] = (uint8_t)v;
+                break;
+            }
+    }
+    uint8_t icon[32 * 16];
+    for (unsigned r = 0; r < 16; r++)
+        memcpy(icon + 32 * r, b->mg_bar + 0x5A8 + 0x30 * r, 32);
+    put(scr, 0x5F54, icon, 32, 16);
+    memset(b->it_tab, 0, sizeof b->it_tab);
+    for (unsigned i = 0; i < 20; i++)
+        if (party[m + 0x14 + i])
+            read_object(b, party[m + 0x14 + i], b->it_tab + 30 * i);
+    for (unsigned k = 0; k < 6; k++)
+        if (party[0x12C + n * 6 + k])
+            read_object(b, party[0x12C + n * 6 + k], b->it_tab + 30 * (20 + k));
+    b->it_prev = 0x93C1;
+    b->it_cur = 0x8101;
+    b->it_idx = 0;
+    b->it_page = 0x14;
+    b->it_redraw = 1;
+    b->it_latch = 0;
+    b->it_count = 0x98;   /* never set: what the stack holds there, 0x98 in every start tried, after the magic list too (INFERRED) */
+    b->phase = BATTLE_KIND_ITEMS;
+}
+
+/* 0x20e8f .. 0x2127b: item `slot` (party offset) used by the member. One worn in slot k (byte 0x10, 1 .. 6) changes places with what
+ * he wears there, list records included (0x25c8e swaps them), and his attack (0x13) and defence (0x12) become the sums of byte 0xe and
+ * byte 0xf / 5 of the six worn records, each halved when byte 0x16 is not his number. Then, from the record now in the list: word 0xc
+ * heals him (up to word 0xa), word 0x14 lowers word 0x10, word 0x17 adds MP (up to 4000); each of these uses the item up. */
+static void item_use(battle_t *b, unsigned slot)
+{
+    uint8_t *party = party_of(b);
+    unsigned m = b->v44, id = party[slot];
+    uint8_t *t = b->it_tab + (b->it_page == 0x1E ? 300 : 0) + 30 * b->it_idx;
+    if (t[0x10]) {
+        unsigned n = party[m + 3], e = n * 6 + 0x12B + t[0x10];
+        party[slot] = party[e];
+        party[e] = (uint8_t)id;
+        uint8_t *w = b->it_tab + 0x23A + ((t[0x10] * 30) & 0xFF);
+        for (int i = 0; i < 30; i++) {
+            uint8_t x = t[i];
+            t[i] = w[i];
+            w[i] = x;
+        }
+        uint8_t a = 0, d = 0;
+        for (unsigned k = 20; k < 26; k++) {
+            const uint8_t *r = b->it_tab + 30 * k;
+            unsigned ra = r[0xE], rd = r[0xF] / 5;
+            if (r[0x16] != n) {
+                ra >>= 1;
+                rd >>= 1;
+            }
+            a = (uint8_t)(a + ra);
+            d = (uint8_t)(d + rd);
+        }
+        party[m + 0x12] = d;
+        party[m + 0x13] = a;
+        b->it_redraw = 1;
+    }
+    unsigned v;
+    if ((v = w16(t, 0xC)) != 0) {
+        party[slot] = 0;
+        unsigned hp = (w16(party, m + 8) + v) & 0xFFFF, top = w16(party, m + 0xA);
+        if (hp > top)
+            hp = top;
+        party[m + 8] = (uint8_t)hp;
+        party[m + 9] = (uint8_t)(hp >> 8);
+        b->it_redraw = 1;
+    }
+    if ((v = w16(t, 0x14)) != 0) {
+        party[slot] = 0;
+        unsigned x = w16(party, m + 0x10);
+        x = x > v ? x - v : 0;
+        party[m + 0x10] = (uint8_t)x;
+        party[m + 0x11] = (uint8_t)(x >> 8);
+        b->it_redraw = 1;
+    }
+    if ((v = w16(t, 0x17)) != 0) {
+        party[slot] = 0;
+        unsigned mp = (w16(party, m + 0xD) + v) & 0xFFFF;
+        if (mp > 0xFA0)
+            mp = 0xFA0;
+        party[m + 0xD] = (uint8_t)mp;
+        party[m + 0xE] = (uint8_t)(mp >> 8);
+        b->it_redraw = 1;
+    }
+}
+
+/* 0x2143f, then the caller's 0x1f753: the list's pointer off, the fight's from the corner, the strip's numbers again. */
+static void items_end(battle_t *b, screen_t *scr)
+{
+    ptr_hide(b, scr, b->it_ptr);
+    ptr_corner(b, scr, &b->mptr);
+    b->phase = BATTLE_KIND_FIGHT;
+    strip_numbers(b, scr);
+    b->choosing = 0;
+}
+
+/* 0x207b2 .. 0x2143c: a round of the item list. When asked, the ten rows of the page with the names of the items there (colour 0x10,
+ * shadow 0x16) and the lit row. Up, Down, Left, Right move; key 1 (scan code 2) uses the lit item, key 2 (scan 3) turns the page; Esc
+ * goes back (0x1f753: the strip's numbers again). Using things does not end the member's turn. Only after a release. */
+static void items_round(battle_t *b, screen_t *scr, unsigned port60)
+{
+    uint8_t *party = party_of(b);
+    unsigned m = b->v44;
+    b->it_count = (b->it_count + 1) & 0xFF;
+    if (b->it_count > 0x28) {
+        b->it_count = 0;
+        walk_palette_step(b->w, scr);
+    }
+    if (b->it_redraw) {
+        unsigned at = 0x7FC0, toff = b->it_page == 0x1E ? 300 : 0, slot = m + b->it_page;
+        unsigned bw = w16(b->mg_bar, 0), bh = w16(b->mg_bar, 2);
+        for (unsigned i = 0; i < 10; i++, toff += 30, slot++) {
+            put(scr, at, b->mg_bar + 4, bw, bh);
+            if (party[slot]) {
+                uint8_t px[96 * 14];
+                text_pic(b, b->it_tab + toff, 12, 0x10, px);
+                silhouette(scr, at + 0x141, px, 96, 14, 0x16);
+                silhouette(scr, at + 0x140, px, 96, 14, 0x16);
+                put_clear(scr, at, px, 96, 14);
+            }
+            at = i == 4 ? 0x8020 : at + 0x12C0;
+        }
+        item_row(scr, b->it_cur, 1);
+        b->it_redraw = 0;
+    }
+    if (b->it_prev != b->it_cur) {
+        ptr_hide(b, scr, b->it_ptr);
+        item_row(scr, b->it_prev, 0);
+        item_row(scr, b->it_cur, 1);
+        b->it_prev = b->it_cur;
+        ptr_show(b, scr, b->it_ptr);
+    }
+    unsigned k = port60 & 0xFF;
+    int mx, my;
+    unsigned mb;
+    if (walk_mouse(b->w, &mx, &my, &mb)) {   /* 0x20ae3: a left press on a row lights it, on an icon is key 1 to 3, on the
+                                              * left-hand buttons' corner leaves (after a release); the right button leaves */
+        unsigned bt = press(mb, &b->it_mlatch), x = (unsigned)mx, y = (unsigned)my;
+        unsigned pos = y * SCREEN_W + x;
+        if (pos != b->it_ptr) {   /* the lit row lit again; its loop leaves [bp-0x1e], the palette counter, at 0x78 */
+            ptr_hide(b, scr, b->it_ptr);
+            item_row(scr, b->it_cur, 1);
+            b->it_count = 0x78;
+            ptr_show(b, scr, pos);
+            b->it_ptr = pos;
+        }
+        if (bt == 1 && x > 0x3F && x < 0x100 && y > 0x65 && y < 0xB1) {
+            unsigned idx = (((x - 0x40) / 0x60) * 5 + (y - 0x66) / 0xF) & 0xFF, i = 0;
+            b->it_idx = idx;
+            x = y = 0;
+            b->it_cur = 0x8101;
+            while (i < idx) {   /* the palette counter is this loop's counter */
+                i++;
+                b->it_cur += 0x12C0;
+                if (i == 5)
+                    b->it_cur = 0x8161;
+            }
+            b->it_count = i;
+        }
+        if (bt == 1 && x > 4 && x < 0x32 && y > 0x66 && y < 0x79)
+            k = 0x40;
+        if (bt == 1 && x > 0x53 && x < 0x84 && y > 0x4B && y < 0x5C)
+            k = ((x - 0x54) >> 4) + 2;
+        if (bt == 2) {
+            items_end(b, scr);
+            return;
+        }
+    }
+    if (k > 0x7F)
+        b->it_latch = 1;
+    if (k >= 0x80 || !b->it_latch)
+        return;
+    b->it_latch = 0;
+    if (k == 1) {
+        items_end(b, scr);
+        return;
+    }
+    if (k == 0x48 && b->it_idx > 0) {
+        b->it_idx--;
+        b->it_cur -= 0x12C0;
+        if (b->it_idx == 4)
+            b->it_cur = 0xCC01;
+    }
+    if (k == 0x50 && b->it_idx < 9) {
+        b->it_idx++;
+        b->it_cur += 0x12C0;
+        if (b->it_idx == 5)
+            b->it_cur = 0x8161;
+    }
+    if (k == 0x4B && b->it_idx > 4) {
+        b->it_idx -= 5;
+        b->it_cur -= 0x60;
+    }
+    if (k == 0x4D && b->it_idx < 5) {
+        b->it_idx += 5;
+        b->it_cur += 0x60;
+    }
+    unsigned slot = m + b->it_page + b->it_idx;
+    if (k == 2 && party[slot]) {
+        item_use(b, slot);
+    } else if (k == 3) {
+        b->it_redraw = 1;
+        b->it_page += 10;
+        if (b->it_page > 0x1E)
+            b->it_page = 0x14;
+    } else if (k == 0x40) {   /* 0x21427 */
+        items_end(b, scr);
+    }
+}
+
+static void start_rewards(battle_t *b, screen_t *scr);
+
 /* 0x1e81c .. 0x1f1c7: a key in the party's turn (the latch is then cleared, whatever the key). */
 static void keys(battle_t *b, screen_t *scr, unsigned k)
 {
@@ -1002,8 +1847,23 @@ static void keys(battle_t *b, screen_t *scr, unsigned k)
     }
     if (!b->choosing)
         return;
-    if (b->v82 != 0) {
-        note(b, "the magic, item and fourth commands");
+    if (b->v82 == 3) {   /* 0x1f86b: flee. The mark goes back and the turn passes to the monsters; one time in two the party gets
+                          * away, to the rewards bar as after a win (0x1f8ec) */
+        mark(b, scr, box_at(b->v44), 0x0F, 0x1F);
+        b->v44 = 0xC8;
+        b->choosing = 0;
+        if (walk_rand(walk_rng(b->w)) < 0x4000)
+            start_rewards(b, scr);
+        return;
+    }
+    if (b->v82 == 1) {   /* 0x1f1ca: the magic list, at once (with a mouse the fight's pointer comes off first) */
+        ptr_hide(b, scr, b->mptr);
+        magic_begin(b, scr);
+        return;
+    }
+    if (b->v82 == 2) {   /* 0x1f6f6: the item list, at once (0x1f716 puts back what is under the fight's pointer, mouse or not) */
+        ptr_hide(b, scr, b->mptr);
+        items_begin(b, scr);
         return;
     }
     if (k == 0x4B) {   /* 0x1eabf: the target moves to the nearest live monster on the left, if any */
@@ -1101,7 +1961,13 @@ static void rewards_pass(battle_t *b, screen_t *scr, unsigned port60)
             b->field[b->bar_at - 4 + i] = b->bar[i];
     put(scr, FIELD_AT, b->field, BATTLE_FIELD_W, BATTLE_FIELD_H);
     unsigned k = port60 & 0xFF;
-    if (k == 0x39 || k == 1 || k == 0x1C) {   /* the Sound Blaster's sample is stopped here when there is one (not built) */
+    int mx, my;
+    unsigned mb;
+    int leave = k == 0x39 || k == 1 || k == 0x1C;   /* the Sound Blaster's sample is stopped here when there is one (not built) */
+    if (!leave && walk_mouse(b->w, &mx, &my, &mb) && mb != 0)   /* 0x1fc75: any button */
+        leave = 1;
+    if (leave) {
+        ptr_hide(b, scr, b->mptr);   /* 0x1fcd7 */
         b->lu = 0;
         level_ups(b, scr);
     }
@@ -1125,113 +1991,36 @@ size_t battle_glyph_offset(unsigned hi, unsigned lo)
     return 0x3B20 + 0x1E * idx;
 }
 
-/* The message box's character: `bits` (MSB first, `w` / 8 bytes a row, 14 rows) in `colour`, recoloured from data byte `split` on to
- * colour + 1 and from 2 * split - 2 (the loop's 0x25 / 0x50 steps) to colour + 2; a shadow of colour + 6 one row down, at x and x + 1. */
-static void message_char(screen_t *scr, unsigned at, const uint8_t *bits, unsigned w, uint8_t colour)
-{
-    uint8_t px[16 * 14];
-    unsigned n = w * 14, bw = w / 8;
-    for (unsigned r = 0; r < 14; r++)
-        for (unsigned x = 0; x < w; x++)
-            px[r * w + x] = (bits[r * bw + x / 8] << (x % 8)) & 0x80 ? colour : 0;
-    /* 0x2741b twice: 8 wide from 0x26 (37 bytes each), 16 wide from 0x50 (80 bytes each) */
-    unsigned from = w == 8 ? 0x26 : 0x50, step = w == 8 ? 0x25 : 0x50;
-    for (unsigned k = 0; k < 2; k++)
-        for (unsigned i = from + k * step; i < from + (k + 1) * step && i < n; i++)
-            if (px[i] == colour)
-                px[i] = (uint8_t)(colour + 1 + k);
-    static const unsigned shadow[2] = {SCREEN_W + 1, SCREEN_W};
-    for (int s = 0; s < 2; s++)   /* 0x25b54 */
-        for (unsigned i = 0; i < n; i++)
-            if (px[i] && at + shadow[s] + (i / w) * SCREEN_W + i % w < SCREEN_W * SCREEN_H)
-                scr->pix[at + shadow[s] + (i / w) * SCREEN_W + i % w] = (uint8_t)(colour + 6);
-    for (unsigned i = 0; i < n; i++)   /* 0x27371 */
-        if (px[i] && at + (i / w) * SCREEN_W + i % w < SCREEN_W * SCREEN_H)
-            scr->pix[at + (i / w) * SCREEN_W + i % w] = px[i];
-}
-
 /* 0x1afb0 with the wait flag: message `msg` of MES_TXT.LCC (0x78 bytes at (msg - 1) * 0x80 + 6, up to '#') over the darkened bottom of
  * the screen (rows 134 .. 179: shaded twice, rows 135 .. 178 twice more), in colour 0x70; then the box waits (dialog_pass). Returns -1 if
  * the text cannot be read. */
 static int start_message(battle_t *b, screen_t *scr, unsigned msg)
 {
-    uint8_t text[0x78];
-    if (msg == 0 || assets_read_at("MES_TXT.LCC", (size_t)(msg - 1) * 0x80 + 6, text, sizeof text) != 0) {
+    /* in a battle the world buffer's 0x7305 .. 0x7308 are the backdrop's 0x1ea5 .. 0x1ea8 */
+    int r = msgbox_open(&b->box, scr, b->font8, b->table, b->back + 0x1EA5, msg, 0x70, 1);
+    if (r < 0) {
         note(b, "a message that MES_TXT.LCC does not have");
         return -1;
     }
-    unsigned n = 0;
-    while (n < sizeof text && text[n] != '#')
-        n++;
-    const uint8_t colour = 0x70;
-    unsigned x = 0, row = 0x87;
-    if (n < 0x28) {
-        row += 15;
-        x += 8 * ((0x28 - n) / 2);
-    } else if (n < 0x50) {
-        row += 7;
-    }
-    /* the box (the wait flag puts it at row 134, 320 x 46 whatever the text's length): 0x2723c takes the screen into the world buffer,
-     * 0x27503 copies it 5 bytes on, 4 bytes short: the copy's last 4 pixels are the world buffer's bytes 0x7305 .. 0x7308, which in a
-     * battle are the backdrop's 0x1ea5 .. 0x1ea8 */
-    memcpy(b->under, scr->pix + 0xA780, sizeof b->under);
-    uint8_t box[sizeof b->under];
-    memcpy(box, b->under, sizeof box);
-    memcpy(box + sizeof box - 4, b->back + 0x1EA5, 4);
-    for (int t = 0; t < 2; t++)
-        for (unsigned i = 0; i < sizeof box; i++)
-            box[i] = b->table[box[i]];
-    for (int t = 0; t < 2; t++)
-        for (unsigned i = SCREEN_W; i < SCREEN_W * 45; i++)
-            box[i] = b->table[box[i]];
-    memcpy(scr->pix + 0xA780, box, sizeof box);
-    for (unsigned i = 0; i < n; i++) {
-        unsigned at = SCREEN_W * row + x;
-        if (text[i] < 0x80) {
-            message_char(scr, at, b->font8 + text[i] * 15, 8, colour);
-            x += 8;
-        } else {
-            unsigned hi = text[i], lo = ++i < n ? text[i] : 0;
-            uint8_t g[28];
-            size_t off = battle_glyph_offset(hi, lo);
-            if (off == (size_t)-1 || assets_read_at("NUMBER.LCZ", off, g, sizeof g) != 0) {
-                note(b, "a character the message font does not have");
-                memset(g, 0, sizeof g);
-            }
-            if (x == 0x138) {
-                x = 0;
-                row += 15;
-            }
-            message_char(scr, SCREEN_W * row + x, g, 16, colour);
-            x += 16;
-        }
-        if (x == 0x140) {
-            x = 0;
-            row += 15;
-        }
-    }
-    b->dlg_count = colour + 3;   /* [bp-0x16] after the last recolouring loop */
-    b->dlg_wait = 1;
+    if (r > 0)
+        note(b, "a character the message font does not have");
     b->phase = BATTLE_KIND_DIALOG;
     return 0;
+}
+
+static void box_step(void *ctx, screen_t *scr)
+{
+    walk_palette_step(((battle_t *)ctx)->w, scr);
 }
 
 /* 0x1b506: one round of the message box's wait: the palette steps every 41st; a key counts after a release has been seen. */
 static void dialog_pass(battle_t *b, screen_t *scr, unsigned port60)
 {
-    if (++b->dlg_count > 0x28) {
-        b->dlg_count = 0;
-        walk_palette_step(b->w, scr);
-    }
-    unsigned k = port60 & 0xFF;
-    if (k > 0x7F)
-        b->dlg_wait = 0;
-    if (b->dlg_wait)
-        k = 0x80;
-    if (k >= 0x80)
-        return;
-    memcpy(scr->pix + 0xA780, b->under, sizeof b->under);   /* 0x27328(0xa780, ...) */
-    level_ups(b, scr);
+    int mx, my;
+    unsigned mb = 0;
+    int on = walk_mouse(b->w, &mx, &my, &mb);
+    if (msgbox_round(&b->box, scr, port60, on, mb, box_step, b))
+        level_ups(b, scr);
 }
 
 /* 0x130e2 .. 0x13291: each member whose experience (word 4) has reached the next level's (word 6, below 60,000) gets it as his
@@ -1253,7 +2042,8 @@ static void level_ups(battle_t *b, screen_t *scr)
         if (start_message(b, scr, msg) == 0)
             return;
     }
-    b->over = BATTLE_BACK;   /* the mouse pointer and the music are the caller's (0x1329d .. 0x132f1) */
+    b->over = BATTLE_BACK;   /* the music is the caller's (0x132cb .. 0x132f1) */
+    walk_mouse_reset(b->w, scr);   /* 0x1329d: the world's pointer starts again from the corner */
 }
 
 int battle_level_up(uint8_t m[0x28])
@@ -1283,6 +2073,51 @@ unsigned battle_add_coins(unsigned coins, unsigned kills, unsigned per)
     return g > 0xC350 ? 0xC350 : g;
 }
 
+/* 0x1e472 .. 0x1e7e3: the buttons in the fight (read again; the places are the first read's). The right button is Esc. A press on the
+ * music or sound button is key 1 or 2 (scan 2, 3). With no command confirmed, the pointer over the tabs chooses the tab and a left press
+ * confirms it (Space); while a target is chosen for an attack, the pointer over a live front monster makes it the target and a left
+ * press attacks. A press counts once ([bp-0x5c]). Returns the key the fight then takes. */
+static unsigned fight_mouse(battle_t *b, unsigned mb, unsigned k)
+{
+    unsigned x = b->mx, y = b->my;
+    if (mb == 0)
+        b->mlatch = 1;
+    if (mb == 2) {
+        b->latch = 1;
+        k = 1;
+    }
+    if (x > 0x10C && x < 0x13C && y > 0x62 && y < 0x8A && mb != 0 && b->mlatch) {
+        b->mlatch = 0;
+        k = y < 0x76 ? 2 : 3;
+    }
+    if (!b->choosing && y > 0x3B && y < 0x4A && x > 0x3F && x < 0x100) {
+        b->v82 = (x - 0x40) / 0x30;
+        if (mb == 1 && b->mlatch) {
+            b->mlatch = 0;
+            k = 0x39;
+            b->latch = 1;
+        }
+    }
+    if (b->choosing && b->v82 == 0 && y > 0x75 && y < 0xB2) {
+        static const unsigned lo[3] = {0x40, 0x82, 0xC2}, hi[3] = {0x7D, 0xBF, 0xFF};
+        for (unsigned s = 0; s < 3; s++) {
+            unsigned o = 8 + 4 * s;
+            if (!(x > lo[s] && x < hi[s] && b->mon[o + 2] < 3 && (b->mon[o + 3] == 0 || b->mon[o + 3] == 0x96)))
+                continue;
+            for (unsigned i = 0xB; i < 0x14; i += 4)
+                if (b->mon[i] == 0x96)
+                    b->mon[i] = 0;
+            b->mon[o + 3] = 0x96;
+            if (mb == 1 && b->mlatch) {
+                b->mlatch = 0;
+                k = 0x39;
+                b->latch = 1;
+            }
+        }
+    }
+    return k;
+}
+
 int battle_pass(battle_t *b, screen_t *scr, unsigned port60)
 {
     b->unbuilt_new = 0;
@@ -1296,10 +2131,24 @@ int battle_pass(battle_t *b, screen_t *scr, unsigned port60)
         dialog_pass(b, scr, port60);
         return b->unbuilt_new ? WALK_PASS_UNBUILT : 0;
     }
+    if (b->phase == BATTLE_KIND_MAGIC) {
+        magic_round(b, scr, port60);
+        return b->unbuilt_new ? WALK_PASS_UNBUILT : 0;
+    }
+    if (b->phase == BATTLE_KIND_PICK) {
+        pick_round(b, scr, port60);
+        return b->unbuilt_new ? WALK_PASS_UNBUILT : 0;
+    }
+    if (b->phase == BATTLE_KIND_ITEMS) {
+        items_round(b, scr, port60);
+        return b->unbuilt_new ? WALK_PASS_UNBUILT : 0;
+    }
     uint8_t *party = party_of(b);
     walk_palette_step(b->w, scr);
     if (b->v28 != b->v82) {
+        ptr_hide(b, scr, b->mptr);   /* 0x1d48b: the pointer off, the tabs, the pointer on again */
         draw_tabs(scr, b->v82);
+        ptr_show(b, scr, b->mptr);
         b->v28 = b->v82;
     }
     if (b->dir) {
@@ -1415,6 +2264,56 @@ int battle_pass(battle_t *b, screen_t *scr, unsigned port60)
         if (b->v42 == 5)
             hit_lands(b);
     }
+    if (b->v66) {   /* 0x1e034: a spell on the monsters: the field flashes colour 0x10 every other pass under the member's attack picture */
+        if (b->v8c) {
+            b->v8c = 0;
+            memset(b->field, 0x10, sizeof b->field);
+        } else {
+            b->v8c = 1;
+        }
+        if (b->atk_pic + 4 <= b->atk_len) {
+            unsigned aw = w16(b->atk, b->atk_pic), ah = w16(b->atk, b->atk_pic + 2);
+            if (b->atk_pic + 4 + (size_t)aw * ah <= b->atk_len)
+                blit_masked(b->field, b->v92, b->atk + b->atk_pic + 4, aw, ah);
+        }
+        b->v8a = (b->v8a - 1) & 0xFFFF;
+        if (b->v8a < 1) {   /* the end: the hit monsters flash and die as after an attack */
+            b->v66 = 0;
+            for (unsigned i = 8; i < 0x14; i += 4)
+                if (b->mon[i + 3] == 0x32)
+                    b->mon[i + 3] = 0x14;
+        }
+        b->v32 = (b->v32 + 0x241) & 0xFFFF;
+    }
+    int mx, my;
+    unsigned mb;
+    if (walk_mouse(b->w, &mx, &my, &mb)) {   /* 0x1e10e: the pointer on the screen, and over the field also into the field */
+        b->mx = (unsigned)mx;
+        b->my = (unsigned)my;
+        ptr_move(b, scr, &b->mptr, (unsigned)(my * SCREEN_W + mx));
+        if (mx > 0x3A && my > 0x40 && mx < 0x100 && my < 0xB3) {   /* 0x26b97: rows r0 .. r1, columns c0 .. c1 of the 6 x 10 */
+            unsigned r0 = 0, r1 = 9, c0 = 0, c1 = 5, frow = 0, fcol = 0;
+            if (my > 0x49)
+                frow = (unsigned)my - 0x4A;
+            else
+                r0 = 0x4A - (unsigned)my;
+            if (my > 0xA9)
+                r1 = 0xB2 - (unsigned)my;
+            if (mx > 0x3F)
+                fcol = (unsigned)mx - 0x40;
+            else
+                c0 = 0x40 - (unsigned)mx;
+            if (mx > 0xFA)
+                c1 = 0xFF - (unsigned)mx;
+            const uint8_t *pic = walk_mouse_pic(b->w);
+            for (unsigned r = r0; r <= r1; r++)
+                for (unsigned c = c0; c <= c1; c++) {
+                    size_t o = (size_t)(frow + r - r0) * BATTLE_FIELD_W + fcol + c - c0;
+                    if (pic[r * 6 + c] && o < sizeof b->field)
+                        b->field[o] = pic[r * 6 + c];
+                }
+        }
+    }
     if (b->v14 != 0) {   /* 0x1e2a0: after a monster's blow the field jumps up 0 .. 19 rows, the bottom rows black */
         b->v14--;
         unsigned r = walk_rand(walk_rng(b->w)) / 0x667;
@@ -1440,7 +2339,9 @@ int battle_pass(battle_t *b, screen_t *scr, unsigned port60)
     unsigned k = port60 & 0xFF;
     if (k > 0x7F)
         b->latch = 1;
-    else if (b->v44 < 0xC8 && b->latch && b->v84 == 0)   /* 0x1e7e3: the party's turn, a release seen, nothing moving */
+    if (walk_mouse(b->w, &mx, &my, &mb))   /* 0x1e472: buttons on the screen's places */
+        k = fight_mouse(b, mb, k);
+    if (k < 0x80 && b->v44 < 0xC8 && b->latch && b->v84 == 0)   /* 0x1e7e3: the party's turn, a release seen, nothing moving */
         keys(b, scr, k);
     return b->unbuilt_new ? WALK_PASS_UNBUILT : 0;
 }

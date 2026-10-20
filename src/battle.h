@@ -24,11 +24,16 @@
  *   - what follows (docs/findings.md "WALK.SL step 16"): after a win the rewards bar (0x1f900 .. 0x1fcb5: "kills x coins each =
  *     coins" in NUMBER.LCZ 0x359b's 13 x 13 digits, bobbing over the swaying field until Space, Esc or Enter; the coins added, at most
  *     50,000), then the world's level-ups (0x130e2 .. 0x13291) with a message box each (0x1afb0: a MES_TXT.LCC text over the darkened
- *     bottom of the screen, waiting for a key); after a loss nothing more here (the caller shows gameover.h).
+ *     bottom of the screen, waiting for a key); after a loss nothing more here (the caller shows gameover.h);
+ *   - the other three commands (docs/findings.md "WALK.SL step 17"): flee (0x1f86b: one try in two goes to the rewards bar), the magic
+ *     list (0x21486, key 1 casts) with the member picker (0x1a8a4) for the spells that help, and the item list (0x20412: key 1 uses,
+ *     key 2 turns the page). battle_kind then says which of their loops the next pass is in.
  *
- * Not built (reported through battle_unbuilt): the mouse, commands 1 to 3 once confirmed (fleeing among them), keys 2 and 3 (music
- * and sound), the dialog some enemies start with (record word 0x11) and what follows a battle with them (record byte 0x2f set), the
- * Sound Blaster sounds.
+ * The mouse (findings "WALK.SL step 18"): the pointer and the buttons in the fight, the lists, the picker, the bar and the message box.
+ *
+ * Not built (reported through battle_unbuilt): keys 2 and 3 in the fight (music and sound), the picker face's countdown (only
+ * its last step is drawn), the dialog some enemies start with (record word 0x11) and what follows a battle with them (record byte 0x2f
+ * set), the Sound Blaster sounds.
  */
 #ifndef TK_BATTLE_H
 #define TK_BATTLE_H
@@ -65,14 +70,17 @@ const char *battle_unbuilt(const battle_t *b);
  * the pass with walk_resume(w, ticks, port60, battle_result(b)), in the same pass. */
 enum { BATTLE_LOST = 2, BATTLE_BACK = 3 };
 int battle_over(const battle_t *b);
-/* Which loop the next pass is in, for comparing with the original's loop tops: the fight (0x1d418), the rewards bar (0x1fb7d) or a
- * message box's wait (0x1b506). */
-enum { BATTLE_KIND_FIGHT = 1, BATTLE_KIND_REWARDS = 3, BATTLE_KIND_DIALOG = 4 };
+/* Which loop the next pass is in, for comparing with the original's loop tops: the fight (0x1d418), the rewards bar (0x1fb7d), a
+ * message box's wait (0x1b506), the magic list (0x217a6), the member picker (0x1aa30) or the item list (0x207b2). */
+enum { BATTLE_KIND_FIGHT = 1, BATTLE_KIND_REWARDS = 3, BATTLE_KIND_DIALOG = 4, BATTLE_KIND_MAGIC = 5, BATTLE_KIND_PICK = 6,
+       BATTLE_KIND_ITEMS = 7 };
 int battle_kind(const battle_t *b);
 /* What the battle returns: the number of slots whose monster died (0 after a loss). */
 unsigned battle_result(const battle_t *b);
 /* (0x2464a) A Big5 character's 28-byte glyph in NUMBER.LCZ; (size_t)-1 when its lead byte has none. */
 size_t battle_glyph_offset(unsigned hi, unsigned lo);
+/* N bytes at POS of the data file NAME run-length decoded (0x25eeb); malloc'd, its length in *len; NULL (and a message) on failure. */
+uint8_t *battle_read_unpack(const char *name, size_t pos, size_t n, size_t *len);
 /* (0x130e2 .. 0x13246) A party record's level-up after a won battle: when its experience (word 4) has reached the next level's
  * (word 6) and is below 60,000, the experience becomes that, the next level 500 higher, the most HP (word 0xa) a twelfth more and the
  * HP (word 8) full, each at most 60,000; returns 1. Otherwise nothing changes and it returns 0. */

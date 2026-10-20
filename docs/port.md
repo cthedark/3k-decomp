@@ -1032,5 +1032,99 @@ title, as in the original.
   `tools/mutate_battle.py` (`SKIP=n` leaves out the first n): 111 mutations, all caught.
 - **Pace (choices, not measured):** the bar and the game-over screen run at the world's 35 passes a second (the original paces neither);
   a message box's wait runs 41 rounds a pass, one palette step a pass.
-- **Not built:** fleeing (command 3's `rand() < 0x4000` path, which also reaches the bar), what follows a battle with a byte-0x2f enemy
+- **Not built:** fleeing (command 3's `rand() < 0x4000` path, which also reaches the bar; built in milestone 8e), what follows a battle with a byte-0x2f enemy
   (reported), the mouse, the Sound Blaster samples, ANI.LCP's message byte (the port passes the result directly).
+
+## Milestone 8e: the other three commands: flee, magic, items (C), built 2026-10-19
+
+All four command tabs now work with the keys (`docs/findings.md` "WALK.SL step 17").
+
+- **Flee (fourth tab):** the turn passes to the monsters; one try in two gets away, to the rewards bar and the world as after a win.
+- **Magic (second tab):** a list of the member's spells (MAGICT.LCC; those his level has reached, greyed when his MP is short) over the
+  field; arrows move, Esc goes back, **key 1** casts. Spells on the monsters hit every live front one, with numbers, a shout and 19 passes
+  of flashes, and then they flash and die as after an attack. Spells that heal, lower word 0x10 or revive open the member picker (arrows,
+  Enter, Esc). Casting ends the member's turn.
+- **Items (third tab):** a list of the member's 20 items on two pages (OBJECT.LCC); arrows move, **key 1** uses (food heals, potions add
+  MP or lower word 0x10, worn things change places with what he wears and set his attack and defence), **key 2** turns the page, Esc goes
+  back. Using things does not end his turn.
+- **Code:** `src/battle.c` (`keys`, `magic_begin`, `magic_round`, `magic_picked`, `magic_end`, `pick_begin`, `pick_round`, `items_begin`,
+  `items_round`, `item_use`, `text_pic`, `strip_numbers`, `next_member`, the spell flashes in `battle_pass`), `BATTLE_KIND_MAGIC`, `_PICK`,
+  `_ITEMS` in `src/battle.h`, `main.c` (41 rounds a pass in the lists and the picker, as in the message box). `tools/walk_scene_data.py
+  --byte` sets levels and items; `tools/battle_keys.py --flee` and `--all`; `tools/check_battle.sh` `RUNS=` runs only some starts.
+- **Checked:** `tools/check_battle.sh`, 18 new starts (flee, cast, heal, revive, long stays in the list and the picker, two item pages,
+  any key), all identical in screen, palette and rand in the lists, and in everything compared before in the battle and the world.
+  ASan/UBSan clean on five of them. `tools/mutate_battle.py`: 46 new deliberate bugs in the new code, all caught (run with
+  `RUNS` set to the new starts). The first run missed six, all for want of a start: no spell greyed between once and twice its level,
+  no Down from the fourth row, no Space on a spell that can be cast, no heal on a fallen member or past the most HP, no spell on an empty
+  front slot; four starts were added (`magic_walk`, `magic_heal_top`, `magic_heal_fallen`, `magic_casts`) and the six then caught. Three
+  are left out with a note in the file because they cannot show with the game's data. Two older patterns that the new code duplicated
+  were made unique and re-run (caught). The whole list (155) was not re-run in one go.
+- **Three values the original never sets** (palette counters of the three loops) are taken from what was seen: 3 in the magic list and 0x98
+  in the item list in every start (INFERRED constants), and in the picker the width (8 or 16) of the last character the list drew, which
+  the original leaves at that stack address (FOUND by two starts that disagreed).
+- **Not built:** the mouse in the lists and the picker; the picker face's 48-step countdown (only its last step is drawn); key 3 in the
+  item list and the lists outside a battle (the world's F-keys); the Sound Blaster sample at a cast.
+
+## Milestone 8f: the mouse in the battle (C), built 2026-10-19
+
+With a mouse (the window's pointer stands in for the driver) the game draws its own pointer, in the world and in the battle, and the
+battle can be played with it alone (`docs/findings.md` "WALK.SL step 18").
+
+- **Fight:** the pointer over a tab chooses it, a left press confirms; while a target is chosen the pointer over a front monster makes it
+  the target, a left press attacks; the right button is Esc; the music and sound buttons are keys 1 and 2.
+- **Magic list:** a left press on a row lights it, on the icon casts; **item list:** a left press on a row lights it, on the icons uses
+  the item, turns the page (or gives, outside a battle), on the left-hand buttons' corner leaves; **picker:** the pointer over a box
+  chooses it, a left press takes it; the right button leaves each of them. Any button leaves the rewards bar; the right one closes a
+  message box.
+- **World:** only the pointer (on the screen and in the window); its buttons do nothing yet.
+- **Code:** `src/battle.c` (`fight_mouse`, `ptr_hide` / `ptr_show` / `ptr_corner` / `ptr_move`, `press`, `items_end`, the mouse parts of
+  the passes and rounds), `src/walk.c` / `walk.h` (`walk_set_mouse`, `walk_mouse`, `walk_mouse_grab` / `_put` / `_under` / `_pic` /
+  `_hide` / `_reset`, the world's pointer), `main.c` (`feed_mouse`; the system pointer is hidden in the world). `tests/walk_dump.c` takes
+  `m:PASS:X:Y:BUTTONS`; `tools/battle_check.py` `--mouse` and `--world-passes`, and the party table in the lists; `tools/battle_mouse.py`.
+- **Checked:** `tools/check_battle.sh`, 18 new starts with a mouse driver in the oracle, all identical (and the 47 earlier ones);
+  ASan/UBSan clean on three. `tools/mutate_battle.py` (now 195): 40 new mouse mutations, all caught against the mouse starts
+  (`RUNS=mouse`). The first run missed seven for want of a start (the world's pointer outside the window, a held press onto a tab, a dead
+  front place under the pointer, a box's edge under it in the picker, a row pressed in the pass the pointer arrives, a box opened with
+  the right button held); six starts were added and all seven then caught. One is left out with a note (it cannot differ). Four older
+  item and picker patterns were brought up to date and re-run against all starts (caught). The whole list was not re-run in one go.
+- **Not built:** the world's buttons (walking and shooting with the mouse, the on-screen F-key buttons), the mouse in MARK.EXE's
+  game-over screen. The "button still down" flags of the fight, the magic list and the item list are never set by the original: the
+  lists' behaved as 0 when a press was held into them (seen once each), the fight's is taken as 0 (not seen).
+
+## Milestone 8g: the world's mouse buttons (C), built 2026-10-19
+
+In the world the left button walks the hero towards the pointer (a held press keeps walking, also over the buttons) and the right one
+shoots; a press on an on-screen button is that button's key (F1 .. F10, 1 .. 4, A), whose action is not built yet, as with the keys
+(`docs/findings.md` "WALK.SL step 19").
+
+- **Code:** `walk_mouse_key` and the mouse part of `walk_keys` in `src/walk.c` (`walk.h`), the pointer placed with the shake.
+- **Checked:** `tools/check_battle.sh`, eight new starts (pure walks, walks into battles and back, a drag onto the buttons, a release), all identical;
+  `test_mouse_key` pins 26 places seen in the original and the edges read from the code. `tools/mutate_battle.py` (206): 11 new, all
+  caught (four by the unit test), one left out with a note.
+- **Not built:** the buttons' actions.
+
+## Milestone 9a: F1, talking (C), built 2026-10-19
+
+F1 (or its button) makes the hero talk to the villager he faces, up to three cells away: the world darkens, the button is pressed, the
+view zooms in on the two of them and the villager's messages come one box at a time (Space, Enter or the right button for the next),
+setting the flags the story uses (`docs/findings.md` "WALK.SL step 20").
+
+- **Code:** `src/walk.c` (`talk_key`, `talk_begin`, `talk_round`, `talk_done`, `fkey_frame`, `fkey_shade`, `button_toggle`, `walk_kind`,
+  `palette_cycle_on`), `src/msgbox.[ch]` (the message box, now shared with the battle's level-ups), `walk_flag_set` in `src/walkscene.c`;
+  `tests/walk_dump.c` reports the world's message box as loop 4; `tools/walk_keys.py talk`.
+- **Checked:** `tools/check_battle.sh`, 12 new starts, all identical at every pass; the battle's level-up runs unchanged after the box
+  moved. `tools/mutate_battle.py` (224): 17 new talk mutations and the box's 16, all caught; two left out with notes.
+- **Not built:** talks that sell or ask for an answer (reported); the other F-keys.
+
+## Milestone 9b: talks that sell and ask (C), built 2026-10-19
+
+A seller's text comes up with the "是 / 否" buttons pressed by turns (Left / Right or the mouse, Enter or Space to take it): yes buys his
+item if the coins are enough. An asking villager's text comes with a five-digit box at the top (Up / Down to change a digit, Left /
+Right to choose one, Enter), and the right number sets his flag (`docs/findings.md` "WALK.SL step 21").
+
+- **Code:** `src/walk.c` (`yesno_open`, `yesno_round`, `talk_buy`, `ask_open`, `ask_round`, `ask_marks`, `talk_close`; the coins drawn
+  at the start in `mouse_start`), `msgbox_open`'s `wait` argument; `battle_read_unpack`; `tools/battle_check.py` loops 8 and 9;
+  `tools/walk_scene_data.py --talk`; `tools/number_keys.py`.
+- **Checked:** `tools/check_battle.sh`, 17 new starts (102 in all), all identical at every pass. `tools/mutate_battle.py` (258): 34 new
+  mutations, all caught; one left out with a note.
+- **Not built:** the right answer's sound; the dark scenes where the asking villagers are (so they were checked in scene 0).

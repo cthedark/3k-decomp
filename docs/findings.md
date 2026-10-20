@@ -2727,3 +2727,290 @@ survivors of the run before:
 **Not built:** fleeing; what follows a battle with a byte-0x2f enemy; the mouse in the bar, the box and the game over; the Sound Blaster
 samples; the ANI.LCP byte itself (the port hands the result over directly). **Pace:** the bar and the game over at 35 passes a second, the
 box's wait 41 rounds a pass: choices, the original paces none of them.
+
+## WALK.SL step 17: the other three commands (flee, magic, items), 2026-10-19
+
+Built in C (`src/battle.c`: the flee in `keys`, `magic_begin` / `magic_round` / `magic_picked` / `magic_end`, `pick_begin` /
+`pick_round`, `items_begin` / `items_round` / `item_use`, `text_pic`, the spell flashes in `battle_pass`) and compared with the original
+pass by pass: `tools/battle_check.py` now also stops at the magic list's loop (`0x217a6`), the member picker's (`0x1aa30`) and the item
+list's (`0x207b2`), where it compares screen, palette and rand. READ from the code (`0x1f1ca` .. `0x1f8e9`, `0x1e034` .. `0x1e109`,
+`0x20412` .. `0x21485`, `0x21486` .. `0x221d0`, `0x1a8a4` .. `0x1afaf`, `0x243ec`), SEEN in oracle screenshots (`work/b5/probe.py`, scratch),
+then CONFIRMED by the comparison unless it says otherwise. The shipped save has no spells and no items, so the starts set them
+(`tools/walk_scene_data.py --byte`).
+
+**The tabs** are attack, magic, items, flee: CONFIRMED (step 12 guessed magic, items and flee for the other three; step 14's "command 1
+runs `0x21486`, 2 and 3 are at `0x1f6f6` on" holds: 2 is the item list, 3 fleeing).
+
+**Flee** (`0x1f86b`): the member's mark goes back (0x0f → 0x1f), the turn goes to the monsters (`[bp-0x44]` = 0xc8, so later members lose
+theirs), and `rand()` below 0x4000 leaves for the rewards bar (`0x1f8ec`), as after a win: the kills so far, their coins, level-ups, the
+world. Otherwise the monsters act.
+
+**The magic list** (`0x21486`, called with the field picture as its drawing buffer; byte 0 of that header set to 1 means "in a battle"):
+- RPG.LCP 0xe95 decoded (0x264 bytes → 2,216): a 96 x 15 row with its header, then icons 48 wide. The icon at offset 0x5a8 (16 x 16) goes to
+  (84, 76); ten rows at (64, 102), 15 rows apart, the second column from (160, 102) (SEEN: the brown rows over the field).
+- Each spell is 20 bytes of MAGICT.LCC at 200 x the member's number + 20 x i: a 12-byte Big5 name; byte 0xc the level it needs (party byte
+  0xc); words 0xd (heal), 0xf (lowers word 0x10), 0x11 (revive); byte 0x13 its strength. A spell his level has not reached is not shown;
+  one shown with his MP (word 0xd) below twice its level is greyed (colour 0x16) and cannot be cast.
+- A name is drawn by `0x243ec`: an (8 x n) x 14 picture, ASCII 8 x 15 from the message box's font, other bytes (below 0x20 too) start Big5
+  pairs from NUMBER.LCZ; the colour turns +1 in each character's first 0x25 (Big5 0x50) pixels and +2 in the next as many; a shadow of colour
+  0xfa at (x + 1, y + 1) and (x, y + 1).
+- The lit row: 94 x 13 inside the row, colours 0x74 .. 0x77 turned 7 .. 10 (SEEN: red). Up and Down move a row (from the bottom of the
+  first column to the top of the second and back), Left and Right a column, Esc leaves (0), and **key 1 (scan code 2) casts** (SEEN: Space and
+  Enter do nothing there). Only after a release; a palette step every 41st round.
+- A spell with any of the three words opens the picker; one without costs twice its level in MP at once and returns its strength.
+- `[bp-0x1c]` (the palette counter) is never set: 3 at the loop's first round in every start tried (INFERRED constant).
+
+**The member picker** (`0x1a8a4`, also used by the world's F-keys; here with faces and fallen members allowed): 18 x 18 boxes from
+(70, 74), 18 apart, each with the member's face, a fallen one crossed out (eight 2 x 2 squares down each diagonal, colours 0x10 .. 0x17); the
+chosen box outlined in 0xf, the others 0x4e. Left and Right go round the party, Enter chooses (the face crossed in 7 .. 10), Esc gives up
+(0xc8, back to the list). Its palette counter `[bp-0x16]` is never set either: it holds the width argument (8 or 16) that the list's last
+character draw (`0x26c04` from `0x243ec`) pushed at that stack address. FOUND 2026-10-19 after two starts gave 8 and 0x10.
+- Then the caster's MP goes down, and: the heal word adds HP to a member who has some (up to word 0xa; result colour 0x2f, 0x9f when he had
+  none and nothing changed); the second word lowers word 0x10 (to 0 at least; 0x3f); the revive word adds HP even from 0 (0x1f, and his face
+  in the strip is drawn again). The face in the picker is drawn as a silhouette in that colour counting down 16 steps, three times, 100
+  draws a step (the port draws only the last, colour - 15). The list returns 1.
+
+**Back in the battle** (`0x1f247`): the result is also the key latch `[bp-0x38]` (so after a cast a held key counts at once: SEEN in the
+heal start, where the held Enter opens the list again for the next member). Not 0: the mark goes back and the next member who can act gets
+it. Above 1, on the monsters: each live front monster loses that many HP (a kill adds the monsters' experience stat to the caster's
+experience, **with no cap**, unlike an attack) and goes to state 0x32; the blow floats over it (colour 0xf0, 50 passes) and the HP left (0x22,
+65 passes), 0x3c apart from 0x30c5; shout 0 or 1 (`rand() / 0x4000`) in colour 0x30; then for 19 passes (`0x1e034`) the field is filled
+with colour 0x10 every other pass under the member's attack picture at x 0x47 at the bottom, and the hit place `[bp-0x32]` moves 0x241 a
+pass; at the end the states 0x32 become 0x14 and the monsters flash and die as after an attack. The strip's HP and MP are drawn again.
+
+**The item list** (`0x20412`): the member's 20 item bytes (party record 0x14 ..) are first packed to the front; two icons (32 x 16 from the
+same block) at (84, 76); the OBJECT.LCC records (30 bytes, item n at (n - 1) x 30) of his items and of the six things he wears (party table
+0x12c + 6 x his number) are read into the field + 0x7d0. In each round, when asked, the ten rows of the page (items 1 .. 10 or 11 .. 20) with
+the names (colour 0x10, shadow 0x16); the lit row in 0xb .. 0xe (SEEN: blue), recoloured over 0x4ca bytes of a 94 x 15 grab, so its last
+two rows are not lit. Arrows move as in the magic list but by items (0 .. 4 down the first column, 5 .. 9 the second), **key 1 uses the
+lit item, key 2 (scan code 3) turns the page**, Esc leaves; key 3 (giving to someone else) works only outside a battle. Using things
+**does not end the member's turn**: the list stays open, and after Esc the commands are chosen again.
+- A worn thing (byte 0x10 = its slot, 1 .. 6) changes places with what he wears there, and the two records change places in the list too
+  (`0x25c8e` swaps them); his attack (party byte 0x13) and defence (0x12) become the 8-bit sums over the six worn records of byte 0xe and
+  byte 0xf / 5, each halved when the record's byte 0x16 is not his number.
+- Then, from the record now in that row: word 0xc heals him (up to word 0xa), word 0x14 lowers word 0x10, word 0x17 adds MP (up to 4,000);
+  each of those uses the item up (its byte is 0; the list is packed again only when it is next opened).
+- `[bp-0x1e]` (the palette counter) is never set: 0x98 in every start tried, after the magic list too (INFERRED constant), so the first
+  round steps the palette.
+- Before the call the battle puts the mouse pointer's background (6 x 10) back at the screen's top-left corner even with no mouse; it held
+  the corner's own pixels (SEEN once), so the port does nothing there.
+
+**Checked:** `tools/check_battle.sh`, 18 new starts, all identical: three flee scripts (`tools/battle_keys.py --flee`, alone and with three
+members); a cast on the monsters that kills the three in front, and casts again and again until the battle is won (an empty front slot
+included); heals through the picker (one reaching the most HP, one on a fallen member, where nothing changes); 88 rounds in the list then
+120 in the picker (palette steps in both); the list walked top to bottom and back with greyed spells, Space and Enter doing nothing; a
+level-255 hero moving round the list, leaving the picker with Esc and reviving a fallen member; four item
+scripts (14 things on two pages: food eaten, worn things changed, the page turned) alone and with three members; three any-key scripts
+(`--all`). ASan/UBSan clean on five of them. `tools/mutate_battle.py`: 46 new mutations, all caught (port.md milestone 8e).
+
+**Not built:** the mouse in the lists and the picker; the face's countdown in the picker (only its last step is drawn); key 3 in the item
+list and the lists outside a battle (the F-keys); the Sound Blaster sample at a cast.
+
+## WALK.SL step 18: the mouse in the battle, 2026-10-19
+
+Built in C (`src/battle.c`: `fight_mouse`, `ptr_*`, `press`, the mouse parts of the fight pass, the lists, the picker, the rewards bar and
+the message box; `src/walk.c`: the world's pointer, `walk_set_mouse` / `walk_mouse*`; `main.c` feeds the window's pointer) and compared
+with the original pass by pass with a mouse driver in the oracle: `tools/battle_check.py --mouse PASS:X:Y:BUTTONS` (the emulator's
+INT 33h reports a driver with two buttons and function 3 in pixels), with `tools/battle_mouse.py` for random scripts. READ from the code
+(`0x260c9`, `0x10b87`, `0x12608`, `0x1287a`, `0x1329d`, `0x1cbfa`, `0x1d48b`, `0x1e10e`, `0x1e472` .. `0x1e7e3`, `0x1f1d9`, `0x1f24a`,
+`0x1f716`, `0x1f753`, `0x1fc75`, `0x1fcd7`, the lists' and the picker's mouse blocks, `0x1b5b5`), then CONFIRMED by the comparison.
+
+**The driver** (`0x260c9`, function 3): x kept at most 0x13a and y at most 0xc2; the buttons as the driver gives them (1 left, 2 right).
+Every place the program asks it is guarded by "a driver is there" (the segments at DS:0x382 .. 0x396, byte 4), except the corner grabs.
+
+**The pointer** (RPG.LCP 0x300: 6 x 10 after a 4-byte header, read after the palette; colour 0 transparent). One 6 x 10 buffer (the
+world buffer + 0x9538) keeps what is under it, for the world, the fight, the lists and the picker in turn. Each loop keeps its own place:
+when the place changes, what is under the old one is put back, the new one is kept and the pointer drawn. At the program's start
+(`0x10b87`, mouse or not) the place is 0 and the corner is kept; the battle (`0x1cbfa`), each list and the picker start the same way, and
+after each list the fight's pointer starts again from the corner (`0x1f24a`, `0x1f753`), after the battle the world's (`0x1329d`).
+- **World** (`0x12608`, before the window copy): the pointer on the screen, and over the play window (x 0x3b .. 0xff, y 7 .. 0xb7) also
+  into the world buffer at x - 0x30, so the window copy shows it. At a touch (`0x1287a`) what is under it goes back. **The world's
+  buttons are not built** (a left press walks towards the pointer through `0x2c8a0`, the right one shoots: `0x136d7`).
+- **The touch's left-over:** what the world kept under the pointer is from before the window copy, i.e. what the screen showed before
+  the world loop's first pass; with the pointer over the window the battle's first screen shows that patch. `battle_check.py` therefore
+  starts the port from the original's screen at the loop's first arrival when `--mouse` is given (the port's own start screen has no
+  world window).
+- **Fight** (`0x1e10e`, after the spell flashes): the pointer on the screen, and over the field (x 0x3b .. 0xff, y 0x41 .. 0xb2) its
+  part inside the field drawn into the field picture (`0x26b97`, rows and columns cut at the field's edges), so the field copy shows it.
+  The tabs are drawn with the pointer taken off and put back (`0x1d48b`).
+
+**The fight's buttons** (`0x1e472`, after the keyboard is read; the places are from the first read): a press counts once (`[bp-0x5c]`,
+set by a release; never initialised, taken as 0). The right button is Esc (the key latch set too). A press on the music or sound
+button (x 0x10d .. 0x13b, y 0x63 .. 0x75 / 0x76 .. 0x89) is key 1 or 2. With no command confirmed the pointer over the tabs (y 0x3c ..
+0x49) **chooses the tab without a press**, and a left press confirms it (Space). While the attack's target is chosen, the pointer over a
+live front monster (y 0x76 .. 0xb1, x 0x41 .. 0x7c, 0x83 .. 0xbe, 0xc3 .. 0xfe) makes it the target, and a left press attacks.
+
+**The lists and the picker** (each with a "button still down" flag, so a press counts once):
+- Magic list: a left press on a row lights it (row = (y - 0x66) / 15, column = (x - 0x40) / 0x60); on the icon (x 0x54 .. 0x63, y 0x4c ..
+  0x5b) it casts; the right button leaves. Its row loop reuses the buttons' variable, so after a row press the button tests see the row
+  number. When the pointer moves the lit row is lit again by a loop whose counter is the palette counter `[bp-0x1c]`, left at 0x78.
+- Item list: a left press on a row lights it (item = column x 5 + row; the loop's counter is the palette counter, left at the item, and
+  the pointer's x and y are set to 0); on an icon (x 0x54 .. 0x83) it is key 1, 2 or 3; on the left-hand buttons' corner (x 5 .. 0x31, y
+  0x67 .. 0x78) it leaves the list (once a key release has set the latch); the right button leaves. A move lights the row again with the
+  palette counter as the loop's (left at 0x78).
+- Member picker (read before the keyboard): the pointer over a box (y 0x4a .. 0x5b, from x 0x86, 18 apart, only members in the party)
+  chooses it without a press, a left press takes it, the right button gives up. A move redraws the boxes with the "box drawn last"
+  variable as the loop's, which the next round then redraws again.
+- Rewards bar: any button leaves (`0x1fc75`), and what is under the pointer goes back (`0x1fcd7`, also after a key; not after a loss).
+- Message box: the right button closes it once all buttons were up after it opened (`[bp-0xe]` starts at 1).
+
+**Where the reads write:** `0x260c9` writes x then y through two pointers; several callers pass the same buffer twice (the fight's
+second read: the field picture; the rewards bar: the hit pictures; the message box: the world's `[bp-0x20]` buffer), so its first word
+becomes y. None of this showed in any comparison (why the field picture's width word does not matter was not looked into; the hit
+pictures are not drawn after the bar); the port does not write them.
+
+**Checked:** `tools/check_battle.sh`, 18 new starts, all identical (screen, palette, rand, and in the lists now also the party table,
+which `battle_check.py` reads from the lists' first argument): the pointer standing still for 300 passes; a walk into the enemy with
+the pointer outside the window, then over it; a scripted visit of the magic tab, a row and the icon, the picker (hover, right button, a
+member), the item tab, a row, the icons and the corner; a press held from a tab onto a row of each list (the held press counts: the
+lists' flags are never initialised either, and the original behaved as with 0, seen once each); a press on the music button held onto a
+tab (not confirmed); the pointer going over a dead front monster while a target is chosen; item rows pressed in the pass the pointer
+arrives; the picker with the pointer on a box's edge; a message box opened with the right button held; seven random scripts with
+spells, items and the picker; one with a level-up's message box. The comparison stops when the world comes back (`--world-passes 0`).
+ASan/UBSan clean on three. The 47 earlier starts are unchanged and identical.
+
+**Not built:** the world's buttons (walking and shooting with the mouse, the on-screen F-key buttons), the mouse in MARK.EXE's game-over
+screen, the pointer in the dialog some enemies start with.
+
+## WALK.SL step 19: the world's mouse buttons, 2026-10-19
+
+Built in C (`walk_mouse_key`, the mouse part of `walk_keys`, the shake in the pointer's place, in `src/walk.c`) and compared with the
+original pass by pass with a mouse driver (`tools/battle_check.py --mouse`, scripts from `tools/battle_mouse.py --world`). READ from the
+code (`0x136d7` .. `0x137d6`, `0x13a02`, `0x2c8a0`), then CONFIRMED by the comparison unless it says otherwise.
+
+**In the key part of each pass** (`0x136d7`, after the arrows' release rules, before the 0x82 suppression): with a driver the buttons
+are read; the left one makes the key `0x2c8a0(x, y, last)` from the place the pass's pointer block read (`[bp-0x46]`, `[bp-0x70]`; in
+the pass a battle resumes, the place before the battle), an arrow from it setting `[bp-0xc0]`; the right one makes it Space (a shot).
+`[bp-0x30]` keeps the key after the suppression (`0x137d6`) as `last`. After the key is taken as the held one (`0x139fb`), a set
+`[bp-0xc0]` is cleared and so is the held key `[bp-0xc2]`, so a mouse walk is not continued by the arrows' release rules. Both start
+at 0 (`[bp-0x30]` SEEN 0 at the first pass).
+
+**`0x2c8a0`, the key of a left press** (SEEN for 26 places, one press each, the key read back after the call; pinned by
+`test_mouse_key` in `tests/test_walk.c`):
+- The arrow towards the pointer from (160, 100): along the larger of |x - 160| and |y - 100|, across when they are equal (Left below
+  x 160, else Right; Down when y is over 100, i.e. lower on the screen, else Up). This is the answer after an arrow (`last` 0x48 .. 0x50: a held press keeps walking
+  over the buttons too) and everywhere outside the two button columns.
+- Left column (x 4 .. 0x32): F1 .. F8 for y up to 0x15, 0x29, 0x3d, 0x51, 0x65, 0x79, 0x8d and above; y 0xa2 .. 0xae the arrow; from 0xaf
+  the A key (the corner icon).
+- Right column (x 0x10d .. 0x13b, y 0x3a .. 0xb1): F9, F10 and the keys 1, 2, 3, 4 for y up to 0x4d, 0x61, 0x75, 0x89, 0x9d and above.
+
+**The pointer and the shake:** the pointer is drawn into the world buffer where the shaken window copy starts (`0x2c581` moves the
+buffer's start before `0x12608`), so it does not shake with the world. FOUND by the comparison (a shot's spark shook the window and the
+port's pointer with it).
+
+**Checked:** `tools/check_battle.sh`, eight new starts in scene 1, all identical at every pass: from (110, 72) three pure walks of 1,500
+passes, and three of 2,500 that walk into battles, fight them with the same presses (the item list once) and go on in the world, which
+is now compared to the end; from (100, 100) a press held from the window onto the left-hand buttons, and a walk released while the
+keyboard port holds an arrow's break code. `make test` (with `test_mouse_key`) passes. `tools/mutate_battle.py`: 11 new mutations, all
+caught (three only after the last two starts were added; one left out with a note, it cannot differ).
+
+**Not built:** what the buttons' keys do (the F-key actions, keys 1 to 4, A): a press on a button reaches the same "not built" as the key.
+SEEN: a press on F1 in scene 1 makes the original do something at once (the screen changes), so starts must keep off the buttons.
+
+## WALK.SL step 20: F1, talking, 2026-10-19
+
+Built in C (`talk_key`, `talk_begin`, `talk_round`, `talk_done`, `fkey_frame`, `fkey_shade`, `button_toggle` in `src/walk.c`; the message
+box moved out of `src/battle.c` into `src/msgbox.c` and is shared) and compared with the original pass by pass (`tools/battle_check.py`,
+which counts the world's message box as the loop `0x1b506`). READ from the code (`0x14d46` .. `0x153ca`, `0x19680`, `0x19b9a` .. `0x1a120`,
+`0x1afb0`, `0x1c3ba`, `0x2c158`), SEEN in oracle screenshots (`work/b5/probe.py`), then CONFIRMED by the comparison unless it says otherwise.
+
+**Every F-key first** (`0x14d62`): the buffer's first bytes become 1, x, y and the map header's byte 5, and the frame routine `0x19680`
+draws the world into the buffer: ground, every villager and party member (the party with the standing frame 1), objects; no shots, rain or
+pointer (with byte 5 set it would double the view: not built). The buffer from 0xe00 on (0x9300 bytes) is shaded and the window shown,
+twice. The palette's first 48 bytes are copied to a scratch buffer (`[bp-0xb0]`, which the frame routine also uses for the entities'
+places) and its first 45 bytes lowered by 16 (at least 0): the message box's palette steps work on that copy, so the colours 0 .. 15 dim
+while it waits. After the key's action the pass ends at `0x172f0` (`0x1729e`), past the hero's walk counters.
+
+**F1** (`0x14e94`): its button is pressed (`0x1c3ba`: the 47 x 20 picture at (4, 2) turned round, its inside put back two rows and columns
+in, so the light and dark edges change places; a second call lets it go). Three cells are looked at: the hero's (x & ~1, y / 2) and the
+two beside it across the way he faces; then the three one step further, up to three steps. The first villager in one of them who is not
+an enemy (byte 0x31 = 0) is the one: he is turned to face the hero, the world is drawn and shaded once more (not shown), and he turns
+back. The loop uses the hero's walk counter `[bp-0x3c]` for each villager's x, so after F1 it holds the last one looked at (FOUND by the
+comparison: the hero's frame changed a pass early). It also writes the cells into the first bytes of the map buffer (`[bp-0xba]`,
+whose raw header is not read again); the port leaves that out. With nobody found the button is let go and the pass ends.
+
+**The talk** (`0x19b9a`): the 96 x 84 middle of the buffer doubled into the window (`0x2c658`, as at a battle's start). A villager has
+five 7-byte entries from byte 0xc: a flag that must be set (byte, bit), a flag to set or a member who joins (0xc9 .. ), a kind, a word
+message. The entry used is the last of the leading ones whose message is not 0 and whose flag is set, the first one if its flag is not
+set (`0x2c158`, the flag table at party table + 200). A joining member takes the first free place of the party (records swapped), the
+villager goes (position 0) and the flag at bytes 0x28/0x29 is set; otherwise the entry's flag is set, unless its byte 4 is 0xff. Then the
+message box (colour 0x50, the wait flag; `0x1afb0`), again with the next message as long as the text's last byte before `#` is 0x7f. At
+the end the coins are drawn again, the pointer starts from the corner and the button is let go.
+
+**The message box, a correction to step 16:** its two shadings run over the 4 bytes past the copy where they are (the world buffer's
+0x7305 .. 0x7308, in a battle the backdrop's 0x1ea5 .. 0x1ea8), so they are left darkened and the next box takes them darker still
+(FOUND: the second box of a five-box talk differed in its last pixel). Step 16's boxes never showed it (one box per member, each taking
+the same 4 bytes two shadings further was not covered).
+
+**Checked:** `tools/check_battle.sh`, 12 new starts in scene 0 and 1, all identical at every pass (screen, palette, rand, and in the world
+the villager and party tables, flags included): one talk; a five-box talk; walks with F1 now and then from the shipped start and from
+beside a villager (`tools/walk_keys.py talk`, 2,500 passes each, 168 to 313 box rounds); F1 finding nobody in scene 1; F1 pressed with the
+mouse and boxes closed with the right button; a villager whose second entry's flag is set, and not. `tools/mutate_battle.py`: 17 new
+mutations, all caught, two left out with notes (they cannot differ in scene 0); the message box's 16, now in `msgbox.c`, all caught
+against the talk and level-up starts. Scenes 13, 37, 39 and 43 have villagers who join, but their first world pass already differs
+(not looked into), so joining is READ only.
+
+**Not built:** talks that sell something (villager byte 0x30 set: a box without the wait flag, then `0x18c36`, the price at word 0x22 and
+the item at byte 0x21; scenes 2, 21, 27) and that ask for an answer (an entry's byte 4 = 0xff: `0x18fdc`, compared with the word at
+0x28 + 2 x the entry; scenes 9, 23). Both are reported. The other F-keys (still reported as their keys).
+
+## WALK.SL step 21: talks that sell and talks that ask, 2026-10-19
+
+Built in C (`yesno_open`, `yesno_round`, `talk_buy`, `ask_open`, `ask_round`, `ask_marks`, `talk_close` in `src/walk.c`; boxes without
+the wait flag in `msgbox_open`) and compared pass by pass (`tools/battle_check.py` now also counts the loops `0x18d23`, "yes / no", and
+`0x19166`, "number"). READ from the code (`0x19dd8` .. `0x1a120`, `0x18c36` .. `0x18fda`, `0x18fdc` .. `0x1967f`, `0x1afb0`, `0x27670`,
+`0x26450`, `0x25b94`), SEEN in the oracle's screens, CONFIRMED by the comparison.
+
+Step 20's "Not built" is now built (that paragraph stays as it was written). The only villagers with these talks are in scenes 2, 9, 21,
+23 and 27, and 9 and 23 are dark scenes (a lit circle round the hero; not built: their first world pass already differs). So the checks
+give their talks to a villager of scene 0 (`tools/walk_scene_data.py --talk V:SCENE:W` copies bytes 0xc .. 0x31 of a record in
+`__1.NOW`).
+
+**The boxes of such a talk do not wait** (villager byte 0x30 set, or the entry's byte 4 = 0xff): the screen's rows 134 .. 179 are kept
+first (`0x2723c` into the scratch buffer + 0x9c40), then every box of the talk is drawn at once (0x7f still chains them; no shipped
+villager of this kind has a chain) and stays. Without the wait flag `0x1afb0` makes the box only as big as the text: 320 x 16 for fewer
+than 40 bytes, narrowed by 16 pixels for each 8 of centring, 320 x 31 for fewer than 80, else 320 x 46, one row above the text. The copy
+it shades is still 0x3980 bytes, so whatever the box's size its first 320 pixels are shaded twice and the rest four times, and the 4
+bytes at the world buffer's 0x7305 are shaded twice as before. After the talk the kept rows are put back.
+
+**Selling** (`0x18c36`): the 47 x 20 pair of buttons at (269, 38), "是" and "否", is kept three ways: as it is, with the left half
+pressed and with the right half pressed (`0x1c3ba` on each 23 x 20 half). One pass a round: the palette step on the dimmed copy every
+26th round, the pressed half drawn again when the choice changed, Left = yes, Right = no, Enter or Space takes it (the raw port 0x60, so
+a key held counts every round); with a mouse, its own pointer (the pointer's picture and the 6 x 10 at its + 0x40), and over the buttons
+(x 270 .. 315, y 38 .. 57) it chooses by half and the left button takes it. Yes with enough coins: the price (word 0x22) is taken and the
+item (byte 0x21) put in the first empty place of 0x14 .. 0x27 of the first member with HP; the members are looked at only up to the
+first who is not in the party. Not enough coins, no place, or no: nothing happens and nothing is said.
+
+**Asking** (`0x18fdc`): RPG.LCP 0x1643b (0x4be bytes, decoded into the world buffer) holds ten 8 x 8 digits and the 94 x 16 box drawn at
+(113, 0) (it comes in over 256 steps of `0x27670`, a pixel one colour index nearer the picture's each, all in the same pass, so the loop
+starts with the picture). A number 0 .. 50,000 starts at 0 with the units chosen (marks of colour 9 above and below the digit). A round:
+the palette step every 23rd; the five digits drawn (`0x26450`, `0x25b94`, at (138 + 9 i, 4)); a key only after a release (a scancode
+> 0x7e): Up adds the digit's unit (at most 50,000), Down takes it away when the number is that large, Left the next digit up and Right
+the next down, both round; Enter takes it. Mouse: left button over the box's left end is Up, right end Down, middle Enter; the right
+button is Left. The right number is the word at 0x28 + 2 x the entry's place in the record; it sets the entry's flag (and plays sound
+`0x1c68e`, not built). SEEN: scene 9's villager 18 wants 38945 (the box `00845` part-way, then flag 10 bit 6 set); scene 23's villager 5
+asks two questions in turn, then gives a box that waits.
+
+**Stack bytes the two loops start from (FOUND by the comparison and a write watch, `work/b5/wprobe.py`):** neither loop sets its palette
+count, and the number box does not set its key latch. The yes / no count lies where the message box kept the high word of the text's
+file offset (`[bp-8]`; 0 for messages below 513); the number box's count lies where `0x19680` pushes an argument, the low byte of a
+buffer's offset, 0x16 in every run; its latch where the message box kept the last Big5 character's second byte (or the box's height),
+never 0. The latch only shows when the first round's key is an arrow made while F1 was still down (FOUND: a key made one pass after F1
+already counts); any other first key, F1's own make included, uses it up or sets it again.
+
+**The number box's mouse needs a key release.** The latch is set only by a scancode above 0x7e in port 0x60, and a mouse press stands
+for a key only in the rounds it is held, so after each press the port must show a break code (any key's release, the last one the
+keyboard sent) before the next press counts. In a run with no key since the start the port reads 0 and the box ignores every press
+except the middle one (Enter does not go through the latch). SEEN in the oracle; the check's mouse start releases Escape first.
+
+**The coins are drawn when the world starts** (`0x10bc9`, after the pointer's corner is kept), FOUND when a start with 100 coins
+differed at its first pass: every earlier start had 0 coins, which the start screen already showed. Built (`mouse_start`).
+
+**Checked:** `tools/check_battle.sh`, 17 new starts, all identical at every pass: selling with yes (bought, coins taken), no, too few
+coins, member 0's places full, a two-row box, with the mouse (the right button over the buttons, no, then yes) and waited on for 600
+passes; scene 9's question answered right and wrong; scene 23's villager 5 three times in a row (two questions, then a box); scene
+23's villagers 7 (two rows) and 8 (13 bytes); the number set with the mouse; an arrow made over F1; 50,000 and one more; Down with
+too little. Keys: `tools/number_keys.py`. `tools/mutate_battle.py`: 34 new mutations, all caught after the four starts above were
+added for the ones first missed; one left out with a note (the yes / no count, 0 for every shipped seller).
+
+**Not built:** the sound of a right answer; the dark scenes the asking villagers live in.

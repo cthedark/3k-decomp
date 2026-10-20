@@ -20,7 +20,7 @@ int walk_flag_test(const uint8_t *tab_b, unsigned idx, unsigned bit)
     return n <= 8 ? (tab_b[WS_FLAGS_AT + idx] >> (n - 1)) & 1 : 0;
 }
 
-static void set_flag(uint8_t *tab_b, unsigned idx, unsigned bit)
+void walk_flag_set(uint8_t *tab_b, unsigned idx, unsigned bit)
 {
     tab_b[WS_FLAGS_AT + idx] |= (uint8_t)((1u << (bit & 31)) & 0xFF);
 }
@@ -120,7 +120,7 @@ int walk_scene_apply_records(walk_scene_t *s)
                             break;
                         }
                     if (found) {
-                        set_flag(tb, R(k + 1), R(k + 2));
+                        walk_flag_set(tb, R(k + 1), R(k + 2));
                         break;
                     }
                 }

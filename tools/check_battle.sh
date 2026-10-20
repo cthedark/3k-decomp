@@ -8,7 +8,8 @@
 #   - six whole battles with attacks (stage 3): two won, then the rewards bar and over 1,200 world passes after it; four lost
 #     (correction, 2026-10-19: this comment said five were won; the comparison now tells won from lost);
 #   - level-ups after a win (step 16): one message box, and three with long waits in a party of three;
-#   - MARK.EXE's game-over screen from the screen a lost battle ends on, 400 passes (tools/gameover_check.py).
+#   - MARK.EXE's game-over screen from the screen a lost battle ends on, 400 passes (tools/gameover_check.py);
+#   - the other three commands (step 17): fleeing, the magic list with its member picker, the item list, and any key mixed.
 # Screen, palette, rand state and, by loop, the battle's tables and locals or the world's villager and party tables must be identical
 # at every pass.
 # The original's recordings are kept in work/check_battle (delete it to record again). PORT=path uses another build of walk_dump;
@@ -27,6 +28,13 @@ DOPTS=""   # extra tools/walk_scene_data.py options for the next run (--join, --
 run() {   # NAME SCENE X Y_HALF N [battle_check options]
     name=$1 sc=$2 x=$3 y=$4 n=$5
     shift 5
+    # RUNS="prefix ..." runs only the starts whose names begin with one of the prefixes ("gameover" for the game-over screen); used by
+    # tools/mutate_battle.py for the mutations of one part
+    if [ -n "${RUNS:-}" ]; then
+        ok=0
+        for p in $RUNS; do case "$name" in "$p"*) ok=1 ;; esac; done
+        [ $ok = 1 ] || return 0
+    fi
     D="$OUT/data_$name"
     [ -d "$D" ] || $PY tools/walk_scene_data.py "$D" "$sc" "$x" "$y" $DOPTS > /dev/null || exit 2
     res=$($PY tools/battle_check.py "$D" "$n" --keep "$OUT/k_$name" --cache "$OUT/$name.rec" --port "$PORT" "$@" 2>/dev/null | grep -v '^pass [0-9]*: wrote')
@@ -85,7 +93,157 @@ run strong_r9 1 94 55 1100 $($PY tools/battle_keys.py 9 1100 --attack)
 run strong_r19 1 214 43 1100 $($PY tools/battle_keys.py 6 1100 --attack)
 run strong_s34 34 106 30 1100 $($PY tools/battle_keys.py 7 1100 --attack)
 DOPTS=""
+# the other three commands (docs/findings.md "WALK.SL step 17"). Fleeing (the fourth tab, tools/battle_keys.py --flee): one try in
+# two leaves for the rewards bar; with one member and with three
+for seed in 1 2; do run "s1_rec4_flee$seed" 1 106 36 1200 $($PY tools/battle_keys.py $seed 1200 --flee); done
+DOPTS="--join 1 --join 2"; run party3_flee5 1 106 36 900 $($PY tools/battle_keys.py 5 900 --flee); DOPTS=""
+# the magic list (the second tab): a hero of level 120 with 300 MP casts his first spell (on the monsters); a hero with 100 HP heals
+# himself in a party of three (the picker); a hero of level 255 in a party with a fallen member moves round the list, leaves the
+# picker with Esc and revives him; a stay of 88 rounds in the list and 120 in the picker (palette steps in both)
+MOPEN="--key 2:0x81 --key 5:0x4d --key 7:0xcd --key 10:0x39 --key 12:0xb9"
+DOPTS="--byte 0:0xc:120 --word 0:0xd:300"; run magic_cast 1 106 36 300 $MOPEN --key 20:0x02 --key 22:0x82
+DOPTS="--join 1 --join 2 --byte 0:0xc:120 --word 0:0xd:300 --hp 0:100 --hp 1:0"
+run magic_heal 1 106 36 300 $MOPEN --key 16:0x50 --key 18:0xd0 --key 22:0x02 --key 24:0x82 --key 28:0x1c --key 30:0x9c
+run magic_long 1 106 36 300 $MOPEN --key 16:0x50 --key 18:0xd0 --key 100:0x02 --key 102:0x82 --key 220:0x1c --key 222:0x9c
+DOPTS="--join 1 --join 2 --byte 0:0xc:255 --word 0:0xd:5000 --hp 1:0 --byte 2:0xc:100 --word 2:0xd:10"
+K="$MOPEN --key 16:0x4d --key 18:0xcd --key 20:0x50 --key 21:0xd0 --key 24:0x50 --key 25:0xd0 --key 28:0x48 --key 29:0xc8 --key 31:0x50"
+K="$K --key 32:0xd0 --key 35:0x4b --key 36:0xcb --key 38:0x4d --key 39:0xcd --key 42:0x02 --key 43:0x82 --key 46:0x4d --key 47:0xcd"
+K="$K --key 50:0x4b --key 51:0xcb --key 53:0x4b --key 54:0xcb --key 56:0x01 --key 57:0x81 --key 60:0x02 --key 61:0x82 --key 64:0x4d"
+run magic_revive 1 106 36 400 $K --key 65:0xcd --key 68:0x1c --key 69:0x9c
+# the list walked from top to bottom and back, Space and Enter on a spell that can be cast (they do nothing there), spells greyed by MP
+# between once and twice their level (key 1 on one does nothing), then a cast; heals that reach the most HP and one on a fallen member
+K="$MOPEN"
+for p in 16 19 22 25 28 31 34 37 40; do K="$K --key $p:0x50 --key $((p + 1)):0xd0"; done
+for p in 43 46 49 52 55 58 61 64 67; do K="$K --key $p:0x48 --key $((p + 1)):0xc8"; done
+K="$K --key 70:0x39 --key 71:0xb9 --key 73:0x1c --key 74:0x9c --key 76:0x4d --key 77:0xcd --key 79:0x50 --key 80:0xd0 --key 82:0x50"
+K="$K --key 83:0xd0 --key 85:0x4b --key 86:0xcb --key 88:0x02 --key 89:0x82 --key 91:0x48 --key 92:0xc8 --key 94:0x02 --key 95:0x82"
+DOPTS="--byte 0:0xc:120 --word 0:0xd:150"; run magic_walk 1 106 36 300 $K
+DOPTS="--join 1 --join 2 --byte 0:0xc:120 --word 0:0xd:300 --hp 0:500 --hp 1:0"
+run magic_heal_top 1 106 36 300 $MOPEN --key 16:0x50 --key 18:0xd0 --key 22:0x02 --key 24:0x82 --key 28:0x1c --key 30:0x9c
+run magic_heal_fallen 1 106 36 300 $MOPEN --key 16:0x50 --key 18:0xd0 --key 22:0x02 --key 24:0x82 --key 26:0x4d --key 27:0xcd \
+    --key 30:0x1c --key 32:0x9c
+# casts again and again (Space opens the list in the party's turn, key 1 casts): after the first kills the three in front, two from the
+# back step forward and the third front slot stays empty
+K="--key 2:0x81 --key 5:0x4d --key 7:0xcd"
+for p in 10 40 70 100 130 160 190 220 250 280 310 340 370; do K="$K --key $p:0x39 --key $((p + 2)):0xb9 --key $((p + 6)):0x02 --key $((p + 8)):0x82"; done
+DOPTS="--byte 0:0xc:120 --word 0:0xd:3000"; run magic_casts 1 106 36 600 $K
+# the item list (the third tab), opened at pass 14, then any key (tools/battle_keys.py --all): a hero with 14 things, two pages, worn
+# things changed, food eaten; alone and in a party of three with a fallen member
+I="--byte 0:0x14:1 --byte 0:0x15:3 --byte 0:0x17:12 --byte 0:0x18:23 --byte 0:0x19:21 --byte 0:0x1a:14 --byte 0:0x1b:9 --byte 0:0x1c:10"
+I="$I --byte 0:0x1d:11 --byte 0:0x1e:13 --byte 0:0x1f:16 --byte 0:0x20:17 --byte 0:0x21:26 --byte 0:0x24:37 --byte 0:0x12e:5 --hp 0:100"
+I="$I --byte 0:0xc:120 --word 0:0xd:10"
+IOPEN="--key 2:0x81 --key 5:0x4b --key 7:0xcb --key 9:0x4b --key 11:0xcb --key 14:0x39 --key 16:0xb9"
+for seed in 4 6; do
+    DOPTS="$I"; run "items$seed" 1 106 36 1200 $IOPEN $($PY tools/battle_keys.py $seed 1200 --all --from 18 | sed 's/--key 18:0x81//')
+    DOPTS="$I --join 1 --join 2 --hp 1:0 --byte 1:0x14:1 --byte 1:0x15:27 --byte 1:0xc:100 --word 1:0xd:2000"
+    run "items3_$seed" 1 106 36 1200 $IOPEN $($PY tools/battle_keys.py $seed 1200 --all --from 18 | sed 's/--key 18:0x81//')
+done
+# any key from the start, the same party: all four commands mixed
+for seed in 1 2 3; do run "allkeys$seed" 1 106 36 1500 $($PY tools/battle_keys.py $seed 1500 --all); done
+DOPTS=""
+# the mouse (docs/findings.md "WALK.SL step 18"; a driver is there, tools/battle_check.py --mouse): the pointer standing still in the
+# battle; a press on the magic tab, a row, the icon, the picker (left, right to give up, then a member), the item tab, a row, the
+# icons and the left-hand corner; a press held from a tab onto a row of each list; random scripts (tools/battle_mouse.py) with
+# items, spells and level-ups. The comparison stops when the world comes back (its own buttons are not built: --world-passes 0)
+MW="--world-passes 0"
+run mouse_still 1 106 36 300 $MW --mouse 0:160:100:0
+# a walk into the enemy with the pointer outside the window, then over it: the world's pointer on the screen for 9 passes
+run mouse_walk 1 110 36 200 $MW --tick-base 20 --key 1:0x4b --key 9:0xcb --mouse 0:20:190:0 --mouse 4:300:30:0 --mouse 7:200:120:0
+M="--key 1:0x81 --mouse 0:160:100:0 --mouse 2:112:66:0 --mouse 4:112:66:1 --mouse 6:112:66:0 --mouse 10:96:124:0 --mouse 12:96:124:1"
+M="$M --mouse 14:96:124:0 --mouse 16:90:82:0 --mouse 18:90:82:1 --mouse 20:90:82:0 --mouse 24:154:80:0 --mouse 28:174:80:0"
+M="$M --mouse 30:174:80:2 --mouse 32:174:80:0 --mouse 36:90:82:0 --mouse 38:90:82:1 --mouse 40:90:82:0 --mouse 44:138:80:0"
+M="$M --mouse 46:138:80:1 --mouse 48:138:80:0 --mouse 60:160:66:0 --mouse 62:160:66:1 --mouse 64:160:66:0 --mouse 70:180:140:0"
+M="$M --mouse 72:180:140:1 --mouse 74:180:140:0 --mouse 78:92:82:0 --mouse 80:92:82:1 --mouse 82:92:82:0 --mouse 86:108:82:0"
+M="$M --mouse 88:108:82:1 --mouse 90:108:82:0 --mouse 94:16:112:0 --mouse 96:16:112:1 --mouse 98:16:112:0"
+DOPTS="$I --join 1 --join 2 --byte 0:0xc:120 --word 0:0xd:300 --hp 0:100 --hp 1:0"; run mouse_lists 1 106 36 300 $MW $M
+run mouse_held_magic 1 106 36 40 $MW --key 1:0x81 --mouse 0:160:100:0 --mouse 2:112:66:0 --mouse 4:112:66:1 --mouse 6:96:140:1 \
+    --mouse 9:96:140:0
+run mouse_held_items 1 106 36 40 $MW --key 1:0x81 --mouse 0:160:100:0 --mouse 2:160:66:0 --mouse 4:160:66:1 --mouse 6:96:140:1 \
+    --mouse 9:96:140:0
+for seed in 15 16 18 24; do run "mouse_magic$seed" 1 106 36 1500 $MW $($PY tools/battle_mouse.py $seed 1500); done
+DOPTS="$I"; for seed in 3 7 8; do run "mouse_items$seed" 1 106 36 1000 $MW $($PY tools/battle_mouse.py $seed 1000); done
+DOPTS="--word 0:4:199"; run mouse_lvl13 1 106 36 1500 $MW $($PY tools/battle_mouse.py 13 1500)
+DOPTS=""
+# a press on the music button held onto the magic tab (it chooses the tab but does not confirm it); a battle with no back row (a walk from
+# (114, 72) at the clock 30000, the party first) attacked with the keys until a front monster is dead, the pointer going over the three
+# front places all the while (a dead one is not taken as the target)
+run mouse_held_tab 1 106 36 40 $MW --key 1:0x81 --mouse 0:288:104:0 --mouse 2:288:104:1 --mouse 4:112:66:1 --mouse 8:112:66:0 \
+    --mouse 12:112:66:1 --mouse 14:112:66:0
+M=""; for p in $(seq 60 4 900); do M="$M --mouse $p:$(( (p / 4 % 3) * 64 + 96 )):144:0"; done
+run mouse_dead_slot 1 114 36 900 $MW --tick-base 30000 --key 1:0x4b --key 21:0xcb $($PY tools/battle_keys.py 3 900 --attack --from 60) \
+    --mouse 0:300:30:0 $M
+# the item list opened with the mouse, then rows pressed in the same pass the pointer arrives (the palette counter then is the item,
+# not the 0x78 a move leaves), 60 passes in the list, the right button; the picker with the pointer on a box's edge for 40 passes
+DOPTS="$I"; run mouse_item_rows 1 106 36 120 $MW --key 1:0x81 --mouse 0:160:100:0 --mouse 2:160:66:0 --mouse 4:160:66:1 \
+    --mouse 6:160:66:0 --mouse 10:180:140:1 --mouse 12:180:140:0 --mouse 16:100:110:1 --mouse 18:100:110:0 --mouse 80:100:110:2 \
+    --mouse 82:100:110:0
+M="--key 1:0x81 --mouse 0:160:100:0 --mouse 2:112:66:0 --mouse 4:112:66:1 --mouse 6:112:66:0 --mouse 10:96:124:0 --mouse 12:96:124:1"
+M="$M --mouse 14:96:124:0 --mouse 16:90:82:0 --mouse 18:90:82:1 --mouse 20:90:82:0 --mouse 24:150:80:0 --mouse 64:150:80:2 --mouse 66:150:80:0"
+DOPTS="$I --join 1 --join 2 --byte 0:0xc:120 --word 0:0xd:300 --hp 0:100 --hp 1:0"; run mouse_picker_edge 1 106 36 120 $MW $M
+# a won battle (the keys) whose rewards bar is left with the right button, held while the level-up's message box opens (it does not
+# close it), then a new right press that does
+DOPTS="--word 0:4:199"; run mouse_box_held 1 106 36 1300 $MW $($PY tools/battle_keys.py 3 1219 --attack) --mouse 0:300:30:0 \
+    --mouse 1221:300:30:2 --mouse 1260:300:30:0 --mouse 1270:300:30:2 --mouse 1272:300:30:0
+DOPTS=""
+# the world's mouse buttons (step 19): presses over the play window only (tools/battle_mouse.py --world: walking towards the pointer,
+# held up to 30 passes, and shots with the right button), from (110, 72) in scene 1 at the clock 20: pure walks, and walks into
+# battles fought with the same presses and back in the world (the world compared to the end)
+for seed in 2 4 6; do run "mouse_world$seed" 1 110 36 1500 --tick-base 20 $($PY tools/battle_mouse.py $seed 1500 --world); done
+for seed in 1 8 18; do run "mouse_world$seed" 1 110 36 2500 --tick-base 20 $($PY tools/battle_mouse.py $seed 2500 --world); done
+# a press held from the window onto the left-hand buttons (it walks on, it does not press them); a walk released while the keyboard
+# port holds an arrow's break code (the walk does not go on as a held arrow); from (100, 50) in scene 1, away from the enemies
+run mouse_world_drag 1 100 50 120 --tick-base 20 --mouse 0:160:100:0 --mouse 10:220:100:1 --mouse 30:20:50:1 --mouse 60:20:50:0 \
+    --mouse 70:160:40:1 --mouse 90:20:150:1 --mouse 100:20:150:0
+run mouse_world_release 1 100 50 120 --tick-base 20 --key 1:0xc8 --mouse 0:160:100:0 --mouse 10:220:100:1 --mouse 40:220:100:0 \
+    --mouse 70:110:150:1 --mouse 80:110:150:0
+# F1, talking (step 20), in scene 0: a villager two cells to the right of the hero; one whose text goes on over five boxes (texts
+# ending in 0x7f); walks with F1 now and then and Space or Enter to close the boxes (tools/walk_keys.py talk) from the shipped start
+# and from (108, 70); the same in scene 1 (F1 finds nobody); F1 pressed with the mouse and the box closed with the right button
+DOPTS="--byte 0:2:3"; run talk_one 0 108 35 300 --key 1:0x81 --key 3:0x3b --key 5:0xbb --key 100:0x39 --key 102:0xb9
+K="--key 1:0x81 --key 3:0x3b --key 5:0xbb"; for p in 60 120 180 240 300 360; do K="$K --key $p:0x39 --key $((p + 2)):0xb9"; done
+DOPTS="--byte 0:2:2"; run talk_five 0 80 29 420 $K
+DOPTS=""; for seed in 5 6 7 10; do run "talk_walk$seed" 0 86 35 2500 $($PY tools/walk_keys.py talk $seed 2500); done
+DOPTS="--byte 0:2:3"; for seed in 1 2; do run "talk_near$seed" 0 108 35 2500 $($PY tools/walk_keys.py talk $seed 2500); done
+DOPTS=""; run talk_nobody 1 110 36 2000 --tick-base 20 $($PY tools/walk_keys.py talk 8 2000)
+DOPTS="--byte 0:2:3"; run talk_mouse 0 108 35 300 --mouse 0:160:100:0 --mouse 3:20:5:1 --mouse 5:20:5:0 --mouse 60:200:100:2 \
+    --mouse 62:200:100:0 --mouse 90:200:100:2 --mouse 92:200:100:0
+# selling and asking talks (step 21), given to the villager at (111, 70) in scene 0 (walk_scene_data.py --talk): scene 2's seller (item 7
+# for 15 coins) with 100 coins, yes; no; with 10 coins; with member 0's 20 item places full; scene 27's seller (a two-row box); the
+# mouse on the buttons (no, then yes); scene 9's question (38945) answered right and wrong; scene 23's villager 5, two questions and
+# then a box that waits, three talks in a row (short boxes); scene 23's villagers 7 (a two-row box) and 8 (13 bytes); the number set
+# with the mouse
+F1="--key 1:0x81 --key 3:0x3b --key 5:0xbb"
+DOPTS="--talk 8:2:0 --word 7:10:100"; run sell_yes 0 108 35 120 $F1 --key 40:0x4d --key 42:0xcd --key 60:0x4b --key 62:0xcb --key 80:0x1c --key 82:0x9c
+run sell_no 0 108 35 120 $F1 --key 40:0x4d --key 42:0xcd --key 80:0x39 --key 82:0xb9
+DOPTS="--talk 8:2:0 --word 7:10:10"; run sell_poor 0 108 35 120 $F1 --key 80:0x1c --key 82:0x9c
+FULL="--talk 8:2:0 --word 7:10:100"; for o in $(seq 20 39); do FULL="$FULL --byte 0:$o:1"; done
+DOPTS="$FULL"; run sell_full 0 108 35 120 $F1 --key 80:0x1c --key 82:0x9c
+DOPTS="--talk 8:27:3 --word 7:10:100"; run sell_rows 0 108 35 120 $F1 --key 80:0x1c --key 82:0x9c
+DOPTS="--talk 8:2:0 --word 7:10:100"; run sell_mouse 0 108 35 200 --mouse 0:160:100:0 --mouse 3:20:5:1 --mouse 5:20:5:0 \
+    --mouse 30:300:45:0 --mouse 40:300:45:2 --mouse 42:300:45:0 --mouse 60:300:45:1 --mouse 62:300:45:0 --mouse 80:200:100:0 $F1 --key 90:0x1c --key 92:0x9c \
+    --mouse 120:20:5:1 --mouse 122:20:5:0 --mouse 140:280:45:0 --mouse 160:280:45:1 --mouse 162:280:45:0
+DOPTS="--talk 8:9:18"; run ask_right 0 108 35 260 $($PY tools/number_keys.py 38945 2>/dev/null)
+run ask_wrong 0 108 35 260 $($PY tools/number_keys.py 38946 2>/dev/null)
+K="$($PY tools/number_keys.py 13 2>/dev/null) $($PY tools/number_keys.py 23 82 2>/dev/null) --key 150:0x3b --key 152:0xbb --key 210:0x39 --key 212:0xb9"
+DOPTS="--talk 8:23:5"; run ask_three 0 108 35 360 $K
+DOPTS="--talk 8:23:7"; run ask_rows 0 108 35 260 $($PY tools/number_keys.py 1 2>/dev/null)
+DOPTS="--talk 8:23:8"; run ask_short 0 108 35 260 $($PY tools/number_keys.py 1 2>/dev/null)
+DOPTS="--talk 8:9:18"; run ask_mouse 0 108 35 300 --key 1:0x81 --mouse 0:160:100:0 --mouse 3:20:5:1 --mouse 5:20:5:0 --mouse 20:120:5:0 \
+    --mouse 30:120:5:1 --mouse 34:120:5:0 --mouse 40:120:5:1 --mouse 50:120:5:0 --mouse 60:150:50:2 --mouse 62:150:50:0 \
+    --mouse 70:200:5:1 --mouse 72:200:5:0 --mouse 80:200:5:1 --mouse 82:200:5:0 --mouse 100:150:5:1 --mouse 102:150:5:0
+# the number box: a key made right after F1's make (the latch is set at the start); 50,000 and one more (at most 50,000); Down at the
+# tens with 1 (nothing); the yes / no buttons waited on for 600 passes (palette steps)
+run ask_latch 0 108 35 120 --key 3:0x3b --key 4:0x48 --key 7:0xc8 --key 30:0x1c --key 32:0x9c
+run ask_cap 0 108 35 260 $($PY tools/number_keys.py 50000 2>/dev/null)
+run ask_down 0 108 35 120 $F1 --key 20:0x48 --key 22:0xc8 --key 26:0x4b --key 28:0xcb --key 32:0x50 --key 34:0xd0 --key 60:0x1c --key 62:0x9c
+DOPTS="--talk 8:2:0 --word 7:10:100"; run sell_wait 0 108 35 700 $F1 --key 640:0x1c --key 642:0x9c
+DOPTS=""
+# which entry: the villager at (82, 70) with flag 0 bit 3 set (his second entry) and not
+for f in 9 1; do DOPTS="--byte 0:2:2 --byte 0:200:$f"; run "talk_flag$f" 0 84 35 300 --key 1:0x81 --key 3:0x3b --key 5:0xbb --key 100:0x39 --key 102:0xb9; done
+DOPTS=""
+DOPTS=""
 # after the loss: MARK.EXE's game-over screen from the screen the battle ended on (tools/gameover_check.py)
+case " ${RUNS:-gameover} " in *" gameover"*)
 START=$($PY -c "
 import sys
 F = 64000 + 768 + 1 + 4 + 1000 + 0x124
@@ -98,5 +256,6 @@ case "$res" in
     *identical*) echo "gameover: $res" ;;
     *) echo "gameover: DIFFERENT"; echo "$res" | head -4; fail=1; [ "${FIRST_FAIL_EXIT:-0}" = 1 ] && exit 1 ;;
 esac
+;; esac
 [ $fail = 0 ] && echo "battle: all identical"
 exit $fail

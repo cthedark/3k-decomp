@@ -54,6 +54,23 @@ static unsigned port_at(int pass)
     return v;
 }
 
+/* The mouse over the passes (m:PASS:X:Y:BUTTONS arguments): none given means no driver; else the earliest holds until the next. */
+static struct { int pass, x, y; unsigned b; } g_mice[1024];
+static int g_nmice;
+
+static void mouse_at(walk_t *w, int pass)
+{
+    int k = -1;
+    for (int i = 0; i < g_nmice; i++) {   /* the latest at or before `pass`; before the first one, the first one */
+        int ok = g_mice[i].pass <= pass;
+        if (k < 0 || (ok && (g_mice[k].pass > pass || g_mice[i].pass >= g_mice[k].pass)) ||
+            (!ok && g_mice[k].pass > pass && g_mice[i].pass < g_mice[k].pass))
+            k = i;
+    }
+    if (k >= 0)
+        walk_set_mouse(w, 1, g_mice[k].x, g_mice[k].y, g_mice[k].b);
+}
+
 static int write_bytes(const char *path, const void *a, size_t na, const void *b, size_t nb)
 {
     FILE *f = fopen(path, "wb");
@@ -98,6 +115,19 @@ int main(int argc, char **argv)
         for (int a = 8; a < argc; a++) {
             int p;
             unsigned c;
+            if (argv[a][0] == 'm') {   /* m:PASS:X:Y:BUTTONS, a mouse driver is there (tools/battle_check.py --mouse) */
+                int x, y;
+                if (sscanf(argv[a], "m:%d:%i:%i:%i", &p, &x, &y, &c) != 4 || g_nmice >= (int)(sizeof g_mice / sizeof g_mice[0])) {
+                    fprintf(stderr, "idle: mouse arguments are m:PASS:X:Y:BUTTONS\n");
+                    walk_free(w);
+                    return 2;
+                }
+                g_mice[g_nmice].pass = p;
+                g_mice[g_nmice].x = x;
+                g_mice[g_nmice].y = y;
+                g_mice[g_nmice++].b = c;
+                continue;
+            }
             if (sscanf(argv[a], "%d:%i", &p, &c) != 2) {
                 fprintf(stderr, "idle: key arguments are PASS:CODE\n");
                 walk_free(w);
@@ -117,6 +147,7 @@ int main(int argc, char **argv)
             for (int i = 0; f && i < n; i++) {
                 if (battle_mode) {
                     uint32_t tk = (uint32_t)(base + (unsigned long)i / div);
+                    mouse_at(w, i);
                     int ev = bt ? battle_pass(bt, &scr, port_at(i)) : walk_pass(w, &scr, tk, port_at(i));
                     if (!bt && (ev & WALK_PASS_BATTLE)) {
                         bt = battle_begin(w, &scr);
@@ -137,7 +168,7 @@ int main(int argc, char **argv)
                      * state and, in the battle, BATTLE_STATE_BYTES - 4, in the world the villager table (1000) and the party table to
                      * the coins (0x124); zeros after */
                     uint8_t st[1 + DUMP_STATE] = {0};
-                    st[0] = bt == NULL ? 0 : battle_over(bt) == BATTLE_LOST ? 2 : (uint8_t)battle_kind(bt);
+                    st[0] = bt == NULL ? (uint8_t)walk_kind(w) : battle_over(bt) == BATTLE_LOST ? 2 : (uint8_t)battle_kind(bt);
                     if (bt) {
                         battle_state_dump(bt, st + 1);
                     } else {

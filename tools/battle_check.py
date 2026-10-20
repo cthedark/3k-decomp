@@ -5,8 +5,9 @@ Usage: work/venv/bin/python tools/battle_check.py DATA N [--tick-base B] [--tick
                                                  [--cache FILE] [--port BIN]
 
 DATA is a data directory that starts the game on an enemy (tools/walk_scene_data.py DIR 1 106 36). The oracle runs WALK.SL with
-four loop tops counted as one sequence of passes: the world (0x11d36), the battle (0x1d418), the rewards bar after a win (0x1fb7d)
-and a message box's wait (0x1b506). At each arrival it records which loop, the screen, the palette, the rand state and, in the battle
+nine loop tops counted as one sequence of passes: the world (0x11d36), the battle (0x1d418), the rewards bar after a win (0x1fb7d),
+a message box's wait (0x1b506), the magic list (0x217a6), the member picker (0x1aa30) and the item list (0x207b2; in these three only
+the screen, palette and rand state are compared), a talk's yes / no buttons (0x18d23) and its number (0x19166; the same). At each arrival it records which loop, the screen, the palette, the rand state and, in the battle
 and the rewards bar, the monster table ([bp-0x7c], 0x3c bytes), the sway count and direction ([bp-0x52], [bp-0x70]), the party table
 and the floating numbers; in the battle also who acts ([bp-0x44]), the turn counter ([bp-0x5e]), the chosen command ([bp-0x82]), the
 choosing flag ([bp-0x72]), the key latch ([bp-0x38]) and more locals; in the world the villager table and the party table up to the
@@ -29,8 +30,14 @@ from unicorn import UC_HOOK_CODE  # noqa: E402
 from unicorn.x86_const import UC_X86_REG_BP, UC_X86_REG_DS, UC_X86_REG_SS  # noqa: E402
 
 WORLD_TOP, BATTLE_TOP, REWARDS_TOP, DIALOG_TOP = 0x11D36, 0x1D418, 0x1FB7D, 0x1B506
-KIND = {WORLD_TOP: 0, BATTLE_TOP: 1, REWARDS_TOP: 3, DIALOG_TOP: 4}
-KIND_NAME = {0: 'world', 1: 'battle', 2: 'lost', 3: 'rewards', 4: 'message box'}
+# the magic list's, the member picker's and the item list's loops (screen, palette and rand are compared there)
+MAGIC_TOP, PICK_TOP, ITEMS_TOP = 0x217A6, 0x1AA30, 0x207B2
+# a talk's yes / no buttons (0x18c36) and its number to set (0x18fdc): screen, palette and rand
+YESNO_TOP, NUMBER_TOP = 0x18D23, 0x19166
+KIND = {WORLD_TOP: 0, BATTLE_TOP: 1, REWARDS_TOP: 3, DIALOG_TOP: 4, MAGIC_TOP: 5, PICK_TOP: 6, ITEMS_TOP: 7, YESNO_TOP: 8,
+        NUMBER_TOP: 9}
+KIND_NAME = {0: 'world', 1: 'battle', 2: 'lost', 3: 'rewards', 4: 'message box', 5: 'magic list', 6: 'member picker',
+             7: 'item list', 8: 'yes / no', 9: 'number'}
 MON = 0x3C
 LOCALS = (0x52, 0x70, 0x44, 0x5E, 0x82, 0x72, 0x38, 0x42, 0x8C, 0x0C, 0x58, 0x14, 0x84, 0x36, 0x10, 0x78)
 BSTATE = 4 + MON + len(LOCALS) + 200 + 60
@@ -50,7 +57,10 @@ def oracle(a, n, keys):
     raw = Path(a.start).read_bytes()
     emu.pal[:] = raw[-768:]
     emu.uc.mem_write(VGA, raw[:64000])
-    emu.watch_pass(list(KIND), a.tick_div, {n + 1: str(work / '_last.raw')}, keys)
+    mice = {int(m.split(':')[0]): [int(v, 0) for v in m.split(':')[1:]] for m in a.mouse}
+    if mice:   # a mouse driver is there from the start; its first place and buttons are the earliest --mouse
+        emu.mouse = list(mice[min(mice)])
+    emu.watch_pass(list(KIND), a.tick_div, {n + 1: str(work / '_last.raw')}, keys, mice=mice or None)
     rec = []
 
     def far(uc, ss, bp, off):
@@ -78,6 +88,9 @@ def oracle(a, n, keys):
             q = 4 + MON + len(LOCALS)
             st[q:q + 200] = bytes(uc.mem_read(far(uc, ss, bp, -0xE), 200))
             st[q + 200:q + 260] = bytes(uc.mem_read(far(uc, ss, bp, -0xA) + 0xD4E2, 60))
+        if kind in (5, 6, 7):   # the lists and the picker get the party table as their first argument
+            q = 4 + MON + len(LOCALS)
+            st[q:q + 200] = bytes(uc.mem_read(far(uc, ss, bp, -6), 200))
         rec.append((kind, bytes(uc.mem_read(VGA, 64000)), bytes(emu.pal), bytes(st)))
 
     for top in KIND:
@@ -95,11 +108,15 @@ def main():
     ap.add_argument('--tick-base', type=int, default=20)
     ap.add_argument('--tick-div', type=int, default=3)
     ap.add_argument('--key', action='append', default=[])
+    ap.add_argument('--mouse', action='append', default=[], metavar='PASS:X:Y:BUTTONS',
+                    help='a mouse driver is there; from pass PASS the pointer is at (X, Y) with BUTTONS held (bit 0 left)')
+    ap.add_argument('--world-passes', type=int, metavar='K',
+                    help='stop comparing K world passes after the battle (the world\'s own mouse buttons are not built)')
     ap.add_argument('--keep', default='work/battle_check')
     ap.add_argument('--start', default='work/check_credits/start.raw')
     ap.add_argument('--exe', default='work/unpacked/WALK.SL.exe')
     ap.add_argument('--port', default='build/walk_dump')
-    ap.add_argument('--cache', help='keep the original\'s recording in this file and reuse it (same DATA, N, clock and keys)')
+    ap.add_argument('--cache', help='keep the original\'s recording in this file and reuse it (same DATA, N, clock, keys and mouse)')
     a = ap.parse_args()
     Path(a.keep).mkdir(parents=True, exist_ok=True)
     keys = {int(k.split(':')[0]): int(k.split(':')[1], 0) for k in a.key}
@@ -109,12 +126,22 @@ def main():
         rec = pickle.loads(zlib.decompress(Path(a.cache).read_bytes()))
         if rec and (len(rec[0][3]) != STATE or isinstance(rec[0][0], bool)):
             rec = None   # recorded by an older version of this tool
+        q = 4 + MON + len(LOCALS)
+        if rec and any(r[0] in (5, 6, 7) and not any(r[3][q:q + 200]) for r in rec):
+            rec = None   # recorded before the lists' party table was
     if rec is None or len(rec) < a.n + 1:
         rec = oracle(a, a.n, keys)
         if a.cache:
             Path(a.cache).write_bytes(zlib.compress(pickle.dumps(rec), 1))
     out = Path(a.keep) / 'port.bin'
-    r = subprocess.run([a.port, a.data, 'battle', str(out), str(a.n), str(a.tick_base), str(a.tick_div), a.start] + a.key,
+    start = a.start
+    if a.mouse:
+        # With a mouse the pointer keeps what was on the screen before the world loop's first pass, which the original has drawn
+        # (the world window included) and the port's start does not: the port starts from the original's screen there.
+        start = str(Path(a.keep) / 'start_loop.raw')
+        Path(start).write_bytes(rec[0][1] + rec[0][2])
+    r = subprocess.run([a.port, a.data, 'battle', str(out), str(a.n), str(a.tick_base), str(a.tick_div), start] + a.key +
+                       ['m:' + m for m in a.mouse],
                        capture_output=True, text=True)
     sys.stderr.write(r.stderr)
     if r.returncode != 0:
@@ -127,6 +154,7 @@ def main():
     first = {}
     ended = None
     kinds = {}
+    in_battle, back, stopped = False, 0, None   # --world-passes: how many world passes after a battle are compared
     for i in range(a.n):
         f = port[FRAME * i:FRAME * (i + 1)]
         pscr, ppal, pkind, pst = f[:64000], f[64000:64768], f[64768], f[64769:]
@@ -141,6 +169,13 @@ def main():
             print(f'oracle: only {len(rec)} arrivals for {a.n} passes')
             return 2
         kind, scr, pal, st = rec[i + 1]
+        if kind != 0:
+            in_battle = True
+        elif in_battle and a.world_passes is not None:
+            back += 1
+            if back > a.world_passes:
+                stopped = i
+                break
         kinds[kind] = kinds.get(kind, 0) + 1
         checks = {'loop': pkind == kind, 'screen': pscr == scr, 'palette': ppal == pal, 'rand': pst[:4] == st[:4]}
         if pkind != kind and 'loop' not in first:
@@ -154,6 +189,9 @@ def main():
             q = 4 + MON + len(LOCALS)
             checks['party'] = pst[q:q + 200] == st[q:q + 200]
             checks['numbers'] = pst[q + 200:q + 260] == st[q + 200:q + 260]
+        if kind in (5, 6, 7) and pkind == kind:
+            q = 4 + MON + len(LOCALS)
+            checks['party'] = pst[q:q + 200] == st[q:q + 200]
         if kind == 1 and pkind == 1:   # the rewards loop uses some of these locals for other things
             checks['turn'] = pst[6 + MON:8 + MON] == st[6 + MON:8 + MON]
             checks['command'] = pst[8 + MON:10 + MON] == st[8 + MON:10 + MON]
@@ -180,9 +218,12 @@ def main():
                 else:
                     print(f'pass {i}: {k} differs')
     n = a.n if ended is None else ended
+    n = n if stopped is None else stopped
     if first:
         return 1
     end = '' if ended is None else f'; the party lost at pass {ended} in both (not compared after)'
+    if stopped is not None:
+        end = f'; back in the world at pass {stopped - a.world_passes}, compared {a.world_passes} world passes more'
     print(f'all {n} passes identical (' + ', '.join(f'{v} {KIND_NAME[k]}' for k, v in sorted(kinds.items())) + f'){end}')
     return 0
 

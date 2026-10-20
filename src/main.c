@@ -915,10 +915,19 @@ static uint32_t walk_clock0(void)
     return (uint32_t)(secs * TK_BIOS_TICKS_PER_SEC_NUM / TK_BIOS_TICKS_PER_SEC_DEN);
 }
 
+/* The window's pointer as WALK.SL's mouse driver: there when the platform reports one. */
+static void feed_mouse(walk_t *w)
+{
+    int x = 0, y = 0;
+    unsigned b = 0;
+    int on = platform_mouse(&x, &y, &b);
+    walk_set_mouse(w, on, x, y, b & 3);
+}
+
 /* WALK.SL's world (walk.h) over what is on `scr` now (the menu's last frame, whose palette it keeps): the first
- * screen, then one pass of the idle main loop per tick of TK_WALK_PASS_HZ, until the window is closed. Nothing
- * reads a key or the mouse yet and nothing is played. Returns 1 when the window was closed, -1 if the screen could
- * not be made. */
+ * screen, then one pass of the main loop per tick of TK_WALK_PASS_HZ, until the window is closed, with the keys, the
+ * mouse (the pointer, walking and shooting in the world, the battle's buttons) and the music. Returns 1 when the window was closed, 2
+ * after a lost battle, -1 if the screen could not be made. */
 static int play_walk(screen_t *scr)
 {
     walk_t *w = walk_create();
@@ -929,7 +938,10 @@ static int play_walk(screen_t *scr)
         walk_free(w);
         return -1;
     }
-    platform_show_pointer(1);
+    /* WALK.SL draws its own mouse pointer (a driver is taken to be there whenever the window reports a pointer): the world's and the
+     * battle's (walk_set_mouse before each pass). In the world the left button walks towards the pointer and the right one shoots; a
+     * press on an on-screen button is its key, whose action (the F-keys, 1 to 4, A) is not built yet. */
+    platform_show_pointer(0);
     /* The scene's song (the loader found it in MUC.ALL: RPG.LCP 0x7add + 5 * the map header's byte 2) starts as the first screen shows and
      * plays on, starting again at its end, until the window is closed. Its register writes are the original driver's, all 6,180 ticks of
      * scene 0's song (tools/compare_opl.py). Silent without a sound device or with --no-music. */
@@ -966,10 +978,14 @@ static int play_walk(screen_t *scr)
         if (bt) {
             /* The rewards bar runs at the world's pace (the original paces neither). A message box's wait is a tight loop in the
              * original that steps the palette every 41st round; 41 rounds a pass here give one step a pass, like the world's cycle
-             * (a choice: how fast the original's loop ran was not measured). */
-            int rounds = battle_kind(bt) == BATTLE_KIND_DIALOG ? 41 : 1;
-            for (int i = 0; i < rounds && !battle_over(bt); i++)
-                battle_pass(bt, scr, platform_port60());   /* what is not built is said on stderr, once per new case */
+             * (a choice: how fast the original's loop ran was not measured). The magic and item lists and the member picker are such loops too. */
+            int kind = battle_kind(bt);
+            int rounds = kind == BATTLE_KIND_DIALOG || kind == BATTLE_KIND_MAGIC || kind == BATTLE_KIND_PICK ||
+                         kind == BATTLE_KIND_ITEMS ? 41 : 1;
+            for (int i = 0; i < rounds && !battle_over(bt); i++) {
+                feed_mouse(w);
+                battle_pass(bt, scr, platform_port60());
+            }   /* what is not built is said on stderr, once per new case */
             if (battle_over(bt) == BATTLE_LOST) {   /* the original writes 0x3e into ANI.LCP and starts MARK.EXE (play_gameover) */
                 result = 2;
                 break;
@@ -988,6 +1004,7 @@ static int play_walk(screen_t *scr)
             platform_present(scr);
             continue;
         }
+        feed_mouse(w);
         got = walk_pass(w, scr, ticks, platform_port60());
         if ((got & WALK_PASS_VILLAGER_EVENT) && !event_reported) {
             fprintf(stderr, "walk: a villager reached the case where the original starts an event (not built)\n");
