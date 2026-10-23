@@ -9,7 +9,7 @@
  *     80 x 50 (0x11a76, the same stepping as battle_shrink) and tiled 4 x 4 over the whole screen;
  *   - each pass the tiles roll up one row and left one pixel, both wrapping round, and the lettering 全體陣亡 ("the whole party has
  *     fallen", TITLE1.LCZ 0x3e73, colour 0 transparent) is drawn over them at (114, 87);
- *   - Space or Enter (or a click, not built) ends it; MARK then goes on to its title as usual. Its song is MUC.ALL 0x2d76b (the
+ *   - Space or Enter, or with a mouse driver any button, ends it; MARK then goes on to its title as usual. Its song is MUC.ALL 0x2d76b (the
  *     caller's: GAMEOVER_SONG_*).
  */
 #include <stddef.h>
@@ -26,6 +26,9 @@ gameover_t *gameover_begin(const screen_t *scr);
 void gameover_pass(gameover_t *g, screen_t *scr);
 /* Does this keyboard port value end the screen (Space or Enter)? */
 int gameover_key(unsigned port60);
+/* (0x10502 .. 0x10537) With a mouse driver (found at MARK's start, 0x10120), does this button state end it? Any button held, the
+ * moment it is seen (no release is waited for). */
+int gameover_mouse(unsigned buttons);
 void gameover_free(gameover_t *g);
 
 #endif

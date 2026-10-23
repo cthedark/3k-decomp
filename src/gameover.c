@@ -88,6 +88,11 @@ int gameover_key(unsigned port60)
     return port60 == 0x39 || port60 == 0x1C;
 }
 
+int gameover_mouse(unsigned buttons)
+{
+    return (buttons & 0xFF) != 0;   /* INT 33h function 3's BX, low byte */
+}
+
 void gameover_free(gameover_t *g)
 {
     if (g)

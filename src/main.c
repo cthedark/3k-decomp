@@ -40,6 +40,7 @@
 #include "title.h"
 #include "battle.h"
 #include "gameover.h"
+#include "sfx.h"
 #include "walk.h"
 
 #define MAX_DUMPS 512
@@ -924,6 +925,52 @@ static void feed_mouse(walk_t *w)
     walk_set_mouse(w, on, x, y, b & 3);
 }
 
+/* One step of the world's start zoom on screen. The original waits for nothing between its 13 steps, so how long they take depends
+ * on the machine; here one a pass of the world's pace (TK_WALK_PASS_HZ), about 0.37 s in all (a choice). A closed window ends the
+ * waits; the world's loop then sees it. */
+static void show_zoom_step(void *ctx, screen_t *scr)
+{
+    uint32_t *due = ctx;
+    platform_present(scr);
+    if (!*due)
+        *due = platform_ticks_ms();
+    *due += 1000u / TK_WALK_PASS_HZ;
+    while ((int32_t)(platform_ticks_ms() - *due) < 0 && platform_poll())
+        platform_sleep_ms(1);
+}
+
+/* One of the 48 steps of a helped member's face flash in the battle's picker (battle_set_show): about 10 ms each, half a second in
+ * all (a choice; the original's 100 draws a step ran as fast as the machine). */
+static void show_flash_step(void *ctx, screen_t *scr)
+{
+    uint32_t due = platform_ticks_ms() + 10;
+    (void)ctx;
+    platform_present(scr);
+    while ((int32_t)(platform_ticks_ms() - due) < 0 && platform_poll())
+        platform_sleep_ms(1);
+}
+
+/* The Sound Blaster's sounds (walk_set_sfx) through the sound sink: a sound replaces any that plays, and one is busy while the sink
+ * still plays it, which stands for the card's busy word. */
+static void sfx_play(void *ctx, unsigned file, unsigned off)
+{
+    const voc_clip *c = sfx_clip(ctx, file, off);
+    if (c)
+        audio_play(c->pcm, c->frames, c->rate);
+}
+
+static int sfx_busy(void *ctx)
+{
+    (void)ctx;
+    return audio_playing();
+}
+
+static void sfx_cut(void *ctx)
+{
+    (void)ctx;
+    audio_stop();
+}
+
 /* WALK.SL's world (walk.h) over what is on `scr` now (the menu's last frame, whose palette it keeps): the first
  * screen, then one pass of the main loop per tick of TK_WALK_PASS_HZ, until the window is closed, with the keys, the
  * mouse (the pointer, walking and shooting in the world, the battle's buttons) and the music. Returns 1 when the window was closed, 2
@@ -934,19 +981,32 @@ static int play_walk(screen_t *scr)
     if (!w)
         return -1;
     const uint32_t clock0 = walk_clock0();
-    if (walk_begin(w, scr, clock0 & 0xFFFF, clock0) != 0) {
-        walk_free(w);
-        return -1;
-    }
+    /* The scene's song (the loader found it in MUC.ALL: RPG.LCP 0x7add + 5 * the map header's byte 2) starts before the start's zoom
+     * (the original starts it at the loader's end, BIOS tick 10) and plays on, starting again at its end, until the window is closed.
+     * Its register writes are the original driver's, all 6,180 ticks of scene 0's song (tools/compare_opl.py). Silent without a sound
+     * device or with --no-music. */
+    size_t song_pos = walk_scene(w)->song_pos, song_len = walk_scene(w)->song_len;
+    music_t *song = song_start_at("walk", song_pos, song_len);
+    /* With music playing the game has an FM card: its flag is 0x81 and the music button starts pressed (walk_sound_buttons). With a
+     * sound device it has a Sound Blaster too: SND_EF.1 and _1_.LOC are read (the original reads the second when a battle starts), the
+     * sound flag is 0x81 and that button starts pressed; key 2 or the button turns the sounds off and on in a battle. */
+    sfx_bank_t *bank = audio_enabled() ? sfx_bank_load() : NULL;
+    walk_set_sound(w, song ? 0x81 : 0, bank ? 0x81 : 0);
+    const walk_sfx_t sfx = {sfx_play, sfx_busy, sfx_cut, bank};
+    if (bank)
+        walk_set_sfx(w, &sfx);
     /* WALK.SL draws its own mouse pointer (a driver is taken to be there whenever the window reports a pointer): the world's and the
      * battle's (walk_set_mouse before each pass). In the world the left button walks towards the pointer and the right one shoots; a
      * press on an on-screen button is its key, whose action (the F-keys, 1 to 4, A) is not built yet. */
     platform_show_pointer(0);
-    /* The scene's song (the loader found it in MUC.ALL: RPG.LCP 0x7add + 5 * the map header's byte 2) starts as the first screen shows and
-     * plays on, starting again at its end, until the window is closed. Its register writes are the original driver's, all 6,180 ticks of
-     * scene 0's song (tools/compare_opl.py). Silent without a sound device or with --no-music. */
+    uint32_t zoom_due = 0;
+    if (walk_begin_shown(w, scr, clock0 & 0xFFFF, clock0, show_zoom_step, &zoom_due) != 0) {
+        song_stop(song);
+        walk_free(w);
+        sfx_bank_free(bank);
+        return -1;
+    }
     const walk_scene_t *sc = walk_scene(w);
-    music_t *song = song_start_at("walk", sc->song_pos, sc->song_len);
     const uint32_t start = platform_ticks_ms();
     uint32_t next = start;
     int event_reported = 0;
@@ -954,6 +1014,7 @@ static int play_walk(screen_t *scr)
      * paces neither). The scene's song stops and the battle's starts: MUC.ALL 0x2bad9, the menu's song, which the loader had read
      * (the original's register writes match the player for 3,119 song ticks). The battle does not end yet. */
     battle_t *bt = NULL;
+    unsigned battle_fm = 0;   /* the music flag the battle's song was last started or stopped for */
     int got = walk_begin_result(w), result = 1;
     platform_present(scr);
     while (platform_poll()) {
@@ -962,8 +1023,10 @@ static int play_walk(screen_t *scr)
             bt = battle_begin(w, scr);
             if (!bt)
                 break;
-            song_stop(song);
-            song = song_start_at("battle", MUSIC_MENU_OFFSET, MUSIC_MENU_LENGTH);
+            battle_set_show(bt, show_flash_step, NULL);
+            song_stop(song);   /* 0x12ed4: the scene's song stops whenever there is a card; the battle's plays if the music is on */
+            song = *walk_fm(w) == 0x81 ? song_start_at("battle", MUSIC_MENU_OFFSET, MUSIC_MENU_LENGTH) : NULL;
+            battle_fm = *walk_fm(w);
             platform_escape_quits(0);   /* Esc goes back from choosing a target; the window's close button still quits */
             platform_present(scr);
         }
@@ -986,14 +1049,19 @@ static int play_walk(screen_t *scr)
                 feed_mouse(w);
                 battle_pass(bt, scr, platform_port60());
             }   /* what is not built is said on stderr, once per new case */
+            if (*walk_fm(w) != battle_fm) {   /* key 1 or the music button: 0x266f6 stops, 0x2660c plays the battle's song from its start */
+                battle_fm = *walk_fm(w);
+                song_stop(song);
+                song = battle_fm == 0x81 ? song_start_at("battle", MUSIC_MENU_OFFSET, MUSIC_MENU_LENGTH) : NULL;
+            }
             if (battle_over(bt) == BATTLE_LOST) {   /* the original writes 0x3e into ANI.LCP and starts MARK.EXE (play_gameover) */
                 result = 2;
                 break;
             }
-            if (battle_over(bt) == BATTLE_BACK) {   /* 0x132cb: the scene's song again from its start, and the rest of the pass */
+            if (battle_over(bt) == BATTLE_BACK) {   /* 0x132cb: with the music on, the scene's song again from its start; the rest of the pass */
                 printf("walk: the battle is won (%u killed); back in the world\n", battle_result(bt));
                 song_stop(song);
-                song = song_start_at("walk", sc->song_pos, sc->song_len);
+                song = *walk_fm(w) == 0x81 ? song_start_at("walk", sc->song_pos, sc->song_len) : NULL;
                 platform_escape_quits(1);
                 got = walk_resume(w, ticks, platform_port60(), battle_result(bt));
                 battle_free(bt);
@@ -1018,10 +1086,13 @@ static int play_walk(screen_t *scr)
     battle_free(bt);
     platform_escape_quits(1);
     walk_free(w);
+    if (bank)
+        audio_stop();   /* the sounds are the bank's */
+    sfx_bank_free(bank);
     return result;
 }
 
-/* MARK.EXE's game-over screen (gameover.h) over what WALK.SL left on `scr`, with its song, until Space or Enter. The original's loop
+/* MARK.EXE's game-over screen (gameover.h) over what WALK.SL left on `scr`, with its song, until Space or Enter, or a mouse button. The original's loop
  * is unpaced; it runs at the world's pace here (a choice, not measured). Returns 0 after the key, 1 when the window was closed. */
 static int play_gameover(screen_t *scr)
 {
@@ -1040,7 +1111,10 @@ static int play_gameover(screen_t *scr)
         next = next_due(next, now, TK_WALK_PASS_HZ);
         gameover_pass(g, scr);
         platform_present(scr);
-        if (gameover_key(platform_port60())) {
+        int mx = 0, my = 0;
+        unsigned mb = 0;
+        int mouse = platform_mouse(&mx, &my, &mb);
+        if (gameover_key(platform_port60()) || (mouse && gameover_mouse(mb & 3))) {
             rc = 0;
             break;
         }

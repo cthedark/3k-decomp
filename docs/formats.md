@@ -17,7 +17,8 @@ known), **unknown**.
 | `STORY1_V` .. `STORY6_V` | **decoded** | Concatenated Creative Voice File clips: 8-bit mono, 13,158 Hz |
 | `*.SL` | partial | DOS executables chained by `execl`; code not yet analyzed |
 | `SAVEnn.000/.001/.002`, `*.NOW` | partial | Save slot and working state; sizes and load flow known, internals unknown |
-| `.LCC`, `.ALL`, `SND_EF.1`, `TAB.TAB`, `_1_.LOC`, `__*.AL?`; some chunks inside `.LCZ` | unknown | |
+| `.LCC`, `.ALL`, `TAB.TAB`, `__*.AL?`; some chunks inside `.LCZ` | unknown | |
+| `SND_EF.1`, `_1_.LOC` | **decoded** | WALK.SL's sound effects: bare VOC sound-data blocks at offsets the code names (`findings.md` "WALK.SL step 25") |
 
 ---
 
@@ -190,6 +191,16 @@ known), **unknown**.
   between the rules, not a slip in either implementation. A centred result is consistent with
   our rule; it does not prove bit-exactness against the real chip. Listening is the real check.
 - Code: `src/voc.c`. `tests/voc_dump.c` writes a clip as WAV.
+
+## VOC codecs 2 and 3: 2.6-bit and 2-bit ADPCM (decoded 2026-10-22)
+- Used by `SND_EF.1` and `_1_.LOC`. The same scheme as codec 1 with shorter codes; the first data byte is again the starting level.
+- **Codec 2:** a byte holds three codes: bits 7-5, bits 4-2, and bits 1-0 with a 0 bit below them. A code is a sign (4) and m 0..3; the
+  step r runs 0..4, the level moves by (m << r) + ((1 << r) >> 1), but by 10m + 5 at r = 4. r grows when m = 3, shrinks when m = 0.
+  n data bytes give 3(n-1) samples.
+- **Codec 3:** four 2-bit codes a byte, high first; a sign (2) and m 0 or 1; r runs 0..5, grows when m = 1, shrinks when m = 0. 4(n-1)
+  samples.
+- **Source and check:** DOSBox-X's tables (`scaleMap_ADPCM2/3`, `adjustMap_ADPCM2/3` in `src/hardware/sblaster.cpp`), written as rules;
+  the port's samples equal a decoder using those tables for all 12 blocks the game plays. Not compared with real hardware.
 
 ## TAB.TAB: the voice-over index (decoded 2026-10-15)
 - Six runs of 5-byte entries, one run per slide 1..6, at file offsets `0x3a7`, `0x3cf`,

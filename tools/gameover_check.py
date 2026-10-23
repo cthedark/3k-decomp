@@ -29,7 +29,12 @@ def main():
     ap.add_argument('--keep', default='work/gameover_check')
     ap.add_argument('--port', default='build/walk_dump')
     ap.add_argument('--exe', default='work/unpacked/MARK.unpacked.exe')
+    ap.add_argument('--key', action='append', default=[], metavar='PASS:CODE', help='the keyboard port from that pass on')
+    ap.add_argument('--mouse', action='append', default=[], metavar='PASS:X:Y:BUTTONS',
+                    help='a mouse driver is there; from pass PASS the pointer is at (X, Y) with BUTTONS held')
     a = ap.parse_args()
+    keys = {int(k.split(':')[0]): int(k.split(':')[1], 0) for k in a.key}
+    mice = {int(m.split(':')[0]): [int(v, 0) for v in m.split(':')[1:]] for m in a.mouse}
     keep = Path(a.keep)
     work = keep / 'emu'
     if work.exists():
@@ -46,7 +51,9 @@ def main():
     emu = Emu(a.exe, work, 250_000, False)
     emu.pal[:] = raw[-768:]
     emu.uc.mem_write(VGA, raw[:64000])
-    emu.watch_pass(TOP, 1, {}, {})
+    if mice:
+        emu.mouse = list(mice[min(mice)])
+    emu.watch_pass(TOP, 1, {}, keys, mice=mice or None)
     rec = []
 
     def cb(uc, address, size, user):
@@ -55,17 +62,20 @@ def main():
             uc.emu_stop()
     emu.uc.hook_add(UC_HOOK_CODE, cb, None, TOP, TOP)
     emu.run(a.n + 400, {})
-    if len(rec) < a.n + 1:
+    ends = len(rec) < a.n + 1   # a key or a button left the loop: its last pass is len(rec) - 1
+    if ends and not (keys or mice):
         print(f'oracle: only {len(rec)} arrivals')
         return 2
     out = keep / 'port.bin'
-    r = subprocess_run([a.port, a.data, 'gameover', str(out), str(a.n), a.start])
+    r = subprocess_run([a.port, a.data, 'gameover', str(out), str(a.n), a.start] + a.key + ['m:' + m for m in a.mouse])
     if r != 0:
         print('port run failed:', r)
         return 2
     port = out.read_bytes()
     F = 64768
-    for i in range(a.n):
+    np = len(port) // F
+    want = len(rec) if ends else a.n
+    for i in range(min(np, want, len(rec) - 1)):
         p, (s, pal) = port[F * i:F * (i + 1)], rec[i + 1]
         if p[:64000] != s or p[64000:] != pal:
             d = [j for j in range(64000) if p[j] != s[j]]
@@ -73,7 +83,10 @@ def main():
             (keep / f'diff_{i}_orig.raw').write_bytes(s + pal)
             (keep / f'diff_{i}_port.raw').write_bytes(p)
             return 1
-    print(f'all {a.n} passes identical')
+    if np != want:
+        print(f'the original ends after {want} passes, the port after {np}')
+        return 1
+    print(f'all {want} passes identical' + (f'; both end in pass {want - 1}' if ends else ''))
     return 0
 
 

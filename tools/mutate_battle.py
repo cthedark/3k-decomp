@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WORK = ROOT / "work" / "mut_battle"
-SOURCES = ["src/walk.c", "src/battle.c", "src/msgbox.c", "src/gameover.c", "src/walkscene.c", "src/assets.c", "src/lcz.c", "src/screen.c"]
+SOURCES = ["src/walk.c", "src/battle.c", "src/msgbox.c", "src/gameover.c", "src/sfx.c", "src/voc.c", "src/walkscene.c", "src/assets.c", "src/lcz.c", "src/screen.c"]
 
 M = []
 
@@ -83,7 +83,7 @@ m("battle.c", "Esc keeps choosing", "if (k == 1) {   /* Esc: back to the command
 m("battle.c", "box: one outline fewer", "for (int i = 0; i < 3; i++)\n                    box_outline", "for (int i = 0; i < 2; i++)\n                    box_outline")
 m("battle.c", "box: outer colour", "{0xF4, 0xFF, 0xF8}", "{0xF5, 0xFF, 0xF8}")
 m("battle.c", "latch starts at 0", "b->latch = rec & 0xFF;", "b->latch = 0;")
-m("battle.c", "a held key counts again", "    b->latch = 0;\n    if (k == 2 || k == 3)", "    if (k == 2 || k == 3)")
+m("battle.c", "a held key counts again", "    b->latch = 0;\n    unsigned *fm = walk_fm(b->w)", "    unsigned *fm = walk_fm(b->w)")
 # stage 3: the attack and the monsters' turn
 m("battle.c", "blow: experience divisor", "(exp / 0x4B0) & 0xFF;", "(exp / 0x4B1) & 0xFF;")
 m("battle.c", "blow: back members full stat", "if (back)\n        s >>= 1;", "")
@@ -180,7 +180,8 @@ m("battle.c", "magic: attack spell costs nothing", "    party[b->v44 + 0xD] = (u
 m("battle.c", "magic: heal a fallen one", "        if (hp != 0) {\n            hp = (hp + v) & 0xFFFF;", "        if (1) {\n            hp = (hp + v) & 0xFFFF;")
 m("battle.c", "magic: heal not capped", "            if (hp > w16(party, m + 0xA))\n                hp = w16(party, m + 0xA);\n            party[m + 8] = (uint8_t)hp;\n            party[m + 9] = (uint8_t)(hp >> 8);\n            res = 0x2F;", "            party[m + 8] = (uint8_t)hp;\n            party[m + 9] = (uint8_t)(hp >> 8);\n            res = 0x2F;")
 m("battle.c", "magic: revive face not drawn", "    if (res == 0x1F)\n        put(scr, FACE_AT", "    if (res == 0)\n        put(scr, FACE_AT")
-m("battle.c", "magic: flash colour", "(uint8_t)(res - 15));   /* 0x25c18 */", "(uint8_t)(res - 16));   /* 0x25c18 */")
+m("battle.c", "magic: flash colour", "        for (unsigned s = 0; s < 16; s++) {\n            silhouette(scr, k * 0x12 + 0x5E47",
+  "        for (unsigned s = 0; s < 15; s++) {\n            silhouette(scr, k * 0x12 + 0x5E47")
 m("battle.c", "magic: latch not the result", "b->latch = r & 0xFF;", "b->latch = 0;")
 m("battle.c", "magic: spell hits a dead slot", "            if (hp == 0)\n                continue;\n            if (hp > r) {", "            if (hp > r) {")
 m("battle.c", "magic: kill gives no experience", "party[m + 4] = (uint8_t)x;\n                party[m + 5] = (uint8_t)(x >> 8);\n            }\n            b->mon[0x34 + k]", "(void)x;\n            }\n            b->mon[0x34 + k]")
@@ -275,7 +276,7 @@ m("walk.c", "talk: frame without the party", "    walk_draw_entities(w->buf, s, 
 m("walk.c", "talk: frame with the walking frame", "    walk_draw_entities(w->buf, s, x, y, 1);\n    walk_draw_objects(w->buf, s, x, y);\n    if (s->header[5])", "    walk_draw_entities(w->buf, s, x, y, w->hero_frame);\n    walk_draw_objects(w->buf, s, x, y);\n    if (s->header[5])")
 m("walk.c", "talk: darkened once", "    for (int t = 0; t < 2; t++) {\n        fkey_shade(w);", "    for (int t = 0; t < 1; t++) {\n        fkey_shade(w);")
 m("walk.c", "talk: palette not dimmed", "        w->dimpal[i] = w->dimpal[i] > 0x10 ? (uint8_t)(w->dimpal[i] - 0x10) : 0;", "        (void)0;")
-m("walk.c", "talk: button not pressed", "    button_toggle(scr, 0x284, 0x2F, 0x14);   /* 0x1c3ba: F1's button pressed */", "    (void)0;")
+m("walk.c", "talk: button not pressed", "    walk_button_toggle(scr, 0x284, 0x2F, 0x14);   /* 0x1c3ba: F1's button pressed */", "    (void)0;")
 m("walk.c", "button: inside turned too", "        memcpy(outer + (r + 2) * w + 2, inner + r * (w - 4), w - 4);", "        (void)inner;")
 m("walk.c", "talk: cells beside not looked at", "        px[1] = (uint8_t)(px[1] - 2);\n        px[2] = (uint8_t)(px[2] + 2);", "        px[1] = (uint8_t)(px[1] - 0);\n        px[2] = (uint8_t)(px[2] + 0);")
 m("walk.c", "talk: two cells only", "    for (int step = 0; step < 3; step++) {", "    for (int step = 0; step < 2; step++) {")
@@ -290,7 +291,7 @@ m("walk.c", "talk: no next message", "    if (w->box.last == 0x7F) {", "    if (
 m("walk.c", "talk: palette steps on the real palette", "    walk_t *w = ctx;\n    palette_cycle_on(w, scr, w->dimpal);", "    walk_t *w = ctx;\n    palette_cycle_on(w, scr, w->palbuf);")
 # "talk: gold not drawn again" is left out: the coins cannot change in a talk until selling is built, and drawing the same number again
 # changes nothing.
-m("walk.c", "talk: button stays pressed", "    button_toggle(scr, 0x284, 0x2F, 0x14);\n    if (w->mouse_on)   /* only kept", "    if (w->mouse_on)   /* only kept")
+m("walk.c", "talk: button stays pressed", "    walk_button_toggle(scr, 0x284, 0x2F, 0x14);\n    if (w->mouse_on)   /* only kept", "    if (w->mouse_on)   /* only kept")
 m("walk.c", "talk: walk counters after F1", "    if (walk_keys(w, port60))\n        return w->unbuilt_new ? WALK_PASS_UNBUILT : 0;", "    walk_keys(w, port60);")
 m("msgbox.c", "box: tail left as it was", "        for (unsigned i = 0; i < 4; i++)\n            tail[i] = table[tail[i]];", "        (void)0;")
 # selling and asking talks (step 21)
@@ -301,7 +302,7 @@ m("msgbox.c", "box: two-row box 46 high", "        bh = 0x1F;", "        (void)0
 m("msgbox.c", "box: second shading by rows", "        for (unsigned i = SCREEN_W; i < SCREEN_W * 45 && i < len; i++)", "        for (unsigned i = bw; i < bw * (bh - 1); i++)")
 m("walk.c", "sell: boxes wait", "    if (r[0x30] == 0 && r[k + 4] != 0xFF) {   /* the wait flag", "    if (r[k + 4] != 0xFF) {   /* the wait flag")
 m("walk.c", "sell: bottom not put back", "    put(scr, 0xA780, w->talk_under, SCREEN_W, 46);\n    talk_done", "    talk_done")
-m("walk.c", "yes/no: right half not pressed", "    button_toggle(scr, 0x30A5, 0x17, 0x14);", "    (void)0;")
+m("walk.c", "yes/no: right half not pressed", "    walk_button_toggle(scr, 0x30A5, 0x17, 0x14);", "    (void)0;")
 m("walk.c", "yes/no: starts on no", "    w->yn_sel = 1;\n    w->talk_count", "    w->yn_sel = 0;\n    w->talk_count")
 # "yes/no: count from 0" is left out: the count starts from the high word of the text's file offset, 0 for every message below 513,
 # and every shipped seller's message is below 513.
@@ -330,6 +331,101 @@ m("walk.c", "ask: plus and minus swapped", "            if (mx > 0x71 && mx < 0x
 m("walk.c", "ask: answer of the first entry", "    if (w->ask_value == w16(r, 0x28 + (w->talk_k - 0xC) / 7 * 2))", "    if (w->ask_value == w16(r, 0x28))")
 m("walk.c", "ask: box not put back", "    put(scr, 0x71, w->ask_under, 94, 16);", "    (void)0;")
 m("walk.c", "gold not drawn at the start", "    walk_show_gold(w, scr);   /* 0x10bc9 */", "    (void)0;   /* 0x10bc9 */")
+# the dark scenes (step 22; RUNS=dark runs only their starts)
+m("walk.c", "dark: not doubled", "    if (s->header[5]) {   /* 0x125c6", "    if (0) {   /* 0x125c6")
+m("walk.c", "dark: shake not in the source", "        walk_double_dark(w->dbuf, w->buf + sh, w->table, s->dark_mask);", "        walk_double_dark(w->dbuf, w->buf, w->table, s->dark_mask);")
+m("walk.c", "dark: window copied with the shake", "        view = w->dbuf;\n        sh = 0;", "        view = w->dbuf;")
+m("walk.c", "dark: pointer into the world buffer", "                    view[o] = w->mpic[r * 6 + c];", "                    w->buf[o] = w->mpic[r * 6 + c];")
+m("walk.c", "dark: band starts a row late", "            if (r >= 34 && r < 34 + 27) {", "            if (r >= 35 && r < 34 + 27) {")
+m("walk.c", "dark: band ends a row early", "            if (r >= 34 && r < 34 + 27) {", "            if (r >= 34 && r < 33 + 27) {")
+m("walk.c", "dark: outside pixel kept", "            } else {\n                d[1] = 0;", "            } else {\n                d[1] = p;")
+m("walk.c", "dark: lower-left not shaded", "                d[1] = q;\n                d[WALK_W] = q;\n                d[WALK_W + 1] = table[q];\n            } else {",
+  "                d[1] = q;\n                d[WALK_W] = p;\n                d[WALK_W + 1] = table[q];\n            } else {")
+m("walk.c", "dark: no mask", "        dst[DARK_MASK_AT + i] &= mask[i];", "        (void)0;")
+m("walk.c", "dark: mask a row low", "enum { DOUBLE_SRC = 0x3220, DOUBLE_DST = 0xE10, DARK_MASK_AT = 0x48A0 };", "enum { DOUBLE_SRC = 0x3220, DOUBLE_DST = 0xE10, DARK_MASK_AT = 0x48A0 + 224 };")
+m("walk.c", "dark: F-keys' world not doubled", "    if (s->header[5]) {   /* 0x19985", "    if (0) {   /* 0x19985")
+m("walk.c", "dark: F-keys' doubling darkened", "        walk_double(w->dbuf, w->buf, w->table);\n        memcpy", "        walk_double_dark(w->dbuf, w->buf, w->table, s->dark_mask);\n        memcpy")
+m("walk.c", "records: not again after a talk", "    records_again(w, 0x384 / WS_RECORD_SIZE);   /* 0x1729e", "    (void)0;   /* 0x1729e")
+# Left out: the record loop running again with [bp-0xbe] 0, and [bp-0xbe] not taking the kind of a record stepped on: it is 0 only
+# after a record of kind 0 (or an unbuilt key, 0x14cd6), and a kind-0 record is itself not built, so no start can reach it.
+m("walk.c", "records: [bp-0xbe] 0 at the start", "    w->vbe = 1;\n", "    w->vbe = 0;\n")
+m("walkscene.c", "dark: mask from another place", "decode_block(rp + 0x4350,", "decode_block(rp + 0x4351,")
+# the start's zoom (step 23; RUNS=zoom runs only its checks)
+m("walk.c", "zoom: across from 0", "        unsigned bx = 1;\n        uint8_t al", "        unsigned bx = 0;\n        uint8_t al")
+m("walk.c", "zoom: down from 0", "    unsigned dy = 1;\n", "    unsigned dy = 0;\n")
+m("walk.c", "zoom: gaps keep the pixel", "            di++;\n            al = 0;\n", "            di++;\n")
+m("walk.c", "zoom: grows 16 across", "    unsigned cw = 24 + 14 * (unsigned)k,", "    unsigned cw = 24 + 16 * (unsigned)k,")
+m("walk.c", "zoom: corner a pixel off", "off = 0x3654 - 0x487 * (unsigned)k;", "off = 0x3655 - 0x487 * (unsigned)k;")
+m("walk.c", "zoom: grabbed a row low", "w->buf + 0xE10 + r * WALK_W, WALK_ZOOM_W);", "w->buf + 0xE10 + (r + 1) * WALK_W, WALK_ZOOM_W);")
+m("walk.c", "zoom: party walking, not standing", "    walk_draw_entities(w->buf, s, x, y, 1);\n    walk_draw_objects(w->buf, s, x, y);\n    if (s->header[5]) {   /* 0x19985",
+  "    walk_draw_entities(w->buf, s, x, y, 0);\n    walk_draw_objects(w->buf, s, x, y);\n    if (s->header[5]) {   /* 0x19985")
+m("walk.c", "zoom: not cleared", "    memset(dst, 0, W * H);\n    unsigned xstep", "    unsigned xstep")
+# story enemies (step 24; RUNS=boss). Left out: the touch leaving the member's offset in the hero's walk counter and byte 0x2f in his
+# frame (0x1276c, 0x1277f): only the box's passes come between, which draw no world, and walk_resume sets both again.
+m("walk.c", "boss: box colour", "msg, 0xC2, 1);", "msg, 0xC3, 1);")
+m("walk.c", "boss: no box", "        if (msg != 0) {\n            int r = msgbox_open", "        if (0) {\n            int r = msgbox_open")
+m("walk.c", "boss: battle with the box", "            return ret & ~WALK_PASS_BATTLE;", "            return ret;")
+m("walk.c", "boss: box's palette not stepped", "    palette_cycle(ctx, scr);\n}\n\n/* 0x1b506 for a story", "    (void)ctx;\n}\n\n/* 0x1b506 for a story")
+m("walk.c", "boss: won, enemy stays", "        rec[0] = rec[1] = 0;\n        walk_flag_set(s->tab_b, rec[0xC]", "        walk_flag_set(s->tab_b, rec[0xC]")
+m("walk.c", "boss: won, flag not set", "        walk_flag_set(s->tab_b, rec[0xC], rec[0xD]);\n        return;", "        return;")
+m("walk.c", "boss: four kills enough", "    if ((result & 0xFF) == 5) {   /* 0x12fd1", "    if ((result & 0xFF) >= 4) {   /* 0x12fd1")
+m("walk.c", "boss: fled, followers not put back", "    for (int i = 0; i < 5; i++) {\n        s->tab_b[WS_PARTY_SIZE * i] = x;",
+  "    for (int i = 0; i < 1; i++) {\n        s->tab_b[WS_PARTY_SIZE * i] = x;")
+m("walk.c", "boss: fled, y not put back", "        s->tab_b[WS_PARTY_SIZE * i + 1] = y;\n", "")
+m("walk.c", "boss: fled, trail not put back", "        s->trail[3 * i] = x;\n", "")
+m("walk.c", "boss: won, the pass goes on", "    if (w->battle_boss && w->ctr == 5) {", "    if (0) {")
+m("walk.c", "boss: won, records not again", "        records_again(w, 0xC8 / WS_RECORD_SIZE);", "        (void)0;")
+# keys 1 and 2 in the fight with an FM card (RUNS=fm). Left out: the music flag itself not switched (only the caller's song and the
+# button at a later start read it, neither compared).
+m("battle.c", "fm: no music button", "        sound_button(b, scr, 0x7B8D);", "        (void)0;")
+m("battle.c", "fm: sound key without a Sound Blaster", "    if (k == 3 && *sb) {", "    if (k == 3) {")
+m("battle.c", "fm: pointer not taken off", "    if (mouse_on(b))\n        walk_mouse_put(scr, b->mptr, walk_mouse_under(b->w), 0);\n    walk_button_toggle",
+  "    walk_button_toggle")
+m("battle.c", "fm: pointer place not kept", "    if (mouse_on(b))\n        walk_mouse_grab(scr, b->mptr, walk_mouse_under(b->w));\n}", "}")
+m("battle.c", "fm: [bp-0x58] 0", "    b->v58 = *walk_fm(w) ? 1 : 0;", "    b->v58 = 0;")
+m("walk.c", "fm: music button not pressed at the start", "    if (w->fm == 0x81)\n        walk_button_toggle", "    if (0)\n        walk_button_toggle")
+# the picker face's flash (RUNS=magic_heal)
+m("battle.c", "flash: once, not three times", "    for (int rep = 0; rep < 3; rep++)", "    for (int rep = 0; rep < 1; rep++)")
+m("battle.c", "flash: colours up", "(uint8_t)(res - s));", "(uint8_t)(res + s));")
+# the game-over screen's mouse (RUNS=gameover)
+m("gameover.c", "gameover: buttons ignored", "    return (buttons & 0xFF) != 0;", "    return 0;")
+m("gameover.c", "gameover: right button ignored", "    return (buttons & 0xFF) != 0;", "    return (buttons & 1) != 0;")
+# the Sound Blaster's sounds (step 25; RUNS=sb_). Left out: the cut at the rewards bar's end with the sounds off (nothing plays then).
+m("walk.c", "sb: destroyed enemy silent", "            walk_sfx_play(w, SFX_EF, 0);\n            sh[2] = 0xA;", "            sh[2] = 0xA;")
+m("walk.c", "sb: destroyed enemy, other sound", "            walk_sfx_play(w, SFX_EF, 0);\n            sh[2] = 0xA;", "            walk_sfx_play(w, SFX_EF, 0x5F80);\n            sh[2] = 0xA;")
+m("walk.c", "sb: spark sound at frame 1", "if (f == 2 && w->sb == 0x81 && !walk_sfx_busy(w))", "if (f == 1 && w->sb == 0x81 && !walk_sfx_busy(w))")
+m("walk.c", "sb: spark sound over a busy card", "if (f == 2 && w->sb == 0x81 && !walk_sfx_busy(w))", "if (f == 2 && w->sb == 0x81)")
+m("walk.c", "sb: spark, other sound", "                walk_sfx_play(w, SFX_EF, 0x5F80);", "                walk_sfx_play(w, SFX_EF, 0x127D);")
+m("walk.c", "sb: roof off silent", "            walk_sfx_play(w, SFX_EF, 0x127D);   /* 0x17b9e */", "")
+m("walk.c", "sb: roof back silent", "            walk_sfx_play(w, SFX_EF, 0x127D);   /* 0x17c2a */", "")
+m("walk.c", "sb: right answer silent", "        walk_sfx_play(w, SFX_EF, 0x1BF5);\n    }", "    }")
+m("walk.c", "sb: right answer, other file", "        walk_sfx_play(w, SFX_EF, 0x1BF5);\n    }", "        walk_sfx_play(w, SFX_LOC, 0x1BF5);\n    }")
+m("walk.c", "sb: plays with the sounds off", "    if (w->sb == 0x81 && w->sfx.play)", "    if (w->sb && w->sfx.play)")
+m("walk.c", "sb: never busy", "    return w->sfx.busy ? w->sfx.busy(w->sfx.ctx) : 0;", "    return 0;")
+m("walk.c", "sb: sound button not pressed at the start", "    if (w->sb == 0x81)\n        walk_button_toggle", "    if (0)\n        walk_button_toggle")
+m("battle.c", "sb: touch silent", "    walk_sfx_play(w, SFX_EF, 0);   /* 0x12df4 */", "")
+m("battle.c", "sb: death silent", "                        walk_sfx_play(b->w, SFX_LOC, 0);   /* 0x1ff7c */", "")
+m("battle.c", "sb: monster's blow silent", "    walk_sfx_play(b->w, SFX_LOC, 0xBC69);   /* 0x1d8f1 */", "")
+m("battle.c", "sb: hit silent", "            walk_sfx_play(b->w, SFX_LOC, 0x37A3);   /* 0x1dfb9 */", "")
+m("battle.c", "sb: spell's end silent", "            walk_sfx_play(b->w, SFX_LOC, 0x37A3);   /* 0x1e0ba */", "")
+m("battle.c", "sb: no shout at an attack", "    member_sound(b, n);   /* 0x1f083 */", "")
+m("battle.c", "sb: no shout at a spell", "        member_sound(b, n);   /* 0x1f4f4 */", "")
+m("battle.c", "sb: the next member's shout", "        walk_sfx_play(b->w, SFX_LOC, at[n]);", "        walk_sfx_play(b->w, SFX_LOC, at[(n + 1) % 5]);")
+m("battle.c", "sb: third member's shout", "0x8849, 0x8E01, 0xA1BB};", "0x8E01, 0x8E01, 0xA1BB};")
+m("battle.c", "sb: fifth member's shout", "0x8849, 0x8E01, 0xA1BB};", "0x8849, 0x8E01, 0xA1BC};")
+m("battle.c", "sb: rewards bar leaves the sound on", "        walk_sfx_stop(b->w);   /* 0x1fcc8: the sound is cut */", "")
+m("battle.c", "sb: key 2 does not switch", "        *sb = *sb == 0x81 ? 0x80 : 0x81;", "        (void)0;")
+m("battle.c", "sb: no sound button in the fight", "        sound_button(b, scr, 0x948D);", "        (void)0;")
+m("sfx.c", "sfx: passes rounded down", "TK_WALK_PASS_HZ * (256u - block[4]) + 999999u) / 1000000u;", "TK_WALK_PASS_HZ * (256u - block[4])) / 1000000u;")
+m("sfx.c", "sfx: passes from the divisor", "(256u - block[4])", "(255u - block[4])")
+m("voc.c", "voc: 2.6-bit step stops at 3", "top = codec == 2 ? 4 : 5", "top = codec == 2 ? 3 : 5")
+m("voc.c", "voc: 2-bit step stops at 4", "top = codec == 2 ? 4 : 5", "top = codec == 2 ? 4 : 4")
+m("voc.c", "voc: 2.6-bit step 4 as the others", "codec == 2 && *r == 4 ? (int)(10 * m + 5)", "codec == 2 && *r == 5 ? (int)(10 * m + 5)")
+m("voc.c", "voc: 2.6-bit third code without its 0", "(b & 3) << 1, &level", "b & 3, &level")
+m("voc.c", "voc: 2-bit low bits first", "for (int s = 6; s >= 0; s -= 2)", "for (int s = 0; s <= 6; s += 2)")
+m("voc.c", "voc: step does not shrink", "    else if (m == 0 && *r > 0)\n        (*r)--;\n    return (uint8_t)*level;\n}\n\nsize_t voc_adpcm_decode",
+  "    return (uint8_t)*level;\n}\n\nsize_t voc_adpcm_decode")
+m("voc.c", "voc: frames of a 2-bit block", "    return codec == 0 ? 1 : codec + 1;", "    return codec == 0 ? 1 : codec == 3 ? 3 : codec + 1;")
 
 
 def main():
@@ -368,17 +464,20 @@ def main():
             if subprocess.run([str(WORK / "test_battle")], capture_output=True).returncode != 0:
                 print("caught by unit: " + name)
                 continue
-            if f == "walk.c":   # the world's own unit tests (tests/test_walk.c) pin parts of the resumed pass
+            # the world's own unit tests (tests/test_walk.c) pin parts of the resumed pass; tests/test_audio.c the sounds' decoders and
+            # lengths
+            unit = {"walk.c": "test_walk", "sfx.c": "test_audio", "voc.c": "test_audio"}.get(f)
+            if unit:
                 core = re.search(r"^CORE_SRC\s*:=\s*(.*)$", (ROOT / "Makefile").read_text(), re.M).group(1).split()
                 opl = sorted(str(p) for p in (ROOT / "build/opl").glob("*.o"))
                 r = subprocess.run(["cc", "-std=c99", "-O1", "-w", "-I", str(src)] + [str(WORK / s) for s in core] +
-                                   [str(ROOT / "tests/test_walk.c")] + opl + ["-o", str(WORK / "test_walk"), "-lc++" if sys.platform == "darwin" else "-lstdc++"],
+                                   [str(ROOT / f"tests/{unit}.c")] + opl + ["-o", str(WORK / unit), "-lc++" if sys.platform == "darwin" else "-lstdc++"],
                                    capture_output=True, text=True)
                 if r.returncode != 0:
                     print(f"DOES NOT BUILD: {name}: {r.stderr.strip()[:200]}")
                     bad += 1
                     continue
-                if subprocess.run([str(WORK / "test_walk"), str(ROOT / "original_bin")], capture_output=True).returncode != 0:
+                if subprocess.run([str(WORK / unit), str(ROOT / "original_bin")], capture_output=True).returncode != 0:
                     print("caught by unit: " + name)
                     continue
             try:

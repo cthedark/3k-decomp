@@ -7,6 +7,7 @@
 #include "assets.h"
 #include "battle.h"
 #include "msgbox.h"
+#include "sfx.h"
 
 struct walk {
     walk_scene_t *scene;
@@ -43,10 +44,14 @@ struct walk {
     int pal_c[5];                       /* counters at data segment 0x532 .. 0x536 */
     unsigned hero_frame, ctr;           /* [bp-0x5e], [bp-0x3c] */
     unsigned v2e, v98, v48, c2;         /* [bp-0x2e], [bp-0x98], [bp-0x48], [bp-0xc2]: see walk_keys */
+    unsigned vbe;                       /* [bp-0xbe]: 1 at the start (0x10bad), then the kind of the last scene record stepped on (0x1731c);
+                                         * not 0, a pass that ends through 0x18b82 runs the record loop again */
     uint8_t *alt;                       /* [bp-0x9e]: byte 0 is 1 while a kind 3 record has taken the roof off, then the roof's saved part of the object map */
     char unbuilt[120];                  /* the last thing the original did that is not built, "" when none */
     int unbuilt_new;                    /* set when it changed during the current pass */
     uint8_t *buf;                       /* the world buffer, a little longer than WALK_W * WALK_H (see walk_draw_specks) */
+    uint8_t *dbuf;                      /* [bp-0x20]: what the doublings write (walk_double, walk_double_dark), WALK_W wide */
+    uint8_t zoom_grab[WALK_ZOOM_W * WALK_ZOOM_H];   /* [bp-0xba]: the start's view, grabbed for the zoom */
     /* [bp-0x62]: 5 shots (x, y, direction, zigzag phase; one per party member number), then [bp-0xcc]: 10 sparks
      * (frame, x, y, direction). All 0xfa at the start (0x102fe). */
     uint8_t fx[WALK_FX_BYTES];
@@ -54,6 +59,10 @@ struct walk {
     /* a touch (WALK_PASS_BATTLE): the member's party offset, the monster group, the record's byte 0x2f */
     unsigned battle_member, battle_group, battle_boss, battle_rec;
     unsigned battle_left;               /* the battle frame's [bp-0x84] as the last battle left it on the stack (0 before any) */
+    int boss_box;                       /* a story enemy's message box waits before its battle (0x12872) */
+    unsigned fm, sb;                    /* 0x2cc5:5 (the FM music) and 0x2cc5:0xc (the Sound Blaster's sounds): 0 no card, 0x81 on,
+                                         * 0x80 off */
+    walk_sfx_t sfx;                     /* the Sound Blaster's driver (walk_set_sfx); none: nothing plays */
     unsigned stride;                    /* the rain stride of the pass that touched (the rest of that pass runs after the battle) */
     int begin_result;                   /* what walk_begin's first pass returned */
 };
@@ -101,6 +110,7 @@ int walk_reset(walk_t *w, uint32_t seed)
     w->v98 = 0;
     w->v48 = w->scene->header[3];   /* 0x11233: the shake starts at the map header's byte 3 (0 in scenes 0 and 1) */
     w->c2 = 0;
+    w->vbe = 1;
     memset(w->alt, 0, WALK_ALT_LEN);
     w->unbuilt[0] = 0;
     w->unbuilt_new = 0;
@@ -128,8 +138,9 @@ walk_t *walk_create(void)
     if (!w)
         return NULL;
     w->buf = calloc(1, WALK_BUF_LEN);
+    w->dbuf = calloc(1, WALK_BUF_LEN);
     w->alt = calloc(1, WALK_ALT_LEN);
-    if (!w->buf || !w->alt || walk_reset(w, 0) != 0) {
+    if (!w->buf || !w->dbuf || !w->alt || walk_reset(w, 0) != 0) {
         walk_free(w);
         return NULL;
     }
@@ -148,6 +159,7 @@ void walk_free(walk_t *w)
         return;
     walk_scene_free(w->scene);
     free(w->buf);
+    free(w->dbuf);
     free(w->alt);
     free(w);
 }
@@ -637,6 +649,8 @@ int walk_roof(uint8_t *omap, uint8_t *alt, const uint8_t *rec, int enter)
 /* The hero stands on scene record `si` (0x172f0 .. 0x18b82). Kind 3 (a house's roof): going up through the door takes the roof off
  * and changes the weather mode by 3 (which stops the rain), coming down puts it back with a bump; the kinds the block names are
  * not built; then the record loop runs again on the live state. */
+static void records_again(walk_t *w, unsigned which);
+
 static void hit_record(walk_t *w, unsigned si)
 {
     walk_scene_t *s = w->scene;
@@ -648,6 +662,7 @@ static void hit_record(walk_t *w, unsigned si)
                 note_unbuilt(w, "a roof outside the map", si / WS_RECORD_SIZE);
             w->alt[0] = 1;
             s->weather += 3;
+            walk_sfx_play(w, SFX_EF, 0x127D);   /* 0x17b9e */
         }
         if (d == 1 && rec[3] == 1 && w->alt[0] != 0) {
             if (walk_roof(s->omap, w->alt, rec, 0) != 0)
@@ -655,6 +670,7 @@ static void hit_record(walk_t *w, unsigned si)
             w->alt[0] = 0;
             w->v48 = 2;
             s->weather -= 3;
+            walk_sfx_play(w, SFX_EF, 0x127D);   /* 0x17c2a */
         }
     } else if (kind == 0 || kind == 1 || kind == 4 || kind == 5 || kind == 7 || kind == 8 || kind == 0xE ||
                (kind >= 0x11 && kind <= 0x14)) {
@@ -662,11 +678,23 @@ static void hit_record(walk_t *w, unsigned si)
         snprintf(what, sizeof what, "scene record kind 0x%x", kind);
         note_unbuilt(w, what, si / WS_RECORD_SIZE);
     }
+    w->vbe = kind;
+    records_again(w, si / WS_RECORD_SIZE);
+}
+
+/* 0x18b82: the end of a pass that went through 0x172f0 (a scene record, or an F-key's action from 0x1729e): the record loop runs again
+ * on the live state while [bp-0xbe] is not 0. After a talk this applies what its flags changed (a member who joins in scene 43: the
+ * picture of him in the object map goes). */
+static void records_again(walk_t *w, unsigned which)
+{
+    walk_scene_t *s = w->scene;
+    if (!w->vbe)
+        return;
     int events = s->events;
     if (walk_scene_apply_records(s) != 0)
-        note_unbuilt(w, "the record loop failed", si / WS_RECORD_SIZE);
+        note_unbuilt(w, "the record loop failed", which);
     if (s->events != events)
-        note_unbuilt(w, "a cut scene starts", si / WS_RECORD_SIZE);
+        note_unbuilt(w, "a cut scene starts", which);
 }
 
 unsigned walk_shake_offset(unsigned v48, unsigned r)
@@ -815,13 +843,14 @@ static void shots_pass(walk_t *w, screen_t *scr, unsigned x, unsigned y)
             }
             sh[2] = 0xA;
         }
-        if (hit == 2) {   /* destroyed: one more coin, shown at once (the sound effect 0x1c68e is not built) */
+        if (hit == 2) {   /* destroyed: one more coin, shown at once, and SND_EF.1's first sound (0x122a7) */
             unsigned g = w16(s->tab_b, WALK_GOLD_AT) + 1;
             if (g > 60000)
                 g = 60000;
             s->tab_b[WALK_GOLD_AT] = (uint8_t)g;
             s->tab_b[WALK_GOLD_AT + 1] = (uint8_t)(g >> 8);
             walk_draw_gold(scr, g, w->art + ART_DIGITS);
+            walk_sfx_play(w, SFX_EF, 0);
             sh[2] = 0xA;
         }
     }
@@ -844,7 +873,9 @@ static void sparks_pass(walk_t *w, unsigned x, unsigned y)
         unsigned pos = walk_screen_pos(sp[1], sp[2], x, y, 0, 1);
         if (f < 5 && pos < 0xC350) {
             blit8(w->buf, pos, w->art + ART_SPARKS + f * 64);
-            sp[0]++;   /* the sound at frame 2 (0x1c68e) is not built */
+            sp[0]++;
+            if (f == 2 && w->sb == 0x81 && !walk_sfx_busy(w))   /* 0x12404: frame 2 sounds, unless a sound still plays */
+                walk_sfx_play(w, SFX_EF, 0x5F80);
         } else {
             sp[0] = 0xA;
         }
@@ -934,8 +965,10 @@ static void fkey_frame(walk_t *w)
     walk_draw_ground(w->buf, s, x, y);
     walk_draw_entities(w->buf, s, x, y, 1);
     walk_draw_objects(w->buf, s, x, y);
-    if (s->header[5])
-        note_unbuilt(w, "the F-keys' world drawing in a scene whose map header byte 5 is set (doubled)", 0);
+    if (s->header[5]) {   /* 0x19985: doubled (not darkened) into the scratch buffer, and its first 0x5080 words back over the world */
+        walk_double(w->dbuf, w->buf, w->table);
+        memcpy(w->buf, w->dbuf, 0x5080 * 2);
+    }
 }
 
 /* 0x25dca: the buffer from row 16 (0xe00) on, 0x9300 bytes, through the shading table */
@@ -947,7 +980,7 @@ static void fkey_shade(walk_t *w)
 
 /* 0x1c3ba: a button pressed or let go: the w x h picture at `at` turned round (its light and dark edges change places), the inside
  * (w - 4) x (h - 4) from two rows and columns in put back where it was. */
-static void button_toggle(screen_t *scr, unsigned at, unsigned w, unsigned h)
+void walk_button_toggle(screen_t *scr, unsigned at, unsigned w, unsigned h)
 {
     uint8_t outer[0x2F * 0x14], inner[0x2F * 0x14];
     if (w * h > sizeof outer)
@@ -1009,10 +1042,11 @@ static void talk_done(walk_t *w, screen_t *scr, int talked)
             walk_mouse_grab(scr, 0, w->mbg);
         }
     }
-    button_toggle(scr, 0x284, 0x2F, 0x14);
+    walk_button_toggle(scr, 0x284, 0x2F, 0x14);
     if (w->mouse_on)   /* only kept: the next pass's pointer block draws it */
         walk_mouse_grab(scr, w->mprev, w->mbg);
     w->talking = 0;
+    records_again(w, 0x384 / WS_RECORD_SIZE);   /* 0x1729e: si = 0x384, no record */
 }
 
 static void talk_step(void *ctx, screen_t *scr)
@@ -1141,10 +1175,10 @@ static void talk_close(walk_t *w, screen_t *scr)
 static void yesno_open(walk_t *w, screen_t *scr)
 {
     grab(scr, 0x308D, 47, 20, w->yn_pic[0]);
-    button_toggle(scr, 0x308D, 0x17, 0x14);
+    walk_button_toggle(scr, 0x308D, 0x17, 0x14);
     grab(scr, 0x308D, 47, 20, w->yn_pic[1]);
-    button_toggle(scr, 0x308D, 0x17, 0x14);
-    button_toggle(scr, 0x30A5, 0x17, 0x14);
+    walk_button_toggle(scr, 0x308D, 0x17, 0x14);
+    walk_button_toggle(scr, 0x30A5, 0x17, 0x14);
     grab(scr, 0x308D, 47, 20, w->yn_pic[2]);
     talk_mouse_start(w, scr);
     w->yn_shown = 2;
@@ -1324,11 +1358,13 @@ static void ask_round(walk_t *w, screen_t *scr, unsigned port60)
     if (w->mouse_on)
         walk_mouse_put(scr, w->talk_mprev, w->talk_mbg, 0);
     put(scr, 0x71, w->ask_under, 94, 16);
-    /* 0x1a073: the right number is the word at 0x28 + 2 x the entry's place; it sets the entry's flag (and plays a sound, 0x1c68e, not
-     * built) */
+    /* 0x1a073: the right number is the word at 0x28 + 2 x the entry's place; it sets the entry's flag and plays SND_EF.1's 0x1bf5
+     * (0x1a0fd) */
     uint8_t *r = w->talk_rec;
-    if (w->ask_value == w16(r, 0x28 + (w->talk_k - 0xC) / 7 * 2))
+    if (w->ask_value == w16(r, 0x28 + (w->talk_k - 0xC) / 7 * 2)) {
         walk_flag_set(w->scene->tab_b, r[w->talk_k + 2], r[w->talk_k + 3]);
+        walk_sfx_play(w, SFX_EF, 0x1BF5);
+    }
     talk_close(w, scr);
 }
 
@@ -1373,7 +1409,7 @@ static void talk_key(walk_t *w, screen_t *scr)
         w->dimpal[i] = w->dimpal[i] > 0x10 ? (uint8_t)(w->dimpal[i] - 0x10) : 0;
     if (w->mouse_on)
         walk_mouse_put(scr, w->mprev, w->mbg, 0);
-    button_toggle(scr, 0x284, 0x2F, 0x14);   /* 0x1c3ba: F1's button pressed */
+    walk_button_toggle(scr, 0x284, 0x2F, 0x14);   /* 0x1c3ba: F1's button pressed */
     if (w->mouse_on)
         walk_mouse_grab(scr, w->mprev, w->mbg);
     unsigned dir = party[2];
@@ -1425,6 +1461,8 @@ static void talk_key(walk_t *w, screen_t *scr)
 int walk_kind(const walk_t *w)
 {
     static const int kind[4] = {0, 4, 8, 9};
+    if (w->boss_box)
+        return 4;
     return kind[w->talking & 3];
 }
 
@@ -1546,15 +1584,19 @@ static int walk_keys(walk_t *w, unsigned port60)
     return 0;
 }
 
-/* 0x1275e .. 0x128ee: what a touch does before the battle. Byte 0x2f = 0: the enemy goes to a random open place (the respawn's rule
- * without the view bounds) and the group is the map header's byte 1 (party table byte 518) * 5 + its sprite set - 1; otherwise the group is byte 0x30, after a
- * dialog when the word at 0x11 is not 0 (not built). */
+/* 0x1275e .. 0x128ee: what a touch does before the battle. The hero's walk counter takes the member's party offset and his frame the
+ * record's byte 0x2f (0x1276c, 0x1277f). Byte 0x2f = 0: the enemy goes to a random open place (the respawn's rule without the view
+ * bounds) and the group is the map header's byte 1 (party table byte 518) * 5 + its sprite set - 1. Otherwise (a story enemy) the
+ * group is byte 0x30, after a message box (0x1afb0: colour 0xc2, the wait flag) with the message at word 0x11 when it is not 0: the
+ * battle then starts when the box closes (walk_pass, boss_round). */
 static int touch(walk_t *w, unsigned member, uint8_t *rec)
 {
     walk_scene_t *s = w->scene;
     w->battle_member = member;
     w->battle_boss = rec[0x2F];
     w->battle_rec = (unsigned)(rec - s->tab_a);
+    w->ctr = member & 0xFF;
+    w->hero_frame = rec[0x2F];
     int ret = WALK_PASS_BATTLE;
     if (rec[0x2F] == 0) {
         for (long tries = 0;; tries++) {
@@ -1573,19 +1615,47 @@ static int touch(walk_t *w, unsigned member, uint8_t *rec)
         }
         w->battle_group = (s->tab_b[518] * 5 + rec[0xB] - 1) & 0xFF;   /* [bp-0x34] = party table + 500: byte 518 */
     } else {
-        if (w16(rec, 0x11) != 0) {
-            note_unbuilt(w, "the dialog an enemy starts a battle with (record word 0x11)", w16(rec, 0x11));
-            ret |= WALK_PASS_UNBUILT;
-        }
         w->battle_group = rec[0x30];
+        unsigned msg = w16(rec, 0x11);
+        if (msg != 0) {
+            int r = msgbox_open(&w->box, w->scr, w->font8, w->table, w->buf + 0x7305, msg, 0xC2, 1);
+            if (r < 0) {
+                note_unbuilt(w, "a message that MES_TXT.LCC does not have", msg);
+                return ret | WALK_PASS_UNBUILT;
+            }
+            if (r > 0) {
+                note_unbuilt(w, "a character the message font does not have", msg);
+                ret |= WALK_PASS_UNBUILT;
+            }
+            w->boss_box = 1;
+            return ret & ~WALK_PASS_BATTLE;
+        }
     }
     return ret;
+}
+
+static void boss_step(void *ctx, screen_t *scr)
+{
+    palette_cycle(ctx, scr);
+}
+
+/* 0x1b506 for a story enemy's box: the palette steps on the palette itself (0x1afb0's [bp-0xac]), as for the level-ups. When the box
+ * closes the battle starts. */
+static int boss_round(walk_t *w, screen_t *scr, unsigned port60)
+{
+    int mx, my;
+    unsigned mb = 0;
+    int on = walk_mouse(w, &mx, &my, &mb);
+    if (!msgbox_round(&w->box, scr, port60, on, mb, boss_step, w))
+        return 0;
+    w->boss_box = 0;
+    return WALK_PASS_BATTLE;
 }
 
 static int pass_tail(walk_t *w, uint32_t ticks, unsigned port60, unsigned stride);
 
 static void mouse_start(walk_t *w, screen_t *scr);
-static void mouse_pass(walk_t *w, screen_t *scr, unsigned shift);
+static void mouse_pass(walk_t *w, screen_t *scr, uint8_t *view, unsigned shift);
 
 int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60)
 {
@@ -1596,6 +1666,10 @@ int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60)
     if (w->talking) {   /* a talk's message box waits (0x1b506) */
         talk_round(w, scr, port60);
         return w->unbuilt_new ? WALK_PASS_UNBUILT : 0;
+    }
+    if (w->boss_box) {
+        int got = boss_round(w, scr, port60);
+        return got | (w->unbuilt_new ? WALK_PASS_UNBUILT : 0);
     }
     mouse_start(w, scr);
 
@@ -1624,8 +1698,14 @@ int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60)
     if (stride && s->weather == 1)   /* mode 2 is read from the code but never seen: nothing is drawn for it */
         walk_draw_rain(w->buf, w->drops, stride);
     unsigned sh = shake(w);   /* 0x1259b: the shake moves where the buffer starts, for the pointer too */
-    mouse_pass(w, scr, sh);
-    walk_copy_window_at(scr, w->buf, sh);
+    uint8_t *view = w->buf;
+    if (s->header[5]) {   /* 0x125c6: a dark scene shows the doubled, darkened middle; the shake moved what is doubled */
+        walk_double_dark(w->dbuf, w->buf + sh, w->table, s->dark_mask);
+        view = w->dbuf;
+        sh = 0;
+    }
+    mouse_pass(w, scr, view, sh);
+    walk_copy_window_at(scr, view, sh);
 
     /* 0x12703: a party member standing on a live enemy (0x2c0da: same position with the low bits cleared, byte 0x31 set, not in
      * smoke) starts a battle; the loop is left here, before the villagers' steps. */
@@ -1710,6 +1790,43 @@ void walk_state_dump(const walk_t *w, uint8_t out[WALK_STATE_BYTES])
 }
 
 /* ---- the window ---- */
+
+enum { DOUBLE_SRC = 0x3220, DOUBLE_DST = 0xE10, DARK_MASK_AT = 0x48A0 };
+
+void walk_double(uint8_t *dst, const uint8_t *src, const uint8_t table[256])
+{
+    for (int r = 0; r < 84; r++)
+        for (int c = 0; c < 96; c++) {
+            uint8_t p = src[DOUBLE_SRC + r * WALK_W + c], q = table[p];
+            uint8_t *d = dst + DOUBLE_DST + 2 * r * WALK_W + 2 * c;
+            d[0] = p;
+            d[1] = q;
+            d[WALK_W] = q;
+            d[WALK_W + 1] = table[q];
+        }
+}
+
+void walk_double_dark(uint8_t *dst, const uint8_t *src, const uint8_t table[256], const uint8_t *mask)
+{
+    for (int r = 0; r < 84; r++)
+        for (int c = 0; c < 96; c++) {
+            uint8_t p = src[DOUBLE_SRC + r * WALK_W + c];
+            uint8_t *d = dst + DOUBLE_DST + 2 * r * WALK_W + 2 * c;
+            d[0] = p;
+            if (r >= 34 && r < 34 + 27) {
+                uint8_t q = table[p];
+                d[1] = q;
+                d[WALK_W] = q;
+                d[WALK_W + 1] = table[q];
+            } else {
+                d[1] = 0;
+                d[WALK_W] = 0;
+                d[WALK_W + 1] = 0;
+            }
+        }
+    for (int i = 0; i < WS_DARK_MASK_BYTES; i++)
+        dst[DARK_MASK_AT + i] &= mask[i];
+}
 
 void walk_copy_window_at(screen_t *scr, const uint8_t *buf, unsigned shift)
 {
@@ -1811,12 +1928,76 @@ int walk_first_screen(walk_t *w, screen_t *scr)
 
 int walk_begin(walk_t *w, screen_t *scr, uint32_t seed, uint32_t ticks)
 {
+    return walk_begin_shown(w, scr, seed, ticks, NULL, NULL);
+}
+
+int walk_begin_shown(walk_t *w, screen_t *scr, uint32_t seed, uint32_t ticks, void (*show)(void *ctx, screen_t *scr), void *ctx)
+{
     if (walk_draw_interface(scr) != 0)
         return -1;
+    walk_sound_buttons(w, scr);
     if (walk_reset(w, seed) != 0)
         return -1;
+    for (int k = 0; k < WALK_ZOOM_STEPS; k++) {   /* 0x11c25 .. 0x11ce6: the view comes in before the first pass */
+        walk_zoom_step(w, scr, k);
+        if (show)
+            show(ctx, scr);
+    }
     w->begin_result = walk_pass(w, scr, ticks, 0);   /* the first pass: its picture is the first screen */
     return 0;
+}
+
+/* ---- the start's zoom (0x11c25 .. 0x11ce6, 0x19ab2) ---- */
+
+void walk_zoom_scale(uint8_t *dst, const uint8_t *src, unsigned sw, unsigned sh)
+{
+    enum { W = WALK_ZOOM_W, H = WALK_ZOOM_H };
+    memset(dst, 0, W * H);
+    unsigned xstep = (0xFFFFu * sw / W) & 0xFFFF, ystep = (0xFFFFu * sh / H) & 0xFFFF;
+    size_t di = 0;
+    unsigned dy = 1;
+    for (unsigned row = 0; row < sh; row++) {
+        size_t si = (size_t)row * sw;
+        unsigned bx = 1;
+        uint8_t al = src[si];
+        for (unsigned x = 0; x < W; x++) {   /* a source pixel is written once, where the step carries; the others stay 0 */
+            if (di < W * H)
+                dst[di] = al;
+            di++;
+            al = 0;
+            bx += xstep;
+            if (bx > 0xFFFF) {
+                bx &= 0xFFFF;
+                al = src[++si];
+            }
+        }
+        for (;;) {   /* rows the step does not carry into stay 0 */
+            dy += ystep;
+            if (dy > 0xFFFF) {
+                dy &= 0xFFFF;
+                break;
+            }
+            di += W;
+        }
+    }
+}
+
+void walk_zoom_step(walk_t *w, screen_t *scr, int k)
+{
+    static uint8_t crop[WALK_ZOOM_W * WALK_ZOOM_H + 1], out[WALK_ZOOM_W * WALK_ZOOM_H];
+    if (k == 0) {   /* the world drawn as the F-keys draw it (the party standing; doubled in a dark scene), its window grabbed */
+        fkey_frame(w);
+        for (int r = 0; r < WALK_ZOOM_H; r++)
+            memcpy(w->zoom_grab + r * WALK_ZOOM_W, w->buf + 0xE10 + r * WALK_W, WALK_ZOOM_W);
+    }
+    /* step k: the w x h middle of the grab (24 x 24 growing by 14 x 12, the corner 0x3654 - 0x487 k) scaled to the window */
+    unsigned cw = 24 + 14 * (unsigned)k, ch = 24 + 12 * (unsigned)k, off = 0x3654 - 0x487 * (unsigned)k;
+    for (unsigned r = 0; r < ch; r++)
+        memcpy(crop + r * cw, w->zoom_grab + off + r * WALK_ZOOM_W, cw);
+    crop[cw * ch] = 0;   /* the scaling may read the byte after the crop, never to draw it */
+    walk_zoom_scale(out, crop, cw, ch);
+    for (int r = 0; r < WALK_ZOOM_H; r++)   /* 0x27328: shown at (64, 16), its zeros too */
+        memcpy(scr->pix + (16 + r) * SCREEN_W + 64, out + r * WALK_ZOOM_W, WALK_ZOOM_W);
 }
 
 int walk_begin_result(const walk_t *w)
@@ -1904,7 +2085,7 @@ static void mouse_start(walk_t *w, screen_t *scr)
     walk_show_gold(w, scr);   /* 0x10bc9 */
 }
 
-static void mouse_pass(walk_t *w, screen_t *scr, unsigned shift)
+static void mouse_pass(walk_t *w, screen_t *scr, uint8_t *view, unsigned shift)
 {
     int x, y;
     unsigned b;
@@ -1924,7 +2105,7 @@ static void mouse_pass(walk_t *w, screen_t *scr, unsigned shift)
             for (unsigned c = 0; c < 6; c++) {
                 size_t o = shift + (size_t)(x - 0x30) + (size_t)y * WALK_W + r * WALK_W + c;
                 if (w->mpic[r * 6 + c] && o < WALK_BUF_LEN)
-                    w->buf[o] = w->mpic[r * 6 + c];
+                    view[o] = w->mpic[r * 6 + c];
             }
 }
 
@@ -1944,12 +2125,87 @@ int walk_resume(walk_t *w, uint32_t ticks, unsigned port60, unsigned result)
     w->hero_frame = w->battle_boss & 0xFF;
     w->ctr = result & 0xFF;
     w->unbuilt_new = 0;
+    if (w->battle_boss && w->ctr == 5) {   /* 0x13300: di = 0xffff, the pass ends at 0x172f0 with si = 0xc8, through 0x18b82 */
+        records_again(w, 0xC8 / WS_RECORD_SIZE);
+        return w->unbuilt_new ? WALK_PASS_UNBUILT : 0;
+    }
     return pass_tail(w, ticks, port60, w->stride);
+}
+
+void walk_boss_after(walk_t *w, unsigned result)
+{    walk_scene_t *s = w->scene;
+    if (!w->battle_boss)
+        return;
+    uint8_t *rec = s->tab_a + w->battle_rec;
+    if ((result & 0xFF) == 5) {   /* 0x12fd1: all five killed: the enemy is gone and its flag set */
+        rec[0] = rec[1] = 0;
+        walk_flag_set(s->tab_b, rec[0xC], rec[0xD]);
+        return;
+    }
+    uint8_t x = rec[0x28], y = rec[0x29];   /* 0x1302e: the party is put back where the record says, the trail too */
+    for (int i = 0; i < 5; i++) {
+        s->tab_b[WS_PARTY_SIZE * i] = x;
+        s->tab_b[WS_PARTY_SIZE * i + 1] = y;
+    }
+    for (int i = 0; i < 13; i++) {
+        s->trail[3 * i] = x;
+        s->trail[3 * i + 1] = y;
+        s->trail[3 * i + 2] = 1;
+    }
 }
 
 unsigned *walk_battle_left(walk_t *w)
 {
     return &w->battle_left;
+}
+
+void walk_set_sound(walk_t *w, unsigned fm, unsigned sb)
+{
+    w->fm = fm;
+    w->sb = sb;
+}
+
+void walk_sound_buttons(const walk_t *w, screen_t *scr)
+{
+    if (w->fm == 0x81)
+        walk_button_toggle(scr, 0x7B8D, 0x2F, 0x14);
+    if (w->sb == 0x81)
+        walk_button_toggle(scr, 0x948D, 0x2F, 0x14);
+}
+
+unsigned *walk_fm(walk_t *w)
+{
+    return &w->fm;
+}
+
+unsigned *walk_sb(walk_t *w)
+{
+    return &w->sb;
+}
+
+void walk_set_sfx(walk_t *w, const walk_sfx_t *sfx)
+{
+    if (sfx)
+        w->sfx = *sfx;
+    else
+        memset(&w->sfx, 0, sizeof w->sfx);
+}
+
+void walk_sfx_play(walk_t *w, unsigned file, unsigned off)
+{
+    if (w->sb == 0x81 && w->sfx.play)
+        w->sfx.play(w->sfx.ctx, file, off);
+}
+
+int walk_sfx_busy(walk_t *w)
+{
+    return w->sfx.busy ? w->sfx.busy(w->sfx.ctx) : 0;
+}
+
+void walk_sfx_stop(walk_t *w)
+{
+    if (w->sb == 0x81 && w->sfx.stop)
+        w->sfx.stop(w->sfx.ctx);
 }
 
 void walk_battle_info(const walk_t *w, unsigned *member, unsigned *group, unsigned *boss, unsigned *rec)

@@ -9,7 +9,8 @@
 #     (correction, 2026-10-19: this comment said five were won; the comparison now tells won from lost);
 #   - level-ups after a win (step 16): one message box, and three with long waits in a party of three;
 #   - MARK.EXE's game-over screen from the screen a lost battle ends on, 400 passes (tools/gameover_check.py);
-#   - the other three commands (step 17): fleeing, the magic list with its member picker, the item list, and any key mixed.
+#   - the other three commands (step 17): fleeing, the magic list with its member picker, the item list, and any key mixed;
+#   - later sections: the mouse, F1 talks, selling and asking, the dark scenes (steps 18 to 22).
 # Screen, palette, rand state and, by loop, the battle's tables and locals or the world's villager and party tables must be identical
 # at every pass.
 # The original's recordings are kept in work/check_battle (delete it to record again). PORT=path uses another build of walk_dump;
@@ -242,6 +243,85 @@ DOPTS=""
 for f in 9 1; do DOPTS="--byte 0:2:2 --byte 0:200:$f"; run "talk_flag$f" 0 84 35 300 --key 1:0x81 --key 3:0x3b --key 5:0xbb --key 100:0x39 --key 102:0xb9; done
 DOPTS=""
 DOPTS=""
+# the dark scenes (map header byte 5 set; step 22): idle and walking with Space (tools/walk_keys.py shoot) in scenes 6 (byte 5 = 2), 9
+# (byte 3 = 1, keeps shaking; walks into an enemy), 13, 23 and 47; F1 walks among scene 23's ten villagers; the mouse walking and
+# shooting in scene 13; the villagers who join in scenes 37, 39 and 43, and in 13 (flag 0 bit 4 set); scene 9's question and scene 23's
+# villager 5, in their own scenes (the hero above each: the start faces him down)
+for sc in 6:100:40 9:100:50 13:100:50 23:100:50 47:48:45; do
+    IFS=: read -r s x y <<EOF
+$sc
+EOF
+    run "dark${s}_idle" "$s" "$x" "$y" 300
+    run "dark${s}_shoot" "$s" "$x" "$y" 1500 $($PY tools/walk_keys.py shoot "$s" 1500)
+done
+for seed in 3 4; do run "dark23_talk$seed" 23 69 22 2500 $($PY tools/walk_keys.py talk $seed 2500); done
+run dark13_mouse 13 100 50 1500 --tick-base 20 $($PY tools/battle_mouse.py 4 1500 --world)
+K="--key 1:0x81 --key 3:0x3b --key 5:0xbb"; for p in 60 120 180 240 300 360; do K="$K --key $p:0x39 --key $((p + 2)):0xb9"; done
+run dark37_join 37 68 42 420 $K; run dark39_join 39 126 23 420 $K; run dark43_join 43 74 16 420 $K
+DOPTS="--byte 0:200:16"; run dark13_join 13 108 45 420 $K
+DOPTS=""; run dark9_ask 9 202 29 260 $($PY tools/number_keys.py 38945 2>/dev/null)
+K="$($PY tools/number_keys.py 13 2>/dev/null) $($PY tools/number_keys.py 23 82 2>/dev/null) --key 150:0x3b --key 152:0xbb --key 210:0x39 --key 212:0xb9"
+run dark23_ask 23 72 21 360 $K
+DOPTS=""
+# story enemies (record byte 0x2f set; step 24): scene 4's (an opening message box, colour 0xc2, closed with Space, then a lost battle;
+# fled by a strong hero three times: the party is put back at the record's bytes 0x28, 0x29); scene 35's record 8 won (all five killed:
+# the enemy goes, its flag is set and the pass ends, then 1,800 world passes) and record 11 fled twice; scene 40's box closed with the
+# right button
+B4="--key 1:0x81 --key 30:0x39 --key 32:0xb9"
+run boss4_lose 4 60 41 300 $B4 $($PY tools/battle_keys.py 3 300 --attack --from 40)
+DOPTS="--word 0:4:30000 --hp 0:9000"
+for seed in 1 2 3; do run "boss4_flee$seed" 4 60 41 1200 $B4 $($PY tools/battle_keys.py $seed 1200 --flee --from 40); done
+run boss35_win 35 96 40 2500 $($PY tools/battle_keys.py 3 2500 --attack)
+for seed in 1 2; do run "boss35_flee$seed" 35 120 40 1500 $($PY tools/battle_keys.py $seed 1500 --flee); done
+DOPTS=""
+run boss40_mouse 40 86 38 300 --world-passes 0 --mouse 0:300:30:0 --mouse 40:300:30:2 --mouse 42:300:30:0
+run boss40_wait 40 86 38 300 --key 1:0x81 --key 120:0x39 --key 122:0xb9
+# keys 1 and 2 in the fight with an FM card (--opl: the oracle's AdLib; the music button starts pressed): key 1 four times (the button
+# goes up and down), key 2 (no Sound Blaster: nothing); a won battle after key 1, back in the world; walks into the enemy at two clock
+# readings (the FM timer leaves a different [bp-0x58]); the music button pressed with the mouse
+run fm_keys 1 106 36 200 --opl --key 1:0x81 --key 20:0x02 --key 22:0x82 --key 40:0x02 --key 42:0x82 --key 60:0x03 --key 62:0x83 \
+    --key 80:0x02 --key 82:0x82
+run fm_win 1 106 36 2500 --opl --key 30:0x02 --key 32:0x82 $($PY tools/battle_keys.py 3 2500 --attack --from 40)
+run fm_walk_20 1 110 36 300 --opl --tick-base 20 --key 1:0x4b --key 9:0xcb
+run fm_walk_30000 1 110 36 300 --opl --tick-base 30000 --key 1:0x4b --key 9:0xcb
+run fm_mouse 1 106 36 300 --opl --world-passes 0 --key 1:0x81 --mouse 0:160:100:0 --mouse 10:290:105:0 --mouse 12:290:105:1 \
+    --mouse 14:290:105:0 --mouse 30:290:105:1 --mouse 32:290:105:0 --mouse 50:160:100:0 --mouse 60:290:125:1 --mouse 62:290:125:0
+# the music button pressed with the pointer on its top-left edge, which the press turns dark, then the pointer moved away
+run fm_mouse_edge 1 106 36 120 --opl --world-passes 0 --key 1:0x81 --mouse 0:160:100:0 --mouse 10:270:99:0 --mouse 12:270:99:1 \
+    --mouse 14:270:99:0 --mouse 30:160:100:0 --mouse 40:270:99:0 --mouse 42:270:99:1 --mouse 44:270:99:0 --mouse 60:160:100:0
+# the Sound Blaster's sounds (step 25; --sb: the oracle's voice driver stubbed, tools/sb_stub.py; the sound button starts pressed): each
+# sound started and cut is compared by pass and by which block of SND_EF.1 or _1_.LOC, the card's busy word following the model both
+# sides share (a sound lasts its length at 35 passes a second). A won battle (the touch, the hits, the monsters' blows, the deaths, the
+# rewards bar cutting the sound) and the sparks in the world after it; a party of five (each member's shout); spells; fleeing; the house
+# door's roof both ways; shots that destroy an enemy; a right answer; a story enemy beaten by a strong hero; a walk in with the monsters
+# first; key 2 turning the sounds off and on again; the sound button clicked
+run sb_win 1 106 36 2500 --sb $($PY tools/battle_keys.py 3 2500 --attack)
+DOPTS="--join 1 --join 2 --join 3 --join 4"; run sb_party5 1 106 36 2500 --sb $($PY tools/battle_keys.py 5 2500 --attack); DOPTS=""
+DOPTS="--byte 0:0xc:120 --word 0:0xd:3000"
+run sb_magic 1 106 36 600 --sb --key 2:0x81 --key 5:0x4d --key 7:0xcd --key 10:0x39 --key 12:0xb9 --key 20:0x02 --key 22:0x82; DOPTS=""
+run sb_flee 1 106 36 1200 --sb $($PY tools/battle_keys.py 1 1200 --flee)
+run sb_door 0 36 22 420 --sb $($PY tools/walk_keys.py door 0 420)
+run sb_volley 1 106 33 900 --sb $($PY tools/walk_keys.py volley 1 900)
+DOPTS="--talk 8:9:18"; run sb_ask 0 108 35 260 --sb $($PY tools/number_keys.py 38945 2>/dev/null); DOPTS=""
+DOPTS="--word 0:4:30000 --hp 0:9000"; run sb_boss35 35 96 40 2500 --sb $($PY tools/battle_keys.py 3 2500 --attack); DOPTS=""
+run sb_walk_20 1 110 36 300 --sb --tick-base 20 --key 1:0x4b --key 9:0xcb
+KS="$($PY tools/battle_keys.py 3 1500 --attack --from 20 | tr ' ' '\n' | grep -v -- --key | awk -F: '$1 < 576 {printf "--key %s ", $0}')"
+run sb_keys 1 106 36 1500 --sb --key 1:0x81 --key 10:0x03 --key 12:0x83 $KS --key 578:0x03 --key 580:0x83 \
+    $($PY tools/battle_keys.py 4 1500 --attack --from 590)
+run sb_mouse 1 106 36 300 --sb --world-passes 0 --key 1:0x81 --mouse 0:160:100:0 --mouse 10:290:125:0 --mouse 12:290:125:1 \
+    --mouse 14:290:125:0 --mouse 30:290:125:1 --mouse 32:290:125:0 $($PY tools/battle_keys.py 3 300 --attack --from 40)
+# the world's start zoom (step 23; tools/zoom_check.py): its 13 steps in scenes 0, 1, 34 and four dark scenes (6, 9, 23, 47), from the
+# data directories of the starts above
+case " ${RUNS:-zoom} " in *" zoom"*)
+for z in talk_one s1_rec4 s34 dark6_idle dark9_idle dark23_idle dark47_idle; do
+    [ -d "$OUT/data_$z" ] || { echo "zoom_$z: no data (run the whole script once)"; fail=1; continue; }
+    res=$($PY tools/zoom_check.py "$OUT/data_$z" --keep "$OUT/z_$z" --port "$PORT" 2>/dev/null)
+    case "$res" in
+        *identical*) echo "zoom_$z: $res" ;;
+        *) echo "zoom_$z: DIFFERENT"; echo "$res" | head -4; fail=1; [ "${FIRST_FAIL_EXIT:-0}" = 1 ] && exit 1 ;;
+    esac
+done
+;; esac
 # after the loss: MARK.EXE's game-over screen from the screen the battle ended on (tools/gameover_check.py)
 case " ${RUNS:-gameover} " in *" gameover"*)
 START=$($PY -c "
@@ -256,6 +336,16 @@ case "$res" in
     *identical*) echo "gameover: $res" ;;
     *) echo "gameover: DIFFERENT"; echo "$res" | head -4; fail=1; [ "${FIRST_FAIL_EXIT:-0}" = 1 ] && exit 1 ;;
 esac
+# how it ends: Space, Enter; with a mouse driver the left or the right button (no release waited for: one held from the start ends it
+# at once); Esc does nothing
+for g in "space:--key 50:0x39" "enter:--key 50:0x1c" "left:--mouse 0:100:100:0 --mouse 40:100:100:1" \
+         "right:--mouse 0:100:100:0 --mouse 60:200:50:2" "held:--mouse 0:100:100:1" "esc:--mouse 0:100:100:0 --key 30:0x01 --key 40:0x81"; do
+    res=$($PY tools/gameover_check.py "$START" 120 --keep "$OUT/k_gameover_${g%%:*}" --port "$PORT" ${g#*:} 2>/dev/null)
+    case "$res" in
+        *identical*) echo "gameover_${g%%:*}: $res" ;;
+        *) echo "gameover_${g%%:*}: DIFFERENT"; echo "$res" | head -4; fail=1; [ "${FIRST_FAIL_EXIT:-0}" = 1 ] && exit 1 ;;
+    esac
+done
 ;; esac
 [ $fail = 0 ] && echo "battle: all identical"
 exit $fail

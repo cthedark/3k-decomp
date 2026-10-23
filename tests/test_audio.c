@@ -15,6 +15,7 @@
 #include "audio.h"
 #include "intro0.h"
 #include "screen.h"
+#include "sfx.h"
 #include "subs.h"
 #include "voc.h"
 #include "voice.h"
@@ -84,6 +85,75 @@ static void test_adpcm(void)
     CHECK(voc_adpcm4_decode(a, 1, out) == 0);
 }
 
+/* The 2.6-bit and 2-bit codecs (WALK.SL's SND_EF.1 and _1_.LOC), worked by hand from the rule in src/voc.c. */
+static void test_adpcm_short(void)
+{
+    printf("ADPCM 2.6-bit and 2-bit\n");
+    uint8_t out[16];
+    /* 2.6-bit, start 128, step 0. 0x7f is the codes 3, 7, 6: +3 -> 131 (step 1), -((3<<1)+1) -> 124 (step 2), the sign and m = 2:
+     * -((2<<2)+2) -> 114 (step 2). 0x00: m = 0 three times: +2 -> 116 (step 1), +1 -> 117 (step 0), +0. */
+    const uint8_t a[] = {128, 0x7f, 0x00};
+    CHECK(voc_adpcm_decode(2, a, sizeof a, out) == 6);
+    CHECK(out[0] == 131 && out[1] == 124 && out[2] == 114 && out[3] == 116 && out[4] == 117 && out[5] == 117);
+    /* 0x6d is the codes 3, 3, 2. From 0: +3, +7, +10 (step 2); +14, +28 (step 4), then at step 4 10m + 5: +25; +35, +35 (the step
+     * stays at 4), +25. */
+    const uint8_t b[] = {0, 0x6d, 0x6d, 0x6d};
+    static const uint8_t bw[] = {3, 10, 20, 34, 62, 87, 122, 157, 182};
+    CHECK(voc_adpcm_decode(2, b, sizeof b, out) == 9 && memcmp(out, bw, sizeof bw) == 0);
+    /* 2-bit, start 128. 0x57 is the codes 1, 1, 1, 3: +1, +3, +6, -12 (step 4); 0x25 the codes 0, 2, 1, 1: +8 (step 3), -4 (step 2),
+     * +6, +12. */
+    const uint8_t c[] = {128, 0x57, 0x25};
+    static const uint8_t cw[] = {129, 132, 138, 126, 134, 130, 136, 148};
+    CHECK(voc_adpcm_decode(3, c, sizeof c, out) == 8 && memcmp(out, cw, sizeof cw) == 0);
+    /* The step stops at 5: +1, +3, +6, +12, +24, +48, +48, +48. */
+    const uint8_t d[] = {0, 0x55, 0x55};
+    static const uint8_t dw[] = {1, 4, 10, 22, 46, 94, 142, 190};
+    CHECK(voc_adpcm_decode(3, d, sizeof d, out) == 8 && memcmp(out, dw, sizeof dw) == 0);
+    /* Clamped at 0 and 255. */
+    const uint8_t e[] = {254, 0x00, 0xff};
+    CHECK(voc_adpcm_decode(3, e, sizeof e, out) == 8 && out[0] == 254 && out[3] == 254 && out[4] < 254);
+    const uint8_t hi[] = {250, 0x6d};
+    CHECK(voc_adpcm_decode(2, hi, sizeof hi, out) == 3 && out[0] == 253 && out[1] == 255 && out[2] == 255);
+    CHECK(voc_adpcm_decode(4, a, sizeof a, out) == 0 && voc_adpcm_decode(0, a, sizeof a, out) == 0);
+    CHECK(voc_adpcm_decode(2, a, 0, out) == 0 && voc_adpcm_decode(3, a, 1, out) == 0);
+
+    /* A bare sound-data block: type 1, size 5, divisor 156 (10,000 Hz), codec 2, the start level and two bytes. */
+    const uint8_t blk[] = {1, 5, 0, 0, 156, 2, 128, 0x7f, 0x00};
+    CHECK(voc_block_frames(blk, sizeof blk) == 6);
+    CHECK(voc_block_frames(blk, sizeof blk - 1) == 0);   /* runs past what is held */
+    uint8_t bad[sizeof blk];
+    memcpy(bad, blk, sizeof blk);
+    bad[5] = 4;
+    CHECK(voc_block_frames(bad, sizeof bad) == 0);
+    bad[5] = 2;
+    bad[0] = 2;
+    CHECK(voc_block_frames(bad, sizeof bad) == 0);
+    voc_clip clip;
+    CHECK(voc_block_decode(blk, sizeof blk, &clip) == 0);
+    CHECK(clip.frames == 6 && clip.rate == 10000 && clip.pcm[0] == (131 - 128) * 256 && clip.pcm[2] == (114 - 128) * 256);
+    voc_free(&clip);
+    CHECK(voc_block_decode(bad, sizeof bad, &clip) != 0);
+    /* 8-bit: two bytes of the block header, then one sample a byte. */
+    const uint8_t pcm8[] = {1, 4, 0, 0, 156, 0, 0x80, 0xff};
+    CHECK(voc_block_frames(pcm8, sizeof pcm8) == 2);
+
+    /* sfx_passes: the samples at 35 passes a second, rounded up. 10,000 samples at 10,000 Hz are 35 passes, one more is 36; 6 is 1. */
+    CHECK(sfx_passes(blk, sizeof blk) == 1);
+    uint8_t *big = calloc(1, 4 + 10003);
+    if (big) {
+        big[0] = 1;
+        big[1] = (uint8_t)(10002 & 0xff);
+        big[2] = (uint8_t)(10002 >> 8);
+        big[4] = 156;
+        CHECK(sfx_passes(big, 4 + 10002) == 35);
+        big[1] = (uint8_t)(10003 & 0xff);
+        CHECK(sfx_passes(big, 4 + 10003) == 36);
+        big[4] = 56;   /* 5,000 Hz: twice as long */
+        CHECK(sfx_passes(big, 4 + 10003) == 71);
+        free(big);
+    }
+}
+
 /* A VOC file with the given blocks appended after the 26-byte header. */
 static size_t make_voc(uint8_t *f, const uint8_t *blocks, size_t n)
 {
@@ -129,9 +199,9 @@ static void test_voc(void)
     f[0] = 'C';
     CHECK(voc_decode(f, 10, &c) != 0);             /* too short */
     CHECK(voc_decode(f, n - 4, &c) != 0);          /* block runs past the end */
-    const uint8_t codec2[] = {1, 5, 0, 0, 156, 2, 0x80, 0xff, 0x00, 0};
-    n = make_voc(f, codec2, sizeof codec2);
-    CHECK(voc_decode(f, n, &c) != 0);              /* codec 2 (2.6-bit ADPCM) is not used */
+    const uint8_t codec4[] = {1, 5, 0, 0, 156, 4, 0x80, 0xff, 0x00, 0};
+    n = make_voc(f, codec4, sizeof codec4);
+    CHECK(voc_decode(f, n, &c) != 0);              /* codec 4 (16-bit) is not used */
     const uint8_t silence[] = {3, 3, 0, 0, 0x10, 0x00, 156, 0};
     n = make_voc(f, silence, sizeof silence);
     CHECK(voc_decode(f, n, &c) != 0);              /* silence blocks are not used either */
@@ -175,6 +245,28 @@ static int have_voice_files(void)
 
 static void test_real_voice(void)
 {
+    printf("WALK.SL's sound effects\n");
+    if (!assets_exists("SND_EF.1") || !assets_exists("_1_.LOC")) {
+        printf("  skipped (no game files)\n");
+        skipped++;
+    } else {
+        /* every sound the built code starts (docs/findings.md, "WALK.SL step 25"), with its codec and its passes (sfx_passes) */
+        static const struct { unsigned file, off, codec, passes; } fx[] = {
+            {SFX_EF, 0, 2, 38}, {SFX_EF, 0x127D, 2, 20}, {SFX_EF, 0x1BF5, 0, 25}, {SFX_EF, 0x5F80, 3, 9},
+            {SFX_LOC, 0, 2, 187}, {SFX_LOC, 0x37A3, 2, 129}, {SFX_LOC, 0xBC69, 0, 45}, {SFX_LOC, 0x6771, 1, 24},
+            {SFX_LOC, 0x7742, 0, 12}, {SFX_LOC, 0x8849, 2, 13}, {SFX_LOC, 0x8E01, 0, 15}, {SFX_LOC, 0xA1BB, 0, 20}};
+        sfx_bank_t *bank = sfx_bank_load();
+        CHECK(bank != NULL);
+        for (size_t i = 0; bank && i < sizeof fx / sizeof fx[0]; i++) {
+            size_t avail = 0;
+            const uint8_t *blk = sfx_block(bank, fx[i].file, fx[i].off, &avail);
+            CHECK(blk && blk[5] == fx[i].codec && sfx_passes(blk, avail) == fx[i].passes);
+            const voc_clip *c = sfx_clip(bank, fx[i].file, fx[i].off);
+            CHECK(c && c->frames == voc_block_frames(blk, avail));
+        }
+        CHECK(!bank || sfx_clip(bank, SFX_EF, 0) == sfx_clip(bank, SFX_EF, 0));   /* kept, not decoded again */
+        sfx_bank_free(bank);
+    }
     printf("voice-over files\n");
     if (!have_voice_files()) {
         printf("  skipped (no game files)\n");
@@ -433,6 +525,7 @@ int main(int argc, char **argv)
     if (argc > 1)
         assets_set_dir(argv[1]);
     test_adpcm();
+    test_adpcm_short();
     test_voc();
     test_table_synthetic();
     test_real_voice();

@@ -1,6 +1,7 @@
 /* WALK.SL's battle, stage 1: the hand-over from the world, the first screen and the idle passes. See battle.h. */
 #include "battle.h"
 #include "msgbox.h"
+#include "sfx.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -97,7 +98,15 @@ struct battle {
     unsigned mg_ptr, mg_mlatch, pk_ptr, pk_mlatch, it_ptr, it_mlatch;
     char unbuilt[120];
     int unbuilt_new;
+    void (*show)(void *ctx, screen_t *scr);   /* battle_set_show: the steps of the picker face's flash on screen */
+    void *show_ctx;
 };
+
+void battle_set_show(battle_t *b, void (*show)(void *ctx, screen_t *scr), void *ctx)
+{
+    b->show = show;
+    b->show_ctx = ctx;
+}
 
 static unsigned w16(const uint8_t *b, size_t o)
 {
@@ -455,6 +464,7 @@ battle_t *battle_begin(walk_t *w, screen_t *scr)
         battle_free(b);
         return NULL;
     }
+    walk_sfx_play(w, SFX_EF, 0);   /* 0x12df4 */
     /* 0x1cbfa (mouse or not): the pointer's place is 0 and the 6 x 10 at the corner is kept under it. [bp-0x5c] (a button still down)
      * is never set: a release sets it, and a button held from the start counts only if the stack happened to hold a non-zero there
      * (taken as 0 here, not seen) */
@@ -537,6 +547,10 @@ battle_t *battle_begin(walk_t *w, screen_t *scr)
     /* [bp-0x38] is never set before the loop: it holds what the stack had there, the SI the world pushed for its copy at 0x199a8,
      * the touched record's offset in the villager table (low byte). Not 0 means a held key counts at once. */
     b->latch = rec & 0xFF;
+    /* [bp-0x58] (the hit face's pass counter) is never set before it counts. Without an FM card it is 0 there. With one, the FM driver's
+     * timer interrupt (0x2aa52) pushes its CX onto the stack below the world's frame and that is left there: 1, 3, 4, 5 in the oracle,
+     * by when the interrupt came. The counter only asks "above 1" after adding 1, so every value 1 .. 0xfe acts as 1. */
+    b->v58 = *walk_fm(w) ? 1 : 0;
     b->v84 = *walk_battle_left(w);   /* seen 1 after a won battle (2026-10-19, walk at clock 20300); never read before it is set */
     b->choosing = 0;
     b->v42 = 5;   /* 0x1d3e4, 0x1d3e8: no hit picture, no hit face running */
@@ -755,6 +769,7 @@ static unsigned draw_monsters(battle_t *b)
                         b->mon[0x14 + 4 * sl] = (uint8_t)(at + 0x169E);
                         b->mon[0x15 + 4 * sl] = (uint8_t)((at + 0x169E) >> 8);
                         b->mon[0x16 + 4 * sl] = 0;
+                        walk_sfx_play(b->w, SFX_LOC, 0);   /* 0x1ff7c */
                     }
                     f = 0;
                 }
@@ -857,6 +872,14 @@ static uint8_t *party_of(battle_t *b)
 /* 0x1ec8f .. 0x1f18d: the member who acts hits the chosen target. All of it is worked out at once; the pictures follow over the next
  * passes (the hit animation, the target's flashing, its dying). */
 /* The next member who can act gets the mark; none left: the monsters' turn comes (v44 reaches 0xc8). */
+/* (0x1cd79) _1_.LOC's sound for each of the five members, by his number: his shout when he attacks or casts. */
+static void member_sound(battle_t *b, unsigned n)
+{
+    static const unsigned at[5] = {0x6771, 0x7742, 0x8849, 0x8E01, 0xA1BB};
+    if (n < 5)
+        walk_sfx_play(b->w, SFX_LOC, at[n]);
+}
+
 static void next_member(battle_t *b, screen_t *scr)
 {
     uint8_t *party = party_of(b);
@@ -911,6 +934,7 @@ static void party_attack(battle_t *b, screen_t *scr)
     b->choosing = 0;
     b->v8a = d / 7 + 0x14;
     b->v32 = (b->v32 - (b->v8a >> 1) * 0xC1) & 0xFFFF;
+    member_sound(b, n);   /* 0x1f083 */
     next_member(b, scr);
     unsigned r = walk_rand(walk_rng(b->w)) / 0x199A + 2;
     set_shout(b, r, 0xF0, 0x79C, 0x2D);
@@ -945,6 +969,7 @@ static void monster_blow(battle_t *b, screen_t *scr)
     b->v54 = 0x26 * r + FACE_AT;
     unsigned m = 0x28 * r;
     b->v14 = 7;
+    walk_sfx_play(b->w, SFX_LOC, 0xBC69);   /* 0x1d8f1 */
     unsigned dmg = battle_monster_blow(w16(b->mon, 0x29), b->v5e < 8, party[m + 0x12]);
     unsigned hp = w16(party, m + 8);
     int dead = 0;
@@ -1459,7 +1484,7 @@ static void magic_round(battle_t *b, screen_t *scr, unsigned port60)
 
 /* 0x21d71 .. 0x22101: the picker has given member m (0xc8: none, back to the list). The caster's MP goes down; the spell heals (the
  * HP, not a fallen member's, up to word 0xa), lowers word 0x10, revives (HP up even from 0); the face in the picker flashes in the colour
- * of the last of those (0x9f, 0x2f, 0x3f, 0x1f) counting down 16 steps, three times (only the last step is drawn here); a revived one's
+ * of the last of those (0x9f, 0x2f, 0x3f, 0x1f) counting down 16 steps, three times (each step shown through b->show when set); a revived one's
  * face is drawn again in the strip. */
 static void magic_picked(battle_t *b, screen_t *scr, unsigned m)
 {
@@ -1505,7 +1530,12 @@ static void magic_picked(battle_t *b, screen_t *scr, unsigned m)
     unsigned k = m / 0x28;
     uint8_t sil[16 * 16];
     memcpy(sil, face, sizeof sil);
-    silhouette(scr, k * 0x12 + 0x5E47, sil, 16, 16, (uint8_t)(res - 15));   /* 0x25c18 */
+    for (int rep = 0; rep < 3; rep++)   /* 0x22041 .. 0x220a2: three times 16 colours down, each drawn 100 times (0x25c18) */
+        for (unsigned s = 0; s < 16; s++) {
+            silhouette(scr, k * 0x12 + 0x5E47, sil, 16, 16, (uint8_t)(res - s));
+            if (b->show)
+                b->show(b->show_ctx, scr);
+        }
     if (res == 0x1F)
         put(scr, FACE_AT + k * 0x26, face, 16, 16);
     magic_end(b, scr, 1);
@@ -1552,6 +1582,7 @@ static void magic_end(battle_t *b, screen_t *scr, unsigned r)
         b->v66 = 1;
         b->v8a = 0x13;
         b->v8c = 1;
+        member_sound(b, n);   /* 0x1f4f4 */
         set_shout(b, walk_rand(walk_rng(b->w)) / 0x4000, 0x30, 0x79C, 0x2D);
     }
     if (r != 0)
@@ -1816,13 +1847,32 @@ static void items_round(battle_t *b, screen_t *scr, unsigned port60)
 
 static void start_rewards(battle_t *b, screen_t *scr);
 
+/* 0x1e82e .. 0x1e8df, 0x1e8f1 .. 0x1e98f: key 1 or 2 with its card there: the flag switched, the right-hand button (47 x 20 at `at`)
+ * pressed or let go with the pointer taken off first and only kept again after (the next move draws it). */
+static void sound_button(battle_t *b, screen_t *scr, unsigned at)
+{
+    if (mouse_on(b))
+        walk_mouse_put(scr, b->mptr, walk_mouse_under(b->w), 0);
+    walk_button_toggle(scr, at, 0x2F, 0x14);
+    if (mouse_on(b))
+        walk_mouse_grab(scr, b->mptr, walk_mouse_under(b->w));
+}
+
 /* 0x1e81c .. 0x1f1c7: a key in the party's turn (the latch is then cleared, whatever the key). */
 static void keys(battle_t *b, screen_t *scr, unsigned k)
 {
     b->latch = 0;
-    if (k == 2 || k == 3)   /* music and sound on / off, with the right-hand button lit (0x1c3ba); no FM card or Sound Blaster in the
-                             * oracle, where the key then does nothing */
-        note(b, "keys 2 and 3 in the battle (music and sound on or off)");
+    unsigned *fm = walk_fm(b->w), *sb = walk_sb(b->w);
+    if (k == 2 && *fm) {   /* music: stopped (0x80) or the battle's song from its start (0x81); the caller plays it */
+        *fm = *fm == 0x81 ? 0x80 : 0x81;
+        sound_button(b, scr, 0x7B8D);
+        k = 0;
+    }
+    if (k == 3 && *sb) {   /* the Sound Blaster's sounds */
+        *sb = *sb == 0x81 ? 0x80 : 0x81;
+        sound_button(b, scr, 0x948D);
+        k = 0;
+    }
     if (!b->choosing) {
         if (k == 0x4B) {          /* Left: the tab before, round from the first to the last */
             if (b->v82 == 0)
@@ -1963,10 +2013,11 @@ static void rewards_pass(battle_t *b, screen_t *scr, unsigned port60)
     unsigned k = port60 & 0xFF;
     int mx, my;
     unsigned mb;
-    int leave = k == 0x39 || k == 1 || k == 0x1C;   /* the Sound Blaster's sample is stopped here when there is one (not built) */
+    int leave = k == 0x39 || k == 1 || k == 0x1C;
     if (!leave && walk_mouse(b->w, &mx, &my, &mb) && mb != 0)   /* 0x1fc75: any button */
         leave = 1;
     if (leave) {
+        walk_sfx_stop(b->w);   /* 0x1fcc8: the sound is cut */
         ptr_hide(b, scr, b->mptr);   /* 0x1fcd7 */
         b->lu = 0;
         level_ups(b, scr);
@@ -2025,14 +2076,13 @@ static void dialog_pass(battle_t *b, screen_t *scr, unsigned port60)
 
 /* 0x130e2 .. 0x13291: each member whose experience (word 4) has reached the next level's (word 6, below 60,000) gets it as his
  * experience, the next one 500 higher, his most HP (word 0xa) a twelfth more and full HP (each at most 60,000), and the message
- * 0x2e2 + his number. Then the world goes on (BATTLE_BACK). An enemy with byte 0x2f set goes another way first (not built). */
+ * 0x2e2 + his number. Then the world goes on (BATTLE_BACK). After a story enemy (byte 0x2f set) the world first takes it away or puts
+ * the party back (walk_boss_after, 0x12fb5). */
 static void level_ups(battle_t *b, screen_t *scr)
 {
     uint8_t *party = party_of(b);
-    unsigned member, group, boss, rec;
-    walk_battle_info(b->w, &member, &group, &boss, &rec);
-    if (boss && b->lu == 0)
-        note(b, "what follows a battle with an enemy whose byte 0x2f is set (0x12fc3)");
+    if (b->lu == 0)
+        walk_boss_after(b->w, battle_result(b));
     for (; b->lu < 5; b->lu++) {
         uint8_t *m = party + 0x28 * b->lu;
         if (!battle_level_up(m))
@@ -2261,8 +2311,10 @@ int battle_pass(battle_t *b, screen_t *scr, unsigned port60)
             if (b->atk_pic + 4 + (size_t)aw * ah <= b->atk_len)
                 blit_masked(b->field, b->v92, b->atk + b->atk_pic + 4, aw, ah);
         }
-        if (b->v42 == 5)
+        if (b->v42 == 5) {
+            walk_sfx_play(b->w, SFX_LOC, 0x37A3);   /* 0x1dfb9 */
             hit_lands(b);
+        }
     }
     if (b->v66) {   /* 0x1e034: a spell on the monsters: the field flashes colour 0x10 every other pass under the member's attack picture */
         if (b->v8c) {
@@ -2278,6 +2330,7 @@ int battle_pass(battle_t *b, screen_t *scr, unsigned port60)
         }
         b->v8a = (b->v8a - 1) & 0xFFFF;
         if (b->v8a < 1) {   /* the end: the hit monsters flash and die as after an attack */
+            walk_sfx_play(b->w, SFX_LOC, 0x37A3);   /* 0x1e0ba */
             b->v66 = 0;
             for (unsigned i = 8; i < 0x14; i += 4)
                 if (b->mon[i + 3] == 0x32)

@@ -93,6 +93,7 @@ void walk_scene_free(walk_scene_t *s)
     free(s->bank1);
     free(s->bank2);
     free(s->puff);
+    free(s->dark_mask);
     free(s);
 }
 
@@ -287,6 +288,13 @@ walk_scene_t *walk_scene_load(void)
     /* The smoke (0x109cb): RPG.LCP 0x1a4cc, 0x1eb bytes. */
     if (rp_len > 0x1A4CC)
         s->puff = decode_block(rp + 0x1A4CC, rp_len - 0x1A4CC < 0x1EB ? rp_len - 0x1A4CC : 0x1EB, 0x500, &s->puff_len);
+    /* The lit oval of the dark scenes (0x108cd, read in every scene): RPG.LCP 0x4350, 0x15a4 bytes. */
+    if (rp_len > 0x4350)
+        s->dark_mask = decode_block(rp + 0x4350, rp_len - 0x4350 < 0x15A4 ? rp_len - 0x4350 : 0x15A4, 0, &s->dark_mask_len);
+    if (!s->dark_mask || s->dark_mask_len < WS_DARK_MASK_BYTES) {
+        fprintf(stderr, "walk: the dark scenes' lit oval (RPG.LCP 0x4350) does not decode\n");
+        goto fail;
+    }
     if (!s->bank1 || !s->bank2 || !s->puff) {
         fprintf(stderr, "walk: a sprite bank does not decode\n");
         goto fail;

@@ -51,6 +51,18 @@ int walk_first_screen(walk_t *w, screen_t *scr);
  * tick count it reads first; the shipped checks use 0), `ticks` the clock at the first pass. The interface is drawn, the
  * moving world is reset and pass 0 is run, so later walk_pass calls continue from there. */
 int walk_begin(walk_t *w, screen_t *scr, uint32_t seed, uint32_t ticks);
+/* walk_begin with the start's zoom shown: `show` (when not NULL) is called after each of its WALK_ZOOM_STEPS pictures. */
+int walk_begin_shown(walk_t *w, screen_t *scr, uint32_t seed, uint32_t ticks, void (*show)(void *ctx, screen_t *scr), void *ctx);
+
+/* The start's zoom (0x11c25, 0x19ab2): the world is drawn as the F-keys draw it and its 192 x 168 window grabbed; then in 13 steps a
+ * middle part of it, 24 x 24 growing by 14 x 12 a step to the whole window, is scaled up to the window (walk_zoom_scale) and shown at
+ * (64, 16). The original waits for nothing between the steps. walk_zoom_step draws step k (0 .. 12; step 0 also draws and grabs). */
+enum { WALK_ZOOM_W = 192, WALK_ZOOM_H = 168, WALK_ZOOM_STEPS = 13 };
+void walk_zoom_step(walk_t *w, screen_t *scr, int k);
+/* 0x26e5f: `src` (sw x sh, one byte more readable) scaled to WALK_ZOOM_W x WALK_ZOOM_H in `dst`, which is cleared first. Steps of
+ * 0xffff * sw / 192 across and 0xffff * sh / 168 down, added from 1: each source pixel is written only at the destination pixel where
+ * the step carries, every other pixel and row stays 0, so a small part comes out as spaced dots. */
+void walk_zoom_scale(uint8_t *dst, const uint8_t *src, unsigned sw, unsigned sh);
 /* What walk_begin's first pass returned (walk_pass's mask): WALK_PASS_BATTLE when the party starts on an enemy. */
 int walk_begin_result(const walk_t *w);
 
@@ -119,6 +131,33 @@ void walk_battle_info(const walk_t *w, unsigned *member, unsigned *group, unsign
 /* The battle routine's [bp-0x84] is never set before its loop's first monster pass, so a battle starts with what the last one left
  * there (0 before any): the battle keeps it here when it is freed. */
 unsigned *walk_battle_left(walk_t *w);
+/* The game's sound flags (0x2cc5:5, FM music; 0x2cc5:0xc, the Sound Blaster's sounds): 0 when there is no such card, 0x81 on, 0x80
+ * off. Both 0 after walk_create; the caller sets what it has. The battle's keys 1 and 2 switch them (the caller then stops or starts
+ * the song). */
+void walk_set_sound(walk_t *w, unsigned fm, unsigned sb);
+/* (0x106c0 .. 0x10730) At the start, after the interface: the music button pressed when there is an FM card, the sound button when
+ * there is a Sound Blaster (walk_begin does this). */
+void walk_sound_buttons(const walk_t *w, screen_t *scr);
+unsigned *walk_fm(walk_t *w);
+unsigned *walk_sb(walk_t *w);
+/* The Sound Blaster's voice driver as the world and the battle use it (docs/findings.md, "WALK.SL step 25"): play the sound-data block
+ * at `off` in `file` (SFX_EF, SFX_LOC of sfx.h), cutting any that plays; whether one plays (the busy word [0x24e]); cut it. With none
+ * set (walk_create) nothing plays and nothing is busy. */
+typedef struct {
+    void (*play)(void *ctx, unsigned file, unsigned off);
+    int (*busy)(void *ctx);
+    void (*stop)(void *ctx);
+    void *ctx;
+} walk_sfx_t;
+void walk_set_sfx(walk_t *w, const walk_sfx_t *sfx);
+/* (0x1c68e) A sound started, when the sound flag is 0x81. */
+void walk_sfx_play(walk_t *w, unsigned file, unsigned off);
+/* (cmp word [0x24e], 0) Whether a sound still plays. */
+int walk_sfx_busy(walk_t *w);
+/* (0x2914d) The sound cut, when the flag is 0x81 (the callers test it). */
+void walk_sfx_stop(walk_t *w);
+/* (0x1c3ba) A button pressed or let go: the w x h picture at screen offset `at` turned round, its inside put back two in. */
+void walk_button_toggle(screen_t *scr, unsigned at, unsigned w, unsigned h);
 /* The world drawn again at the hero with walk frame 0 and its middle 96 x 84 doubled through `table` (0x2c658): the 192 x 168 picture
  * the battle's backdrop is made from. Uses (and overwrites) the world buffer. */
 void walk_battle_view(walk_t *w, const uint8_t table[256], uint8_t window[192 * 168]);
@@ -126,8 +165,14 @@ void walk_battle_view(walk_t *w, const uint8_t table[256], uint8_t window[192 * 
 void walk_show_gold(walk_t *w, screen_t *scr);
 /* After a won battle (0x13300 on): the rest of the pass that touched the enemy, from the villagers' steps (0x13318), with the clock
  * `ticks` and the key `port60` of the pass in which the battle ended. `result` is what the battle returned (the monsters it killed);
- * like the original, it is left in the hero's walk counter, and the enemy record's byte 0x2f in his frame. Returns as walk_pass. */
+ * like the original, it is left in the hero's walk counter, and the enemy record's byte 0x2f in his frame. After a story enemy (byte
+ * 0x2f set) whose five monsters were all killed the pass ends instead (0x172f0), the scene records run again (0x18b82). Returns as
+ * walk_pass. */
 int walk_resume(walk_t *w, uint32_t ticks, unsigned port60, unsigned result);
+/* (0x12fb5 .. 0x130e2) After a battle with a story enemy, before the level-ups: `result` 5 (all killed) takes the enemy away
+ * (position 0) and sets its flag (bytes 0xc, 0xd); otherwise the whole party and its trail go to the record's bytes 0x28, 0x29.
+ * Nothing for other enemies. */
+void walk_boss_after(walk_t *w, unsigned result);
 
 /* Shots ([bp-0x62]: 5 of x, y, direction, zigzag phase) and sparks ([bp-0xcc]: 10 of frame, x, y, direction), kept as one list. */
 enum { WALK_SHOTS = 5, WALK_SPARKS = 10, WALK_FX_BYTES = 4 * (WALK_SHOTS + WALK_SPARKS), WALK_ART_BYTES = 0x15E + 0x44 + 0x140,
@@ -158,6 +203,13 @@ unsigned walk_find_record(const uint8_t *tab_a, unsigned x, unsigned y);
 unsigned walk_shake_offset(unsigned v48, unsigned r);
 /* (0x1b634) A house's roof: `alt` holds the roof flag in byte 0 and the saved part of the object map after it. See walk.c. */
 int walk_roof(uint8_t *omap, uint8_t *alt, const uint8_t *rec, int enter);
+/* 0x2c658: the 96 x 84 pixels of `src` (WALK_W wide) from (64, 57) doubled into `dst` from (16, 16): each pixel p becomes
+ * p, t[p] over t[p], t[t[p]] (t = `table`, the shading table). The F-keys' world drawing does this in a dark scene. */
+void walk_double(uint8_t *dst, const uint8_t *src, const uint8_t table[256]);
+/* 0x2c581, a dark scene's (map header byte 5 set) world window: the same doubling, but only source rows 34 .. 60 are shaded that way;
+ * the rows above and below become p, 0 over 0, 0. Then WS_DARK_MASK_BYTES of `dst` from row 83 are ANDed with `mask` (the lit oval). */
+void walk_double_dark(uint8_t *dst, const uint8_t *src, const uint8_t table[256], const uint8_t *mask);
+
 /* Copy the world buffer's window to screen (64, 16), read `shift` bytes into the buffer (the bump shake). */
 void walk_copy_window_at(screen_t *scr, const uint8_t *buf, unsigned shift);
 

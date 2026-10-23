@@ -26,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from dosemu import Emu, VGA  # noqa: E402
+from sb_stub import SoundBlaster  # noqa: E402
 from unicorn import UC_HOOK_CODE  # noqa: E402
 from unicorn.x86_const import UC_X86_REG_BP, UC_X86_REG_DS, UC_X86_REG_SS  # noqa: E402
 
@@ -37,7 +38,7 @@ YESNO_TOP, NUMBER_TOP = 0x18D23, 0x19166
 KIND = {WORLD_TOP: 0, BATTLE_TOP: 1, REWARDS_TOP: 3, DIALOG_TOP: 4, MAGIC_TOP: 5, PICK_TOP: 6, ITEMS_TOP: 7, YESNO_TOP: 8,
         NUMBER_TOP: 9}
 KIND_NAME = {0: 'world', 1: 'battle', 2: 'lost', 3: 'rewards', 4: 'message box', 5: 'magic list', 6: 'member picker',
-             7: 'item list', 8: 'yes / no', 9: 'number'}
+             7: 'item list', 8: 'yes / no', 9: 'number', 'flash': 'face flash steps', 'sounds': 'sounds'}
 MON = 0x3C
 LOCALS = (0x52, 0x70, 0x44, 0x5E, 0x82, 0x72, 0x38, 0x42, 0x8C, 0x0C, 0x58, 0x14, 0x84, 0x36, 0x10, 0x78)
 BSTATE = 4 + MON + len(LOCALS) + 200 + 60
@@ -54,6 +55,8 @@ def oracle(a, n, keys):
         if p.is_file():
             shutil.copy2(p, work / p.name)
     emu = Emu(a.exe, work, 250_000, False)
+    if a.opl:   # an AdLib: the game finds it and its music flag (0x2cc5:5) is 0x81
+        emu.opl_log = []
     raw = Path(a.start).read_bytes()
     emu.pal[:] = raw[-768:]
     emu.uc.mem_write(VGA, raw[:64000])
@@ -61,7 +64,16 @@ def oracle(a, n, keys):
     if mice:   # a mouse driver is there from the start; its first place and buttons are the earliest --mouse
         emu.mouse = list(mice[min(mice)])
     emu.watch_pass(list(KIND), a.tick_div, {n + 1: str(work / '_last.raw')}, keys, mice=mice or None)
+    sb = SoundBlaster(emu, work) if a.sb else None
+    a.sb_log = sb
     rec = []
+    flash = []   # the screen after each step of the picker face's flash (0x22087), with the pass it came in
+
+    def flash_cb(uc, address, size, user):
+        if emu.pass_count - 1 <= n:
+            flash.append((emu.pass_count - 1, bytes(uc.mem_read(VGA, 64000))))
+
+    emu.uc.hook_add(UC_HOOK_CODE, flash_cb, None, 0x22087, 0x22087)
 
     def far(uc, ss, bp, off):
         o, s = struct.unpack('<HH', bytes(uc.mem_read(ss * 16 + ((bp - off) & 0xFFFF), 4)))
@@ -98,7 +110,7 @@ def oracle(a, n, keys):
     # The loop tops set the clock to base + pass / tick_div. The run's own limit is in emulated time, which a battle's passes use more
     # of than the clock they are given, so it is generous: it only matters when the original waits somewhere that is not a loop top.
     emu.run((a.tick_base or 0) + n + 400, {})
-    return rec
+    return rec, flash, ([e for e in sb.events if e[0] <= n] if sb else None)
 
 
 def main():
@@ -112,6 +124,9 @@ def main():
                     help='a mouse driver is there; from pass PASS the pointer is at (X, Y) with BUTTONS held (bit 0 left)')
     ap.add_argument('--world-passes', type=int, metavar='K',
                     help='stop comparing K world passes after the battle (the world\'s own mouse buttons are not built)')
+    ap.add_argument('--opl', action='store_true', help='an FM card is there (music on), in the original and the port')
+    ap.add_argument('--sb', action='store_true',
+                    help='a Sound Blaster is there (sounds on): the sounds started, cut and waited for are compared (tools/sb_stub.py)')
     ap.add_argument('--keep', default='work/battle_check')
     ap.add_argument('--start', default='work/check_credits/start.raw')
     ap.add_argument('--exe', default='work/unpacked/WALK.SL.exe')
@@ -122,6 +137,10 @@ def main():
     keys = {int(k.split(':')[0]): int(k.split(':')[1], 0) for k in a.key}
 
     rec = None
+    flash = None
+    sounds = None
+    fcache = Path(a.cache + '.flash') if a.cache else None
+    scache = Path(a.cache + '.sb') if a.cache else None
     if a.cache and Path(a.cache).exists():
         rec = pickle.loads(zlib.decompress(Path(a.cache).read_bytes()))
         if rec and (len(rec[0][3]) != STATE or isinstance(rec[0][0], bool)):
@@ -129,11 +148,29 @@ def main():
         q = 4 + MON + len(LOCALS)
         if rec and any(r[0] in (5, 6, 7) and not any(r[3][q:q + 200]) for r in rec):
             rec = None   # recorded before the lists' party table was
+        if rec and fcache.exists():
+            flash = pickle.loads(zlib.decompress(fcache.read_bytes()))
+        elif rec and any(r[0] == 6 for r in rec):
+            rec = None   # recorded before the picker face's flash steps were
+        if rec and a.sb:
+            if scache.exists():
+                sounds = pickle.loads(zlib.decompress(scache.read_bytes()))
+            else:
+                rec = None
     if rec is None or len(rec) < a.n + 1:
-        rec = oracle(a, a.n, keys)
+        rec, flash, sounds = oracle(a, a.n, keys)
         if a.cache:
             Path(a.cache).write_bytes(zlib.compress(pickle.dumps(rec), 1))
+            fcache.write_bytes(zlib.compress(pickle.dumps(flash), 1))
+            if a.sb:
+                scache.write_bytes(zlib.compress(pickle.dumps(sounds), 1))
     out = Path(a.keep) / 'port.bin'
+    fout = Path(a.keep) / 'port_flash.bin'
+    if fout.exists():
+        fout.unlink()
+    sout = Path(a.keep) / 'port_sounds.txt'
+    if sout.exists():
+        sout.unlink()
     start = a.start
     if a.mouse:
         # With a mouse the pointer keeps what was on the screen before the world loop's first pass, which the original has drawn
@@ -141,7 +178,8 @@ def main():
         start = str(Path(a.keep) / 'start_loop.raw')
         Path(start).write_bytes(rec[0][1] + rec[0][2])
     r = subprocess.run([a.port, a.data, 'battle', str(out), str(a.n), str(a.tick_base), str(a.tick_div), start] + a.key +
-                       ['m:' + m for m in a.mouse],
+                       ['m:' + m for m in a.mouse] + ([('fm-shown' if a.mouse else 'fm')] if a.opl else []) + ['f:' + str(fout)] +
+                       ([('sb-shown' if a.mouse else 'sb'), 's:' + str(sout)] if a.sb else []),
                        capture_output=True, text=True)
     sys.stderr.write(r.stderr)
     if r.returncode != 0:
@@ -196,7 +234,11 @@ def main():
             checks['turn'] = pst[6 + MON:8 + MON] == st[6 + MON:8 + MON]
             checks['command'] = pst[8 + MON:10 + MON] == st[8 + MON:10 + MON]
             checks['key latch'] = pst[10 + MON] == st[10 + MON]
-            checks['attack locals'] = pst[11 + MON:q] == st[11 + MON:q]
+            pa, oa = bytearray(pst[11 + MON:q]), bytearray(st[11 + MON:q])
+            if a.opl:   # [bp-0x58] starts as what the FM driver's timer interrupt pushed there (1 .. 0xfe all act as 1)
+                j = LOCALS.index(0x58) - 7
+                pa[j], oa[j] = min(pa[j], 1), min(oa[j], 1)
+            checks['attack locals'] = pa == oa
         for k, ok in checks.items():
             if not ok and k not in first:
                 first[k] = i
@@ -219,12 +261,48 @@ def main():
                     print(f'pass {i}: {k} differs')
     n = a.n if ended is None else ended
     n = n if stopped is None else stopped
+    # the picker face's flash: the screen after each of its steps, in the passes compared
+    pf = []
+    if fout.exists():
+        fb = fout.read_bytes()
+        pf = [(struct.unpack_from('<i', fb, k)[0], fb[k + 4:k + 64004]) for k in range(0, len(fb), 64004)]
+    of = [(p, s) for p, s in (flash or []) if p < n]
+    pf = [(p, s) for p, s in pf if p < n]
+    if len(of) != len(pf):
+        print(f'the picker face\'s flash: {len(of)} steps in the original, {len(pf)} in the port')
+        first['flash'] = 0
+    else:
+        for j, ((op, os_), (pp, ps)) in enumerate(zip(of, pf)):
+            if op != pp or os_ != ps:
+                print(f'the picker face\'s flash, step {j}: original pass {op}, port pass {pp}, '
+                      f'{sum(x != y for x, y in zip(os_, ps))} pixels differ')
+                first['flash'] = j
+                break
+    if a.sb:   # the sounds: started (which block of which file), cut and waited for, by pass
+        ps = []
+        if sout.exists():
+            for line in sout.read_text().split('\n'):
+                f = line.split()
+                if f:
+                    ps.append((int(f[0]), f[1]) + ((f[2], int(f[3], 0)) if f[1] == 'play' else ()))
+        os2 = [e for e in sounds if e[0] < n]
+        ps = [e for e in ps if e[0] < n]
+        if os2 != ps:
+            j = next((j for j, (x, y) in enumerate(zip(os2, ps)) if x != y), min(len(os2), len(ps)))
+            show = lambda e: ' '.join(str(v) if not isinstance(v, int) or k < 3 else hex(v) for k, v in enumerate(e))  # noqa: E731
+            print(f'sounds: {len(os2)} in the original, {len(ps)} in the port; event {j}: original '
+                  f'{show(os2[j]) if j < len(os2) else "none"}, port {show(ps[j]) if j < len(ps) else "none"}')
+            first['sounds'] = j
+        else:
+            kinds['sounds'] = len(os2)
     if first:
         return 1
+    if of:
+        kinds['flash'] = len(of)
     end = '' if ended is None else f'; the party lost at pass {ended} in both (not compared after)'
     if stopped is not None:
         end = f'; back in the world at pass {stopped - a.world_passes}, compared {a.world_passes} world passes more'
-    print(f'all {n} passes identical (' + ', '.join(f'{v} {KIND_NAME[k]}' for k, v in sorted(kinds.items())) + f'){end}')
+    print(f'all {n} passes identical (' + ', '.join(f'{v} {KIND_NAME[k]}' for k, v in sorted(kinds.items(), key=str)) + f'){end}')
     return 0
 
 

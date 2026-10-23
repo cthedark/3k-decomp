@@ -39,7 +39,8 @@ enum {
     WS_TILES_PAD = 0x10000, /* tile data is padded to this: a tile number is a 16-bit word shifted left by 6 */
     WS_SPRITES_PAD = 0x8000 + 256,
     WS_BANK1_PAD = 0x2800 + 256,
-    WS_BANK2_PAD = 0x10000 + 256
+    WS_BANK2_PAD = 0x10000 + 256,
+    WS_DARK_MASK_BYTES = 0x187A * 2   /* what the dark view (0x2c581) ANDs of the oval: 6266 words */
 };
 
 typedef struct {
@@ -66,6 +67,8 @@ typedef struct {
     size_t bank2_len;
     uint8_t *puff;                   /* RPG.LCP 0x1a4cc decoded: five 16 x 16 frames of an enemy going up in smoke, at [bp-0xba] + 0xe90a */
     size_t puff_len;
+    uint8_t *dark_mask;              /* RPG.LCP 0x4350 decoded (12,544 bytes, 224 wide): the lit oval of a dark scene, 0xff in it, 0 out */
+    size_t dark_mask_len;
     size_t song_pos, song_len;       /* where the scene's song is in MUC.ALL (read, not played here) */
     int events;                      /* scene records of kind 0x10 that fired (a cut scene starts; not modelled) */
 } walk_scene_t;

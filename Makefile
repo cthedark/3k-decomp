@@ -29,7 +29,7 @@ BUILD := build
 YMFM_DIR := third_party/ymfm
 OPL_OBJ  := $(BUILD)/opl/ymfm_opl.o $(BUILD)/opl/ymfm_adpcm.o $(BUILD)/opl/ymfm_pcm.o $(BUILD)/opl/opl.o
 
-CORE_SRC := src/lcz.c src/assets.c src/screen.c src/gfx.c src/title.c src/tkrand.c src/intro0.c src/intro1.c src/intro2.c src/intro3.c src/intro4.c src/intro5.c src/intro6.c src/subs.c src/slide.c src/voc.c src/voice.c src/audio.c src/cmf.c src/music.c src/menu.c src/credits.c src/walkscene.c src/walk.c src/battle.c src/msgbox.c src/gameover.c
+CORE_SRC := src/lcz.c src/assets.c src/screen.c src/gfx.c src/title.c src/tkrand.c src/intro0.c src/intro1.c src/intro2.c src/intro3.c src/intro4.c src/intro5.c src/intro6.c src/subs.c src/slide.c src/voc.c src/voice.c src/audio.c src/cmf.c src/music.c src/menu.c src/credits.c src/walkscene.c src/walk.c src/battle.c src/msgbox.c src/gameover.c src/sfx.c
 GAME_SRC := $(CORE_SRC) src/platform_sdl.c src/main.c
 
 all: $(BUILD)/3k
@@ -81,8 +81,8 @@ $(BUILD)/test_battle: src/battle.c src/msgbox.c src/walk.c src/walkscene.c src/a
 
 # The WALK.SL port's state and first screen as files, for comparing with the original and the Python model
 # (tools/check_walk.sh). Needs only the loader and the drawing, so it builds fast.
-$(BUILD)/walk_dump: src/walk.c src/battle.c src/msgbox.c src/gameover.c src/walkscene.c src/assets.c src/lcz.c src/screen.c tests/walk_dump.c src/*.h | $(BUILD)
-	$(CC) $(CFLAGS) -Isrc src/walk.c src/battle.c src/msgbox.c src/gameover.c src/walkscene.c src/assets.c src/lcz.c src/screen.c tests/walk_dump.c -o $@
+$(BUILD)/walk_dump: src/walk.c src/battle.c src/msgbox.c src/gameover.c src/sfx.c src/voc.c src/walkscene.c src/assets.c src/lcz.c src/screen.c tests/walk_dump.c src/*.h | $(BUILD)
+	$(CC) $(CFLAGS) -Isrc src/walk.c src/battle.c src/msgbox.c src/gameover.c src/sfx.c src/voc.c src/walkscene.c src/assets.c src/lcz.c src/screen.c tests/walk_dump.c -o $@
 
 $(BUILD)/test_gfx: $(CORE_SRC) tests/test_gfx.c src/*.h $(OPL_OBJ) | $(BUILD)
 	$(CC) $(CFLAGS) -Isrc $(CORE_SRC) tests/test_gfx.c $(OPL_OBJ) -o $@ $(CXXLIB)

@@ -37,7 +37,8 @@ replaces it (they are chained programs, not call-and-return overlays; see
 | `.LCC` (6) | `MAGICT`, `MANDATA1`, `MAN_PIC`, `MES_TXT` (98 KB), `OBJECT`, `SHOP_PIC` (105 KB) | Names suggest tables, text and pictures. No header recognized yet. |
 | `.ALL` (6) | `GTAB` (567 KB), `MON` (489 KB), `MUC` (188 KB), `M_M` (160 KB), `MAN_INFO`, `__2` | Big bundles. `MUC` is named by MARK. |
 | `STORYn_V` (6) | `STORY1_V` .. `STORY6_V` | 150-460 KB each. **Voice-over clips (VOC), decoded**: see `formats.md`. |
-| other | `SND_EF.1` (25 KB), `TAB.TAB`, `_1_.LOC` (61 KB), `__1.AL1`, `__1.AL2`, `__1.NOW`, `MAN_INFO.NOW` | Unknown. `SND_EF` is probably sound effects. |
+| other | `TAB.TAB`, `__1.AL1`, `__1.AL2`, `__1.NOW`, `MAN_INFO.NOW` | Unknown. |
+| sound effects | `SND_EF.1` (25 KB), `_1_.LOC` (61 KB) | **Decoded**: WALK.SL's sounds, bare VOC sound-data blocks (`formats.md`). |
 | `CHKLIST.MS` | 54 bytes | Anti-virus checksum list naming MARK.EXE and TV.EXE. Not game data. |
 
 ## Save files

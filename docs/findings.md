@@ -3014,3 +3014,173 @@ too little. Keys: `tools/number_keys.py`. `tools/mutate_battle.py`: 34 new mutat
 added for the ones first missed; one left out with a note (the yes / no count, 0 for every shipped seller).
 
 **Not built:** the sound of a right answer; the dark scenes the asking villagers live in.
+
+## WALK.SL step 22: the dark scenes, 2026-10-20
+
+Built in C (`walk_double_dark`, `walk_double`, `records_again` in `src/walk.c`) and compared pass by pass with `tools/battle_check.py`.
+READ from the code (`0x1124a`, `0x108cd` .. `0x1091d`, `0x11df1` .. `0x11e1e`, `0x122df` .. `0x1230c`, `0x125c6` .. `0x12608`, `0x19680`
+.. `0x199b0`, `0x2c362`, `0x2c456`, `0x2c581`, `0x2c658`, `0x172f0` .. `0x1731c`, `0x18b82`), SEEN in oracle screenshots, the oval's
+source FOUND with a write watch (`work/dark/wprobe.py`, scratch), CONFIRMED by the comparison.
+
+**Map header byte 5** (`[bp-4]`, any value not 0; 1 in 23 scenes, 2 in scene 6) makes a scene dark. **Correction to step 13:** its list
+of scenes (9, 10, 11, 12, 24, 25, 29, 47) was short (the scenes are 6, 9 .. 20, 23 .. 26, 29, 37, 39, 43, 45, 47, 50), and the world is
+not only doubled but darkened. **Correction to step 20:** scenes 13, 37, 39 and 43 differed at their first pass because they are dark.
+**Correction to step 21:** the lit part is an oval, not a circle.
+
+**A pass** in a dark scene: the ground (`0x2c362`) and the objects (`0x2c456`) are drawn only for the 14 x 13 cells from the buffer's
+(64, 56) (the view flag), the villagers, party and shots as always; then, after the shake (`[bp-0xa]`), `0x2c581` takes the 96 x 84
+pixels from (64, 57) + the shake and doubles them into the scratch buffer `[bp-0x20]` from (16, 16), 224 wide: source rows 34 .. 60 as
+p, t[p] / t[p], t[t[p]] (t = the shading table at the buffer's + 0xfe78, as the battle's doubling), the 34 rows above and 23 below as
+p, 0 / 0, 0. Then 0x187a words of it from row 83 (offset 0x48a0) are ANDed with the oval: RPG.LCP 0x4350, 0x15a4 bytes run-length coded
+to 12,544 (56 rows of 224: 0xff inside, 0 out), which the start-up (`0x108cd`) reads in every scene, to the ground map's + 0xca70. So the
+middle band shows the shaded, doubled oval round the hero and colour 0 beside it, and the rest one pixel in four. The pointer is drawn
+into the scratch buffer and the window copied from it, both with no shake.
+
+**The F-keys' world drawing** (`0x19680` with the buffer's byte 3 set, also at the start, `0x11c25`) doubles the same 96 x 84 with
+`0x2c658` (no darkening) into its scratch buffer and copies its first 0x5080 words back over the world buffer: a talk in a dark scene
+shades a lit doubled view, and the talk's own zoom doubles it again. The start (`0x11c25` .. `0x11cca`) fades in that lit view before
+the first pass (not built: the port has no world fade-in).
+
+**After an F-key's action the scene records run again** (FOUND by the first join compared: scene 43's villager 3 joins, and the next
+pass's picture still showed objects 0x0a and 0x0b at cells (37, 17) and (38, 17), a picture of him; a write watch caught the record loop
+`0x1171c` / `0x117eb` clearing them in the pass after the talk). The pass's end at `0x172f0` with `si` = 0x384 (`0x1729e`, every F-key
+action) or a record's offset goes to `0x18b82`, which runs the record loop again when `[bp-0xbe]` is not 0. `[bp-0xbe]` is 1 from the
+start (`0x10bad`), then the kind of the last record stepped on (`0x1731c`), and 0 after the key at `0x14cd6` (not built). The port did
+run the loop after every record stepped on; it now does that only when the kind is not 0 (kind 0 is not built) and also after a talk.
+The earlier talks in scene 0 never changed a flag a record looks at, so they could not show it.
+
+**Joining is CONFIRMED** (step 20 read it only): scenes 37 (villager 4), 39 (4) and 43 (3) and scene 13's villager 1 with flag 0 bit 4
+set; the member takes the first free place and the villager goes.
+
+**Checked:** first a scratch survey (`work/dark/survey.py`): all 24 dark scenes, 300 passes idle and 300 with walking and shooting keys,
+all identical, including a battle and a lost one in scene 10. Then `tools/check_battle.sh`, 19 new starts, all identical at every pass:
+scenes 6, 9, 13, 23 and 47 idle (300) and with walking and shooting (1,500; in scene 9 into an enemy and a lost battle); F1 walks among
+scene 23's ten villagers (2,500, 603 and 821 number-box rounds); the mouse walking and shooting in scene 13; the four joins; scene 9's
+question (38945) and scene 23's villager 5 in their own scenes. Unit test `test_doubling` (the band edges, the zeros, the mask's first
+and last byte). `tools/mutate_battle.py`: 15 new mutations, all caught (6 by the unit test); two more left out with a note (`[bp-0xbe]` is 0 only after a kind-0
+record, itself not built). ASan/UBSan clean on the dark starts; the quick `tools/check_walk.sh` all identical.
+
+**Not built:** the world's fade-in at the start (built in step 23: a zoom, not a fade); the key at `0x14cd6` that clears `[bp-0xbe]`.
+
+## WALK.SL step 23: the world's start zoom, 2026-10-20
+
+Built in C (`walk_zoom_step`, `walk_zoom_scale`) and compared step by step with `tools/zoom_check.py`, which keeps the oracle's screen
+after each step (at `0x19b75`) and at the main loop's first arrival. READ from the code (`0x10bb8`, `0x11c17` .. `0x11ce6`, `0x19680`,
+`0x272df`, `0x19ab2` .. `0x19b98`, `0x2728d`, `0x26e5f`, `0x27328`, `0x274cd`), CONFIRMED by the comparison.
+
+**Correction to step 22:** what it called the world's fade-in is a zoom. With `[bp-0x74]` set (from the start, `0x10bb8`; also set at
+`0x138c8` and `0x17b0b`, a scene change, not built) the end of the start-up's record loop (`0x11c25`) draws the world as the F-keys do
+(`0x19680`: the party standing; in a dark scene the lit doubled view), keeps its 192 x 168 window in `[bp-0xba]` (`0x272df`) and runs
+`0x19ab2`: 13 steps, the part w x h at `0x3654 - 0x487 k` of the kept window (24 x 24 at step 0, 14 wider and 12 taller each step, so
+centred, up to 192 x 168) copied with a size header into the world buffer + 0x7e04 (`0x2728d`), scaled to 192 x 168 into the world
+buffer (`0x26e5f`) and shown at (64, 16) (`0x27328`). Between the steps it only empties the BIOS key buffer (`0x274cd`); it waits for
+nothing, so its pace was the machine's. It also restarts the song if it has ended.
+
+**The scaling** (`0x26e5f`) clears the picture, then for each source row writes 192 pixels: a pixel register starts as the row's first
+source pixel, is written, set to 0, and loaded with the next source pixel each time a 16-bit sum (from 1, adding 0xffff * w / 192)
+carries; after the row, rows are skipped (left 0) until a second sum (from 1, adding 0xffff * h / 168) carries. So each source pixel
+appears once, as a dot, and the dots close up as the part grows; even the last step, at full size, leaves out one column and one row
+(source column 191 and row 167 go, a 0 column after the second and a 0 row after the second). The first pass then draws over it.
+
+**The song** starts at the loader's end (BIOS tick 10, the music step), before the zoom; the port started it after the first pass and now starts
+it before the zoom.
+
+**Checked:** `tools/check_battle.sh`, section "zoom": scenes 0, 1, 34 and the dark scenes 6, 9, 23 and 47, all 13 steps identical, and
+the screen unchanged from the last step to the main loop. Unit test `test_zoom_scale` (the full-size pattern and a 24 x 24 part).
+`tools/mutate_battle.py`: 8 new mutations, all caught (4 by the unit test). The pace is a choice: one step a pass of the world's 35 a
+second, about 0.37 s for the zoom.
+
+## WALK.SL step 24: the rest of the battle: story enemies, keys 1 and 2, the picker's flash, the game-over screen's mouse, 2026-10-21
+
+Built in C and compared pass by pass (`tools/battle_check.py`, `tools/gameover_check.py`). READ from the code (`0x1275e` .. `0x128ee`,
+`0x12e56` .. `0x130e2`, `0x13300`, `0x172f0`, `0x25fe0`, `0x25ff1`, `0x106c0` .. `0x1072b`, `0x1e81c` .. `0x1e98f`, `0x22041` .. `0x220a2`,
+MARK's `0x10502` .. `0x10537`), SEEN in the oracle, then CONFIRMED by the comparison unless it says otherwise.
+
+**Story enemies** (villager byte 0x2f set, byte 0x31 > 0; 13 in the shipped `__1.NOW`: scenes 4, 18, 23, 35, 40, 41 and 43, all with sprite set 6,
+which shots cannot kill):
+- **The touch:** the hero's walk counter `[bp-0x3c]` takes the member's party offset and his frame `[bp-0x5e]` the record's byte 0x2f (for every
+  enemy, `0x1276c`, `0x1277f`). The enemy is not moved. If its word 0x11 (read by `0x25fe0`, which only returns the word) is not 0, the message
+  box `0x1afb0` opens with that message, colour 0xc2 and the wait flag, the same call as a level-up's but for the colour (palette steps on the
+  palette itself); the battle starts when it closes. Scenes 4, 23, 40 and 41 have such messages. The group is byte 0x30, and every slot holds
+  a monster (step 13), so all five must die.
+- **After the battle** (`0x12fb5`, after the rewards bar, before the level-ups): if the battle returned 5 (all five killed) the record's
+  position becomes 0 (`0x25ff1` writes a word) and its flag (bytes 0xc, 0xd) is set; `di` = 0xffff then makes the pass end at `0x172f0` with
+  `si` = 0xc8 (left by the level-up loop), which goes to `0x18b82`: the scene records run again and the villagers' steps and the hero's walk
+  frame are skipped. Otherwise (fled) the five party records and the 13 trail entries are put at the record's bytes 0x28, 0x29 (with flag 1),
+  and the pass goes on as after any battle. Fleeing a story enemy is therefore the only way a battle moves the party.
+- SEEN: scene 4's enemy (group 77) kills a hero with 9,000 HP in about 240 passes; scene 35's records 8 to 11 (groups 4 .. 18, no message)
+  can be beaten.
+
+**Keys 1 and 2 in the fight** (scan codes 2 and 3; `0x1e81c` .. `0x1e98f`): only when the card is there (`0x2cc5:5` for the FM music,
+`0x2cc5:0xc` for the Sound Blaster's sounds: 0 no card, 0x81 on, 0x80 off). The flag is switched, the music stopped (`0x266f6`) or the
+battle's song started from its beginning (`0x2660c`), and the right-hand button (47 x 20 at 0x7b8d or 0x948d) pressed or let go
+(`0x1c3ba`) with the pointer taken off before and its place only kept after. At the start (`0x106c0` .. `0x1072b`) the original sets the
+music flag to 0x81 and presses the music button when it finds an FM card, and the same for the sound button and a Sound Blaster. The
+oracle had neither, so step 14 saw the keys do nothing; `battle_check.py --opl` turns on the oracle's AdLib.
+- **A value found with the FM card:** the battle's `[bp-0x58]` (the hit face's pass counter, never set before it counts) is 0 without the
+  card and 1, 3, 4 or 5 with it, by when the FM driver's timer interrupt (`0x2aa52`, which pushes its registers on the current stack)
+  last came while the stack was below the world's frame (FOUND by a write watch). The counter adds 1 and asks "above 1", so all those
+  values act alike; the port uses 1 and the comparison takes 1 .. 0xfe as equal there.
+
+**The picker face's flash** (`0x22041` .. `0x220a2`): three times, the 16 colours from the result down, each drawn 100 times (`0x25c18`).
+The port now draws all 48 steps and shows each one (10 ms each in real time, a choice; the original's pace was the machine's).
+`battle_check.py` compares the screen after each step (the oracle's at `0x22087`): all 48 identical in the five heal and revive starts.
+
+**MARK.EXE's game-over screen with a mouse** (`0x10502`): when a driver was found at MARK's start (`0x10120`), INT 33h function 3's buttons
+not 0 end the screen, in the pass they are seen, without waiting for a release (a button held from the start ends it at pass 0). Esc does
+nothing. Both buttons, a held one, Space and Enter are checked against the oracle.
+
+**The Sound Blaster** (READ and SEEN with the driver at segment `0x190e` stubbed to succeed; not built): with one, WALK.SL reads all of
+`SND_EF.1` (0x6179 bytes) at the start and the battle reads `_1_.LOC` (0xede6 bytes); `0x1c68e(pointer)` stops any sample and plays the
+VOC sound-data block at the pointer (8-bit PCM or 2-, 3- or 4-bit ADPCM, 8,000 to 13,157 Hz). The call sites: `SND_EF.1` 0 at a spark's frame 2
+(`0x122a7`) and at a touch (`0x12df4`), 0x5f80 at a kill (`0x1243c`), 0x127d at a roof (`0x17b9e`), 0x1bf5 in the F-key handlers, 0xc8 at a
+right answer (`0x1a0fd`); `_1_.LOC` 0xbc69 in the monsters' blow (`0x1d8f1`), 0x37a3 in the party's attack (`0x1dfb9`, `0x1e0ba`) and
+offsets from a table at `0x1f083` and `0x1f4f4` (what each one sounds like was not listened to). Nothing on screen depends on them. SEEN:
+the stubbed run plays `SND_EF.1` 0 at the touch and then `_1_.LOC` blocks through a whole battle.
+
+**Checked:** `tools/check_battle.sh`, 28 new starts and checks (149 in all), all identical: scene 4's box then a lost battle; three
+flights from it by a strong hero (put back each time); scene 35's record 8 won (taken away, flag set, pass ended, then 1,864 world passes)
+and record 11 fled twice; scene 40's box closed with the right button and after 120 passes; with the FM card key 1 four times and key 2,
+a won battle back in the world, walks into the enemy at two clock readings, the button pressed with the mouse (also on its edge); the
+game-over screen ended by Space, Enter, either button and a held button, and not by Esc. Unit test `test_boss_after`. `tools/mutate_battle.py`:
+23 new mutations, all caught (three only after the unit test and the edge start were added); two left out with notes.
+
+## WALK.SL step 25: the Sound Blaster's sounds, 2026-10-22
+
+Built in C and compared pass by pass with the original run with a stubbed Sound Blaster (`tools/sb_stub.py`, `battle_check.py --sb`).
+READ from the code (`0x1c68e`, the driver wrapper at `0x290f1` .. `0x2918f`, the 26 reads of the busy word, the call sites below,
+`0x1cd79` .. `0x1cde7`), SEEN in the stubbed oracle, then CONFIRMED by the comparison unless it says otherwise.
+
+**The driver** (segment `0x190e`, a wrapper round CT-VOICE: `0x11` detect, `0x49(on)` speaker, `0x6d` stop, `0x76` terminate, `0x9c(far
+pointer)` play). `0x1c68e(pointer)` does nothing unless the sound flag `0x2cc5:0xc` is 0x81; then it turns the speaker off, stops any
+sound, turns it on and plays the bare VOC sound-data block at the pointer (no file header). The voice driver's status word `[0x24e]`
+(not 0 while a sound plays) is read at 26 places: the spark's sound waits for it, three F-key handlers spin on it, and every loop's
+clean-up stops the sound when it is 0.
+
+**What sounds when** (12 blocks; the codec in brackets: 0 8-bit, 1 4-bit, 2 2.6-bit, 3 2-bit ADPCM):
+- `SND_EF.1` 0 (2): an enemy destroyed by a shot (`0x122a7`) and a battle's start (`0x12df4`, after the party strip).
+- `SND_EF.1` 0x5f80 (3): a spark reaching its frame 2 (`0x12404` .. `0x1243c`), only when no sound plays (`[0x24e]` = 0).
+- `SND_EF.1` 0x127d (2): a roof taken off and put back (`0x17b9e`, `0x17c2a`).
+- `SND_EF.1` 0x1bf5 (0): a right answer to an asking villager (`0x1a0fd`) and the six F-key handlers (not built).
+- `_1_.LOC` 0xbc69 (0): a monster's blow (`0x1d8f1`); 0x37a3 (2): the party's hit landing (`0x1dfb9`) and a spell's flashes ending
+  (`0x1e0ba`); 0 (2): a monster starting to die (`0x1ff7c`).
+- `_1_.LOC` 0x6771, 0x7742, 0x8849, 0x8e01, 0xa1bb (1, 0, 2, 0, 0): each member's shout when he attacks (`0x1f083`) or casts at the
+  monsters (`0x1f4f4`), by his number (party byte 3), from a table the battle builds at `0x1cd79` (at `_1_.LOC`'s buffer - 0x2e).
+- The rewards bar's end cuts the sound (`0x1fcc8`).
+- **Not built:** `SND_EF.1` 0x5571 at `0x17a3f` (a scene record of a kind not built) and the sound of the routine `0x22c42` (`0x24225`,
+  called from `0x17df7`; an action not built).
+
+**The busy word in pass time.** A stepped comparison has no real time, so `sb_stub.py` and `walk_dump`'s `sb` share a model: a sound
+started in pass P plays until the top of pass P + D, D being its samples at its rate at 35 passes a second, rounded up (`sfx_passes`:
+9 to 187 passes); a stop or a wait ends it. In the real game the busy word is the sink still playing the sound (`audio_playing`). A GUESS
+in both: what the sound card took is not modelled.
+
+**The decoders.** The 2.6-bit and 2-bit codecs written out as rules, like the 4-bit one (`docs/formats.md`), from DOSBox-X's tables. For
+all 12 blocks the port's samples equal a decoder that uses DOSBox-X's tables directly (`scaleMap_ADPCM2/3/4`, `adjustMap_ADPCM2/3/4`,
+copied as data): 153,469 samples, identical. Not compared with real hardware, and nobody has listened to them.
+
+**Checked:** `tools/check_battle.sh`, 11 new `sb_` starts (the sounds by pass and by block, as well as everything else), all identical:
+a won battle and the world after it (105 sounds), a party of five (146), spells, fleeing, the house door both ways, shots that destroy
+enemies, a right answer, a story enemy beaten, a walk-in with the monsters first, key 2 off and on again, the sound button clicked.
+Unit tests `test_adpcm_short` (hand-worked samples, blocks, `sfx_passes`) and the real blocks' codecs and lengths. `tools/mutate_battle.py`:
+34 new mutations, all caught (9 by the unit tests). ASan/UBSan clean on five starts. A real-time run with music off wrote sound.

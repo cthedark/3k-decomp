@@ -1128,3 +1128,80 @@ Right to choose one, Enter), and the right number sets his flag (`docs/findings.
 - **Checked:** `tools/check_battle.sh`, 17 new starts (102 in all), all identical at every pass. `tools/mutate_battle.py` (258): 34 new
   mutations, all caught; one left out with a note.
 - **Not built:** the right answer's sound; the dark scenes where the asking villagers are (so they were checked in scene 0).
+
+## Milestone 9c: the dark scenes (C), built 2026-10-20
+
+In the 24 scenes whose map header byte 5 is set (6, 9 .. 20, 23 .. 26, 29, 37, 39, 43, 45, 47, 50) the world window shows the middle of
+the view doubled: the hero's surroundings lit in an oval (RPG.LCP 0x4350), dimmed rows above and below it, and only every fourth pixel
+of the rest. An F-key's drawing of the world there is doubled but not darkened. After a talk the scene records run again, as after
+stepping on one (`docs/findings.md` "WALK.SL step 22").
+
+- **Code:** `src/walk.c` (`walk_double`, `walk_double_dark`, the end of `walk_pass`, `fkey_frame`, `records_again`, `vbe`; the pointer
+  drawn into the shown buffer in `mouse_pass`), the oval in `src/walkscene.c` (`dark_mask`); `test_doubling` in `tests/test_walk.c`.
+- **Checked:** every dark scene idle and with walking and shooting keys, 300 passes each, all identical (a scratch survey); then
+  `tools/check_battle.sh`, 19 new starts (120 in all), all identical at every pass, among them a battle in a dark scene, the mouse, F1 walks
+  with 600 to 800 number-box rounds, four members joining (scenes 13, 37, 39, 43) and scenes 9 and 23's questions in their own scenes.
+  `tools/mutate_battle.py` (273): 15 new mutations, all caught (6 of them by the unit test); two more left out with a note. ASan/UBSan clean on
+  the dark starts; the quick `tools/check_walk.sh` is all identical.
+- **Not built:** the world's fade-in at the start (built in 9d: it is a zoom, not a fade); the Python model
+  (`tools/walk_idle.py`) has no dark scenes, since `check_walk.sh` runs only scenes 0 and 1.
+
+## Milestone 9d: the world's start zoom (C), built 2026-10-20
+
+Before the world's first pass the view comes in from its middle: a 24 x 24 part of the window grows to the whole window in 13 steps,
+each scaled up to the window as spaced dots that close up (in a dark scene the lit doubled view). The scene's song now starts before it,
+as in the original (`docs/findings.md` "WALK.SL step 23").
+
+- **Code:** `src/walk.c` (`walk_zoom_step`, `walk_zoom_scale`, `walk_begin_shown`), `src/main.c` (`show_zoom_step`: one step a pass of
+  the world's pace, about 0.37 s in all; the original does not wait between steps, so this pace is a choice); `tests/walk_dump.c`
+  mode `zoom`; `tools/zoom_check.py`.
+- **Checked:** `tools/check_battle.sh` (section "zoom"), all 13 steps identical to the original's screens in scenes 0, 1, 34 and the dark
+  scenes 6, 9, 23 and 47; the screen does not change between the last step and the main loop. Unit test `test_zoom_scale`.
+  `tools/mutate_battle.py` (281): 8 new mutations, all caught (4 by the unit test). The whole `check_battle.sh` and the quick
+  `check_walk.sh` are still all identical; ASan/UBSan clean on the zoom checks.
+- **Not built:** the zoom the other way (`0x199b4`, which shrinks the view) and the scene change that sets the zoom off again
+  (`0x138c8`, `0x17b0b`).
+
+## Milestone 8h: the rest of the battle (C), built 2026-10-21
+
+Story enemies, the music and sound keys in the fight, the picker face's flash and the game-over screen's mouse (`docs/findings.md`
+"WALK.SL step 24"). With this, every part of the battle is built except the Sound Blaster's sounds.
+
+- **Story enemies** (byte 0x2f set; scenes 4, 18, 23, 35, 40, 41, 43): the opening message box (colour 0xc2) when word 0x11 is set,
+  then the battle against group byte 0x30. All five killed: the enemy goes, its flag is set and the pass ends; fled: the party and its
+  trail are put back at the record's bytes 0x28, 0x29.
+- **Keys 1 and 2 in the fight:** with music playing the game has an FM card, so the music button starts pressed and key 1 (or the
+  button) stops the battle's song or starts it again from its beginning. There is no Sound Blaster, so key 2 does nothing, as in the
+  original without one.
+- **The picker face's flash:** all 48 steps (three times 16 colours down), each shown for 10 ms in real time (a choice).
+- **The game-over screen:** any mouse button ends it, as Space and Enter do.
+- **Code:** `src/walk.c` (`touch`, `boss_round`, `walk_boss_after`, `walk_resume`, `walk_set_sound`, `walk_sound_buttons`,
+  `walk_button_toggle`), `src/battle.c` (`keys`, `sound_button`, `magic_picked`, `battle_set_show`), `src/gameover.c` (`gameover_mouse`),
+  `src/main.c`; `tests/walk_dump.c` (`fm`, `fm-shown`, `f:PATH`, keys and mouse in `gameover`); `tools/battle_check.py --opl` and the
+  flash steps; `tools/gameover_check.py --key`, `--mouse`.
+- **Checked:** `tools/check_battle.sh`, 28 new starts and checks (149 in all, about 11 minutes once recorded), all identical; unit test
+  `test_boss_after`; `tools/mutate_battle.py`: 23 new mutations, all caught; ASan/UBSan clean on six of the new starts; the quick
+  `tools/check_walk.sh` all identical; a real-time run closed a story enemy's box and fled. The whole mutation list (303) has not been run
+  in one go. (Run in 8i, 337 by then: all caught.)
+- **Not built:** the Sound Blaster's sounds (read in step 24; nothing on screen depends on them). (Built in 8i.)
+
+## Milestone 8i: the Sound Blaster's sounds (C), built 2026-10-22
+
+With a sound device the game now has a Sound Blaster as well as the FM card (`docs/findings.md` "WALK.SL step 25"): `SND_EF.1` and
+`_1_.LOC` are read, the sound button starts pressed, and the battle's and the world's sounds play at the original's 12 call sites.
+Key 2 or the button turns them off and on in a battle. This finishes milestone 8.
+
+- **Code:** `src/sfx.c` (new: the two files, a block's length in passes, decoded clips kept), `src/voc.c` (`voc_adpcm_decode` for
+  codecs 2 and 3, `voc_block_decode` for bare blocks), `src/walk.c` (`walk_set_sfx`, `walk_sfx_play`, `walk_sfx_busy`,
+  `walk_sfx_stop`; shots, sparks, roofs, a right answer), `src/battle.c` (`member_sound`; the touch, blows, hits, deaths, the
+  rewards bar's cut), `src/main.c` (the sink: a sound replaces any that plays); `tests/walk_dump.c` (`sb`, `sb-shown`, `s:PATH`);
+  `tools/sb_stub.py` (new) and `tools/battle_check.py --sb`.
+- **Checked:** 11 new starts in `tools/check_battle.sh` (all its starts identical, sounds included); the decoders give the same samples
+  as DOSBox-X's tables for all 12 blocks; unit tests in `tests/test_audio.c`; 34 new mutations, all caught; ASan/UBSan clean on five
+  starts; a real-time run with `--no-music` under SDL's disk audio driver wrote sound.
+- **The whole mutation list (337), 2026-10-23:** run through once (resumed after mutation 221 when a restart stopped it), all caught. Four
+  patterns had gone stale (three after `button_toggle` became `walk_button_toggle`, one after 8h's flash); they were brought up to date
+  and re-run alone (caught).
+- **A choice:** a sound's length in passes (35 a second) stands for the card's busy word in the comparisons; in the game it is the sink
+  still playing. Nobody has listened to the sounds.
+- **Not built:** the sounds of actions not built (the six F-key handlers' `SND_EF.1` 0x1bf5, a scene record's 0x5571, `0x22c42`'s).

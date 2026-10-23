@@ -914,6 +914,55 @@ static void test_mouse_key(void)
     CHECK(walk_mouse_key(0xA5, 0x5F, 0) == 0x4D && walk_mouse_key(0xA5, 0x5E, 0) == 0x48);
 }
 
+static void test_boss_after(void)
+{
+    printf("after a story enemy's battle: five killed takes it away and sets its flag; fewer puts the party and its trail back\n");
+    if (!assets_exists("__2.ALL") || !assets_exists("NUMBER.LCZ")) {
+        printf("  skipped (no data)\n");
+        skipped++;
+        return;
+    }
+    for (unsigned kills = 4; kills <= 5; kills++) {
+        walk_t *w = walk_create();
+        CHECK(w != NULL);
+        if (!w)
+            return;
+        static screen_t scr;
+        CHECK(walk_begin(w, &scr, 0, 20) == 0);
+        walk_scene_t *s = (walk_scene_t *)walk_scene(w);
+        uint8_t *r = s->tab_a + 13 * WS_VILLAGER_SIZE;   /* an enemy with byte 0x2f set and no opening message, on the hero */
+        r[0] = s->tab_b[0];
+        r[1] = s->tab_b[1];
+        r[2] = 3;
+        r[0xB] = 6;
+        r[0xC] = 5;      /* its flag: byte 5, bit 3 */
+        r[0xD] = 3;
+        r[0x11] = r[0x12] = 0;
+        r[0x28] = 50;    /* where a party that did not kill all five goes */
+        r[0x29] = 60;
+        r[0x2F] = 1;
+        r[0x30] = 4;
+        r[0x31] = 1;
+        uint8_t x0 = r[0], y0 = r[1];
+        CHECK(walk_pass(w, &scr, 20, 0) & WALK_PASS_BATTLE);
+        CHECK(r[0] == x0 && r[1] == y0);   /* not moved by the touch */
+        walk_boss_after(w, kills);
+        if (kills == 5) {
+            CHECK(r[0] == 0 && r[1] == 0);
+            CHECK(walk_flag_test(s->tab_b, 5, 3));
+            CHECK(s->tab_b[0] == x0);   /* the party stays */
+        } else {
+            CHECK(r[0] == x0 && r[1] == y0);
+            CHECK(!walk_flag_test(s->tab_b, 5, 3));
+            for (int i = 0; i < 5; i++)
+                CHECK(s->tab_b[WS_PARTY_SIZE * i] == 50 && s->tab_b[WS_PARTY_SIZE * i + 1] == 60);
+            for (int i = 0; i < 13; i++)
+                CHECK(s->trail[3 * i] == 50 && s->trail[3 * i + 1] == 60 && s->trail[3 * i + 2] == 1);
+        }
+        walk_free(w);
+    }
+}
+
 static void test_resume_stride(void)
 {
     printf("the pass resumed after a battle decides with the rain stride of the pass that touched, not the clock's\n");
@@ -1331,6 +1380,86 @@ static void test_shake(void)
     CHECK(walk_shake_offset(1, 0x7FFF) == 448);
 }
 
+/* 0x2c658 and 0x2c581 on a made-up source: pixel (64 + c, 57 + r) = 1 + r (so each source row is told apart) and a table t[p] = p + 100.
+ * The plain doubling writes p, t[p] / t[p], t[t[p]] at (16 + 2c, 16 + 2r); the dark one does that only for source rows 34 .. 60 and
+ * p, 0 / 0, 0 above and below; then rows 83 .. 138 of the result are ANDed with the mask from its first byte. */
+static void test_doubling(void)
+{
+    printf("the doublings of a dark scene\n");
+    enum { LEN = WALK_W * WALK_H };
+    uint8_t *src = calloc(1, LEN), *dst = calloc(1, LEN), *mask = malloc(0x187A * 2), table[256];
+    if (!src || !dst || !mask) {
+        CHECK(0);
+        free(src);
+        free(dst);
+        free(mask);
+        return;
+    }
+    for (int i = 0; i < 256; i++)
+        table[i] = (uint8_t)(i + 100);
+    for (int r = 0; r < 84; r++)
+        for (int c = 0; c < 96; c++)
+            src[(57 + r) * WALK_W + 64 + c] = (uint8_t)(1 + r);
+    memset(mask, 0xFF, 0x187A * 2);
+    walk_double(dst, src, table);
+    CHECK(dst[16 * WALK_W + 16] == 1 && dst[16 * WALK_W + 17] == 101 && dst[17 * WALK_W + 16] == 101 && dst[17 * WALK_W + 17] == 201);
+    CHECK(dst[183 * WALK_W + 207] == (uint8_t)(84 + 200));   /* the last pixel: row 83 of the source, t[t[84]] */
+    CHECK(dst[16 * WALK_W + 15] == 0 && dst[16 * WALK_W + 208] == 0 && dst[15 * WALK_W + 16] == 0);   /* nothing outside 192 x 168 */
+
+    memset(dst, 0xEE, LEN);
+    walk_double_dark(dst, src, table, mask);
+    /* source row 33 (the last unshaded one above) is window row 82/83; source row 34 the first shaded one, rows 84/85 */
+    CHECK(dst[82 * WALK_W + 16] == 34 && dst[82 * WALK_W + 17] == 0 && dst[83 * WALK_W + 16] == 0 && dst[83 * WALK_W + 17] == 0);
+    CHECK(dst[84 * WALK_W + 16] == 35 && dst[84 * WALK_W + 17] == 135 && dst[85 * WALK_W + 16] == 135 && dst[85 * WALK_W + 17] == 235);
+    /* source row 60 the last shaded (rows 136/137), 61 the first unshaded below (rows 138/139) */
+    CHECK(dst[137 * WALK_W + 207] == (uint8_t)(61 + 200));
+    CHECK(dst[138 * WALK_W + 16] == 62 && dst[138 * WALK_W + 17] == 0 && dst[139 * WALK_W + 16] == 0);
+    CHECK(dst[183 * WALK_W + 207] == 0 && dst[182 * WALK_W + 206] == 84);
+    CHECK(dst[16 * WALK_W + 15] == 0xEE && dst[15 * WALK_W + 16] == 0xEE);   /* outside the window untouched */
+    /* the mask: from row 83 (offset 0x48a0) for 0x187a words, so the last byte ANDed is row 138, column 211 */
+    memset(mask, 0, 0x187A * 2);
+    mask[(84 - 83) * WALK_W + 17] = 0xFF;
+    memset(dst, 0xEE, LEN);
+    walk_double_dark(dst, src, table, mask);
+    CHECK(dst[84 * WALK_W + 17] == 135 && dst[84 * WALK_W + 16] == 0 && dst[85 * WALK_W + 17] == 0);
+    CHECK(dst[82 * WALK_W + 16] == 34);                       /* row 82 is above the mask */
+    CHECK(dst[138 * WALK_W + 211] == 0 && dst[138 * WALK_W + 212] == 0xEE);   /* 12,532 bytes: row 138 ends at column 211 */
+    CHECK(dst[139 * WALK_W + 16] == 0 && dst[139 * WALK_W + 18] == 0);        /* below: p, 0 / 0, 0, not masked */
+    CHECK(dst[140 * WALK_W + 16] == 63);
+    free(src);
+    free(dst);
+    free(mask);
+}
+
+/* 0x26e5f worked by hand. Full size (192 x 168): the step 0xffff carries at the first add, not at the second, then at every add, so a
+ * row comes out as s0, s1, 0, s2, s3 .. s190 and the rows likewise (source rows 0, 1 at rows 0, 1, row 2 empty, then 2, 3 ..). 24 x 24:
+ * across the step is 0xffff * 24 / 192 = 8191 added from 1, carrying after the 9th add and then after every 8th (source pixels at 0, 9,
+ * 17, 25); down 0xffff * 24 / 168 = 9362, carrying after the 8th add and then the 7th (source rows at rows 0, 8, 15). */
+static void test_zoom_scale(void)
+{
+    printf("the start's zoom scaling\n");
+    enum { W = WALK_ZOOM_W, H = WALK_ZOOM_H };
+    static uint8_t src[W * H + 1], dst[W * H];
+    for (int r = 0; r < H; r++)
+        for (int c = 0; c < W; c++)
+            src[r * W + c] = (uint8_t)(1 + (c % 200));
+    src[W] = 0xAA;   /* row 1's first pixel, told apart */
+    walk_zoom_scale(dst, src, W, H);
+    CHECK(dst[0] == 1 && dst[1] == 2 && dst[2] == 0 && dst[3] == 3 && dst[4] == 4 && dst[191] == 191);
+    CHECK(dst[W] == 0xAA && dst[2 * W] == 0 && dst[2 * W + 3] == 0 && dst[3 * W + 3] == 3);
+    CHECK(dst[167 * W + 191] == 191);
+    memset(src, 0, sizeof src);
+    for (int r = 0; r < 24; r++)
+        for (int c = 0; c < 24; c++)
+            src[r * 24 + c] = (uint8_t)(10 * r + c + 1);
+    walk_zoom_scale(dst, src, 24, 24);
+    CHECK(dst[0] == 1 && dst[9] == 2 && dst[17] == 3 && dst[25] == 4);
+    CHECK(dst[1] == 0 && dst[8] == 0 && dst[10] == 0 && dst[16] == 0 && dst[18] == 0);
+    CHECK(dst[8 * W] == 11 && dst[8 * W + 9] == 12 && dst[15 * W] == 21);
+    for (int r = 1; r < 8; r++)
+        CHECK(dst[r * W] == 0 && dst[r * W + 9] == 0);
+}
+
 static void test_missing_data(void)
 {
     printf("missing data\n");
@@ -1364,6 +1493,9 @@ int main(int argc, char **argv)
     test_motion_whole();
     test_pass_wiring();
     test_resume_stride();
+    test_boss_after();
+    test_doubling();
+    test_zoom_scale();
     test_mouse_key();
     test_foot();
     test_trail_and_records();

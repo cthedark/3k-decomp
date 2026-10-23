@@ -38,8 +38,8 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
 | Plan a key script through waypoints with the model (a route through the streets), to ask the oracle to walk it | `walk_route.py` (`walk_keys.py route` uses it) |
 | Make key scripts for the oracle (random arrow-key presses, or yo-yoing around the house door) | `walk_keys.py` (`talk` for F1; `number_keys.py` answers a number box) (with `walk_idle_trace.py --key PASS:CODE`; `findings.md` "WALK.SL step 7") |
 | Check WALK.SL's main loop (animated tiles, palette cycle, weather clock, villagers, hero counter, walking, roofs, shots and enemies) pass by pass against the oracle: record, model, C port | `walk_idle_trace.py`, `walk_idle.py` (`check`, `cross`; `WALK_DATA=DIR` for another scene's data); `check_walk.sh` runs seven clock readings (`findings.md` "WALK.SL step 6") |
-| Check WALK.SL's battle pass by pass against the oracle (world, battle, rewards bar and message box loops as one pass sequence) | `battle_check.py` (one start; `--cache` keeps the original's recording), `check_battle.sh` (102 starts: six whole battles, level-ups, the bar, a walk-in win, fleeing, the magic and item lists, the mouse (`--mouse`), and MARK's game-over screen through `gameover_check.py`; about 3 minutes once recorded, about 15 to record; `RUNS="prefix ..."` runs only some), `battle_keys.py` (key scripts for the command and target choice, `--attack` for whole battles, `--flee`, `--all` for every key), `battle_mouse.py` (mouse scripts), `walk_scene_data.py` (a start in any scene and place; `--word` / `--byte` for experience, levels, MP, items) |
-| Mutation checks (do the tests fail when the code is wrong?) | `mutate_audio.sh`, `mutate_music.sh` (needs nothing), `mutate_menu.sh` (needs `check_menu.sh` run first), `mutate_credits.sh` (needs `check_credits.sh` run first), `mutate_walk.py` (needs `check_walk.sh` run first; 276 bugs, about 45 minutes; `ONLY=TEXT` runs the ones whose name contains TEXT), `mutate_battle.py` (needs `check_battle.sh` run first; 258 bugs; `SKIP=n`, `ONLY=TEXT`, and `RUNS="prefix ..."` passed to `check_battle.sh` to run fewer starts) |
+| Check WALK.SL's battle pass by pass against the oracle (world, battle, rewards bar and message box loops as one pass sequence) | `battle_check.py` (one start; `--cache` keeps the original's recording), `check_battle.sh` (160 starts: six whole battles, level-ups, the bar, a walk-in win, fleeing, the magic and item lists, the mouse (`--mouse`), story enemies, the FM card (`--opl`), the Sound Blaster's sounds (`--sb`, `sb_stub.py`), and MARK's game-over screen through `gameover_check.py`; about 12 minutes once recorded; `RUNS="prefix ..."` runs only some), `battle_keys.py` (key scripts for the command and target choice, `--attack` for whole battles, `--flee`, `--all` for every key), `battle_mouse.py` (mouse scripts), `walk_scene_data.py` (a start in any scene and place; `--word` / `--byte` for experience, levels, MP, items) |
+| Mutation checks (do the tests fail when the code is wrong?) | `mutate_audio.sh`, `mutate_music.sh` (needs nothing), `mutate_menu.sh` (needs `check_menu.sh` run first), `mutate_credits.sh` (needs `check_credits.sh` run first), `mutate_walk.py` (needs `check_walk.sh` run first; 276 bugs, about 45 minutes; `ONLY=TEXT` runs the ones whose name contains TEXT), `mutate_battle.py` (needs `check_battle.sh` run first; 303 bugs; `SKIP=n`, `ONLY=TEXT`, and `RUNS="prefix ..."` passed to `check_battle.sh` to run fewer starts) |
 
 ## Current state (update this section each session)
 - Done: PKLITE unpacking of 5 programs; Ghidra loads MARK and TV; the original
@@ -76,14 +76,17 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
     their message box and the way back to the world; after a loss MARK.EXE's game-over screen, then the title. Milestone 8e: the other
     three commands: fleeing, the magic list (key 1 casts) with its member picker, and the item list (key 1 uses, key 2 turns the page).
     Milestone 8f: the mouse in the battle (tabs, targets, the lists, the picker, the bar, the message box) and the pointer in the world;
-    8g: walking and shooting with the mouse in the world. Milestone 9a: F1, talking to villagers (message boxes, flags); 9b: the talks that sell and ask.
+    8g: walking and shooting with the mouse in the world. Milestone 9a: F1, talking to villagers (message boxes, flags); 9b: the talks that sell and ask;
+    9c (2026-10-20): the dark scenes (map header byte 5: the view zoomed in, darkened, a lit oval round the hero; 24 scenes);
+    9d: the world's start zoom (the view comes in from its middle in 13 steps before the first pass). Milestone 8h (2026-10-21): story
+    enemies, keys 1 and 2 in the fight, the picker face's flash, the game-over screen's mouse; 8i (2026-10-22): the Sound Blaster's
+    sounds (`SND_EF.1`, `_1_.LOC`). The battle (milestone 8) is complete.
   - The operator has confirmed by eye or ear: the title, intro pacing, voice and subtitle sync, the music balance, the menu and its opening,
     the credits' pace, the first screen of the world, the idle animation, and walking with collision (2026-10-17).
 - **Not built in the world** (`findings.md` "WALK.SL step 7"-"step 13", `port.md` 7c-8a): the keys 1-4, A and the F-key actions, the mouse,
-  sliding round corners, the scene-change block at `0x172f0` (doors to other scenes, cut scenes, shops) and the record kinds it names, the
-  doubled world of scenes whose map header byte 5 is 1 (9, 10, 11, 12, 24, 25, 29, 47), weather mode 2 (scene 3), loading a save, the
-  new-game step that writes the `.NOW` files, the Sound Blaster sound effects, the actions of the world's on-screen buttons; in the battle keys 2 and
-  3, the picker face's countdown, the dialog of byte-0x2f enemies and what follows a battle with them. A reached unbuilt case is printed on stderr
+  sliding round corners, the scene-change block at `0x172f0` (doors to other scenes, cut scenes, shops) and the record kinds it names,
+  weather mode 2 (scene 3), loading a save, the
+  new-game step that writes the `.NOW` files, the actions of the world's on-screen buttons and the sounds of those actions. A reached unbuilt case is printed on stderr
   (`walk: not built: ...`, `battle: not built: ...`).
 - Not done: no code analysed in the overlays; no function renamed or
   reconstructed; subtitle and picture formats unknown.
@@ -99,8 +102,8 @@ is still open. For the world, in the order the operator and Kiro agreed to work:
    themselves (the loader already handles all 53, `walk_scene.py scenes`).
 3. The battle that touching an enemy starts, in stages (`findings.md` steps 12-18): the first screen and idle passes, the command and target
    choice with the keys, the attack and the monsters' turn, what follows a win or a loss, the other three commands (flee, magic, items)
-   and the mouse are built (`port.md` 8a-8f; the world's mouse buttons 8g). Next: the byte-0x2f enemies (dialog first, another way
-   back), and the actions of the F-keys (F1 talk is built, `port.md` 9a and 9b), keys 1 to 4 and A.
+   and the mouse are built (`port.md` 8a-8f; the world's mouse buttons 8g), then story enemies, keys 1 and 2 and the sounds (8h, 8i): the
+   battle is complete. Next: the actions of the F-keys (F1 talk is built, `port.md` 9a and 9b), keys 1 to 4 and A.
 4. New game (writing `__1.NOW` / `MAN_INFO.NOW` from `__1.AL1`, `__1.AL2`, `MAN_INFO.ALL`) and loading a save from the slot picker.
 
 How to pick up the world work: `tools/check_walk.sh` checks everything built so far (about 21 minutes; `SHOTS=0` about 3); `tools/walk_idle_trace.py --key` records

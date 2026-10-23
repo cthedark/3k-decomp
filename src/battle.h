@@ -30,10 +30,8 @@
  *     key 2 turns the page). battle_kind then says which of their loops the next pass is in.
  *
  * The mouse (findings "WALK.SL step 18"): the pointer and the buttons in the fight, the lists, the picker, the bar and the message box.
- *
- * Not built (reported through battle_unbuilt): keys 2 and 3 in the fight (music and sound), the picker face's countdown (only
- * its last step is drawn), the dialog some enemies start with (record word 0x11) and what follows a battle with them (record byte 0x2f
- * set), the Sound Blaster sounds.
+ * Story enemies, keys 1 and 2 with their cards, the picker face's 48-step flash (findings "WALK.SL step 24"). The Sound Blaster's
+ * sounds from SND_EF.1 and _1_.LOC through walk_sfx_play (findings "WALK.SL step 25").
  */
 #ifndef TK_BATTLE_H
 #define TK_BATTLE_H
@@ -60,6 +58,10 @@ enum {
  * first pass, drawing into `scr`. Returns NULL, with a message on stderr, if a file cannot be read. `w` must outlive the battle. */
 battle_t *battle_begin(walk_t *w, screen_t *scr);
 void battle_free(battle_t *b);
+/* With `show` set, it is called after each of the 48 steps of a helped member's face flash in the picker (three times 16 colours
+ * down); the original draws each step 100 times and does not wait, so how long it showed depended on the machine. Without it only the
+ * end is seen, as at a loop top. */
+void battle_set_show(battle_t *b, void (*show)(void *ctx, screen_t *scr), void *ctx);
 
 /* One pass of the battle loop with the keyboard port reading `port60` (as for walk_pass). Returns WALK_PASS_UNBUILT when the original
  * would have done something not built (battle_unbuilt says what), else 0. */
