@@ -103,6 +103,8 @@ struct battle {
     /* F4 in the world (battle_world_cast): the list's buffer byte 0 is 0 there ([bp-0xe] of 0x21486); 0 while the caster is being
      * picked, 1 from his list on */
     int world, world_stage;
+    int world_items;                   /* F5 (battle_world_items): the item list after the picker, not the magic list */
+    unsigned world_result;             /* what the item list returns to F5: 0, or 0xff for the equipment screen (F6) */
 };
 
 void battle_set_show(battle_t *b, void (*show)(void *ctx, screen_t *scr), void *ctx)
@@ -598,6 +600,19 @@ battle_t *battle_world_cast(walk_t *w, screen_t *scr)
     /* [bp-0x16] is never set: 0x2d in every F4 tried (INFERRED constant; any value from 0x29 on gives a palette step at once) */
     b->pk_count = 0x2D;
     return b;
+}
+
+battle_t *battle_world_items(walk_t *w, screen_t *scr)
+{
+    battle_t *b = battle_world_cast(w, scr);   /* the same picker (0x156c7), its count 0x2d in F5 too */
+    if (b)
+        b->world_items = 1;
+    return b;
+}
+
+unsigned battle_world_result(const battle_t *b)
+{
+    return b->world_result;
 }
 
 /* ---- one pass ---- */
@@ -1250,6 +1265,8 @@ static void strip_numbers(battle_t *b, screen_t *scr)
 
 static void magic_end(battle_t *b, screen_t *scr, unsigned r);
 static void magic_picked(battle_t *b, screen_t *scr, unsigned m);
+static void items_begin(battle_t *b, screen_t *scr);
+static void item_given(battle_t *b, screen_t *scr, unsigned m);
 
 /* The lists' and the picker's palette step (0x1c284 on their palette argument): the palette itself in a battle, F4's dimmed copy
  * ([bp-0xb0]) in the world. */
@@ -1377,6 +1394,9 @@ static void pick_round(battle_t *b, screen_t *scr, unsigned port60)
     }
     if (!done)
         return;
+    /* the picker's [bp-0x16] stays on the stack: a picker opened again before anything draws text there (the item list's key 3 a
+     * second time) starts from it (found 2026-10-24, a palette step one pass early otherwise) */
+    b->last_gw = b->pk_count;
     ptr_hide(b, scr, b->pk_ptr);   /* 0x1ae98 */
     outline(scr, b->pk_sel, 0x12, 0x12, 0x4E);
     if (b->pk_m < 0xC8 && b->pk_faces)
@@ -1547,7 +1567,14 @@ static void magic_picked(battle_t *b, screen_t *scr, unsigned m)
         }
         b->v44 = m;
         b->world_stage = 1;
-        magic_begin(b, scr);
+        if (b->world_items)   /* F5 (0x156cf .. 0x1572d): his item list */
+            items_begin(b, scr);
+        else
+            magic_begin(b, scr);
+        return;
+    }
+    if (b->world && b->world_stage == 3) {   /* the item list's key 3 (0x2132d .. 0x21423): to whom */
+        item_given(b, scr, m);
         return;
     }
     ptr_corner(b, scr, &b->mg_ptr);   /* 0x21d74: the list's pointer starts again from the corner */
@@ -1703,10 +1730,11 @@ static void items_begin(battle_t *b, screen_t *scr)
                 break;
             }
     }
-    uint8_t icon[32 * 16];
+    unsigned iw = b->world ? 48 : 32;   /* 0x2054f: all three icons in the world (key 3 gives an item away), two in a battle */
+    uint8_t icon[48 * 16];
     for (unsigned r = 0; r < 16; r++)
-        memcpy(icon + 32 * r, b->mg_bar + 0x5A8 + 0x30 * r, 32);
-    put(scr, 0x5F54, icon, 32, 16);
+        memcpy(icon + iw * r, b->mg_bar + 0x5A8 + 0x30 * r, iw);
+    put(scr, 0x5F54, icon, iw, 16);
     memset(b->it_tab, 0, sizeof b->it_tab);
     for (unsigned i = 0; i < 20; i++)
         if (party[m + 0x14 + i])
@@ -1720,7 +1748,8 @@ static void items_begin(battle_t *b, screen_t *scr)
     b->it_page = 0x14;
     b->it_redraw = 1;
     b->it_latch = 0;
-    b->it_count = 0x98;   /* never set: what the stack holds there, 0x98 in every start tried, after the magic list too (INFERRED) */
+    b->it_count = b->world ? 0x70 : 0x98;   /* never set: what the stack holds there, 0x98 in every battle tried (after the magic list
+                                             * too) and 0x70 in F5 (INFERRED) */
     b->phase = BATTLE_KIND_ITEMS;
 }
 
@@ -1787,14 +1816,39 @@ static void item_use(battle_t *b, unsigned slot)
     }
 }
 
-/* 0x2143f, then the caller's 0x1f753: the list's pointer off, the fight's from the corner, the strip's numbers again. */
+/* 0x2143f, then the caller's 0x1f753: the list's pointer off, the fight's from the corner, the strip's numbers again. In the world
+ * (F5) only the pointer: back to F5. */
 static void items_end(battle_t *b, screen_t *scr)
 {
     ptr_hide(b, scr, b->it_ptr);
+    if (b->world) {
+        b->over = BATTLE_BACK;
+        return;
+    }
     ptr_corner(b, scr, &b->mptr);
     b->phase = BATTLE_KIND_FIGHT;
     strip_numbers(b, scr);
     b->choosing = 0;
+}
+
+/* 0x21330 .. 0x21423: back from the picker of the item list's key 3 with member m: the pointer's place 0 and the corner kept; when m is
+ * another member (below 0xc8) with an empty one of his 20 item places, the lit item goes to the first of them. */
+static void item_given(battle_t *b, screen_t *scr, unsigned m)
+{
+    uint8_t *party = party_of(b);
+    ptr_corner(b, scr, &b->it_ptr);
+    b->world_stage = 1;
+    b->phase = BATTLE_KIND_ITEMS;
+    unsigned slot = b->v44 + b->it_page + b->it_idx;
+    if (m == b->v44 || m >= 0xC8)
+        return;
+    for (unsigned j = 0x14; j < 0x28; j++)
+        if (party[m + j] == 0) {
+            party[m + j] = party[slot];
+            party[slot] = 0;
+            b->it_redraw = 1;
+            return;
+        }
 }
 
 /* 0x207b2 .. 0x2143c: a round of the item list. When asked, the ten rows of the page with the names of the items there (colour 0x10,
@@ -1807,7 +1861,7 @@ static void items_round(battle_t *b, screen_t *scr, unsigned port60)
     b->it_count = (b->it_count + 1) & 0xFF;
     if (b->it_count > 0x28) {
         b->it_count = 0;
-        walk_palette_step(b->w, scr);
+        step_palette(b, scr);
     }
     if (b->it_redraw) {
         unsigned at = 0x7FC0, toff = b->it_page == 0x1E ? 300 : 0, slot = m + b->it_page;
@@ -1906,7 +1960,13 @@ static void items_round(battle_t *b, screen_t *scr, unsigned port60)
         b->it_page += 10;
         if (b->it_page > 0x1E)
             b->it_page = 0x14;
-    } else if (k == 0x40) {   /* 0x21427 */
+    } else if (k == 4 && party[slot] && b->world) {   /* 0x212b5: key 3, in the world only: to whom (a picker without faces) */
+        ptr_hide(b, scr, b->it_ptr);
+        pick_begin(b, scr, 0, 0);
+        b->world_stage = 3;
+    } else if (k == 0x40) {   /* 0x21427: F6 (or its button); in the world the list returns 0xff, the equipment screen */
+        if (b->world)
+            b->world_result = 0xFF;
         items_end(b, scr);
     }
 }

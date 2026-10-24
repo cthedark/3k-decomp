@@ -139,6 +139,9 @@ for seed in 4 6; do
     DOPTS="$I --join 1 --join 2 --hp 1:0 --byte 1:0x14:1 --byte 1:0x15:27 --byte 1:0xc:100 --word 1:0xd:2000"
     run "items3_$seed" 1 106 36 1200 $IOPEN $($PY tools/battle_keys.py $seed 1200 --all --from 18 | sed 's/--key 18:0x81//')
 done
+# key 3 (scan 4) and the third icon in the battle's item list: nothing there (step 30), in a party of three
+DOPTS="$I --join 1 --join 2"; run items_key3 1 106 36 120 $IOPEN --key 30:0x04 --key 32:0x84 --key 50:0x50 --key 52:0xd0 \
+    --key 60:0x04 --key 62:0x84 --key 90:0x01 --key 92:0x81
 # any key from the start, the same party: all four commands mixed
 for seed in 1 2 3; do run "allkeys$seed" 1 106 36 1500 $($PY tools/battle_keys.py $seed 1500 --all); done
 DOPTS=""
@@ -395,6 +398,42 @@ run cast_mouse 1 106 30 300 --mouse 0:160:100:0 --mouse 3:20:65:1 --mouse 5:20:6
 run cast_dark13 13 100 50 200 --key 1:0x81 --key 3:0x3e --key 5:0xbe --key 40:0x1c --key 42:0x9c --key 80:0x50 --key 82:0xd0 \
     --key 100:0x02 --key 102:0x82 --key 140:0x4d --key 142:0xcd --key 150:0x1c --key 152:0x9c
 for seed in 1 2 3; do run "cast_walk$seed" 1 106 30 2500 $($PY tools/walk_keys.py cast $seed 2500); done
+DOPTS=""
+# F5, items (step 30): the hero with items 1 (food), 3 (a sword), 9 (water) and member 1 with 5 HP: key 3 gives the first to member 1
+# (with long waits); key 1 eats and wears; key 2 turns the page; key 3 to himself, to a fallen member, to one with no room, and Esc in its
+# picker; Esc in the first picker; member 1's own list; twelve items over both pages; the mouse (the third icon gives); a dark scene;
+# walks with F5 (tools/walk_keys.py items)
+IT="--byte 0:0x14:1 --byte 0:0x15:3 --byte 0:0x17:9 --join 1 --hp 1:5 --hp 0:20"
+DOPTS="$IT"
+run items_give 1 106 30 300 --key 1:0x81 --key 3:0x3f --key 5:0xbf --key 40:0x1c --key 42:0x9c --key 100:0x04 --key 102:0x84 \
+    --key 140:0x4d --key 142:0xcd --key 160:0x1c --key 162:0x9c --key 200:0x01 --key 202:0x81
+run items_use 1 106 30 200 --key 1:0x81 --key 3:0x3f --key 5:0xbf --key 20:0x1c --key 22:0x9c --key 40:0x02 --key 42:0x82 \
+    --key 60:0x50 --key 62:0xd0 --key 70:0x02 --key 72:0x82 --key 90:0x50 --key 92:0xd0 --key 100:0x02 --key 102:0x82 \
+    --key 120:0x03 --key 122:0x83 --key 140:0x03 --key 142:0x83 --key 160:0x01 --key 162:0x81
+run items_self 1 106 30 200 --key 1:0x81 --key 3:0x3f --key 5:0xbf --key 20:0x1c --key 22:0x9c --key 40:0x04 --key 42:0x84 \
+    --key 60:0x1c --key 62:0x9c --key 80:0x04 --key 82:0x84 --key 100:0x01 --key 102:0x81 --key 140:0x01 --key 142:0x81
+run items_esc 1 106 30 100 --key 1:0x81 --key 3:0x3f --key 5:0xbf --key 40:0x01 --key 42:0x81
+run items_member1 1 106 30 200 --key 1:0x81 --key 3:0x3f --key 5:0xbf --key 20:0x4d --key 22:0xcd --key 40:0x1c --key 42:0x9c \
+    --key 140:0x01 --key 142:0x81
+DOPTS="$IT --hp 1:0"
+run items_dead 1 106 30 200 --key 1:0x81 --key 3:0x3f --key 5:0xbf --key 20:0x1c --key 22:0x9c --key 40:0x04 --key 42:0x84 \
+    --key 60:0x4d --key 62:0xcd --key 80:0x1c --key 82:0x9c --key 140:0x01 --key 142:0x81
+FULL1=""; for o in $(seq 20 39); do FULL1="$FULL1 --byte 1:$o:1"; done
+DOPTS="$IT$FULL1"
+run items_full 1 106 30 200 --key 1:0x81 --key 3:0x3f --key 5:0xbf --key 20:0x1c --key 22:0x9c --key 40:0x04 --key 42:0x84 \
+    --key 60:0x4d --key 62:0xcd --key 80:0x1c --key 82:0x9c --key 140:0x01 --key 142:0x81
+MANY="$IT"; for o in 24 25 26 27 28 29 30 31 32; do MANY="$MANY --byte 0:$o:$((o - 13))"; done
+DOPTS="$MANY"
+run items_pages 1 106 30 200 --key 1:0x81 --key 3:0x3f --key 5:0xbf --key 20:0x1c --key 22:0x9c --key 40:0x03 --key 42:0x83 \
+    --key 60:0x50 --key 62:0xd0 --key 70:0x04 --key 72:0x84 --key 90:0x4d --key 92:0xcd --key 100:0x1c --key 102:0x9c \
+    --key 120:0x03 --key 122:0x83 --key 160:0x01 --key 162:0x81
+DOPTS="$IT"
+run items_mouse 1 106 30 300 --key 1:0x81 --mouse 0:160:100:0 --mouse 3:20:85:1 --mouse 5:20:85:0 --mouse 30:140:80:0 --mouse 40:140:80:1 \
+    --mouse 42:140:80:0 --mouse 70:100:125:1 --mouse 72:100:125:0 --mouse 100:124:80:1 --mouse 102:124:80:0 --mouse 130:165:80:0 \
+    --mouse 140:165:80:1 --mouse 142:165:80:0 --mouse 200:160:100:2 --mouse 202:160:100:0
+run items_dark13 13 100 50 200 --key 1:0x81 --key 3:0x3f --key 5:0xbf --key 40:0x1c --key 42:0x9c --key 100:0x04 --key 102:0x84 \
+    --key 140:0x4d --key 142:0xcd --key 160:0x1c --key 162:0x9c
+for seed in 1 2 3; do run "items_walk$seed" 1 106 30 2500 $($PY tools/walk_keys.py items $seed 2500); done
 DOPTS=""
 # the world's start zoom (step 23; tools/zoom_check.py): its 13 steps in scenes 0, 1, 34 and four dark scenes (6, 9, 23, 47), from the
 # data directories of the starts above

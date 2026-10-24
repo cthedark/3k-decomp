@@ -3357,3 +3357,38 @@ member's picker (back to the list); a defence spell; a revive; a greyed spell; m
 caught (the revived face's one after the revive start was made to reach the revive spell); three left out with notes (the records run
 again with no flag changed; each of the two refusals of a fallen caster hides the other). ASan/UBSan clean on four starts; a real-time
 run cast a heal.
+
+## WALK.SL step 30: F5, items, 2026-10-24
+
+Built in C and compared pass by pass. READ from the code (`0x15620` .. `0x157f5` with key 0x3f; the item list `0x20412` again for what
+differs out of a battle), SEEN in the oracle (`work/b8/probe_items.py`: the list's art source, the first counters), then CONFIRMED by the
+comparison.
+
+**F5 and F6 share a handler** (`0x15620`): both buttons, F5's at (4, 82) and F6's at (4, 102), are pressed whichever key it was; the same
+member picker as F4's (faces, no fallen one, count 0x2d); then, with the world buffer's byte 0 set to 0, F5's item list (`0x20412`) or,
+for F6, the equipment screen (`0x221d2`). Each returns what comes next: the item list 0xff for the equipment screen (F6 or its button
+pressed in the list), the equipment screen 0x3f for the item list; the handler goes on while it is 0x3f. At the end both buttons are let
+go, the pointer's place is set to 0 and the corner kept, and the pass ends through `0x1729e`.
+
+**The item list out of a battle** (its buffer's byte 0, `[bp-0x10]`, 0):
+- its art comes from the map buffer + 0xd5b1, the same bytes as in a battle (`RPG.LCP` 0xe95), and all three icons are shown (48 x 16;
+  a battle crops it to the first two, `0x20590`);
+- key 3 (scan 4) or the third icon gives the lit item away (`0x212b5` .. `0x21423`): a picker without faces in which a fallen member
+  is not taken; to another member below 0xc8 with an empty item place the item goes to his first one, and the list is drawn again;
+  to himself, or to nobody, nothing;
+- its palette steps are on F5's dimmed copy;
+- its count starts from 0x70 (0x98 in a battle; a stack value, INFERRED from the starts).
+Key 1 uses an item and key 2 turns the page as in a battle (`port.md` 8e).
+
+**A found leftover:** the picker's palette count (`[bp-0x16]`) is never set at its start: in a battle it was the width of the last
+character the list drew. When key 3 opens the picker a second time with nothing drawn between, it starts where the first picker's count
+stopped (FOUND: one palette step a pass early in a start that gave twice; the port now leaves it there, `b->last_gw`).
+
+**Not built:** the equipment screen (F6, `0x221d2`); the item list's F6 reports it and F5 ends there. F6 itself is still an unbuilt key.
+
+**Checked:** `tools/check_battle.sh`, 13 new `items_` starts, all identical at every pass: giving with long waits; eating and wearing;
+turning the page; giving to himself, to a fallen member, to one with no room, and Esc in its picker; Esc in the first picker; member
+1's list; twelve items over both pages; the mouse (the third icon); a dark scene; three 2,500-pass walks with F5 (`tools/walk_keys.py
+items`). The battle's item starts are unchanged, and a new one presses key 3 and the third icon in a battle's list (nothing happens).
+`tools/mutate_battle.py`: 19 new mutations, all caught; one left out with a note (the battle's first count in the world: both above
+0x28). Four older patterns that these changes had made stale were repointed and re-run (caught). ASan/UBSan clean on three starts.

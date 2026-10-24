@@ -1249,3 +1249,14 @@ in a battle; spells on monsters do nothing there (`docs/findings.md` "WALK.SL st
 - **Checked:** `tools/check_battle.sh`, 14 new `cast_` starts, all identical at every pass. `tools/mutate_battle.py` (427): 14 new
   mutations, all caught; three left out with notes. ASan/UBSan clean on four starts.
 - **Not built:** F5 to F10, keys 1 to 4 and A.
+
+## Milestone 9h: F5, items (C), built 2026-10-24
+
+F5 (or its button) picks a member and opens his item list over the world: key 1 uses an item, key 2 turns the page, and key 3 (the
+third icon) gives the lit item to another member (`docs/findings.md` "WALK.SL step 30").
+
+- **Code:** `src/battle.c` (`battle_world_items`, `battle_world_result`, `item_given`; the item list's world branches), `src/walk.c`
+  (`items_key`; `cast_done` lets F5's two buttons go); `tools/walk_keys.py items`.
+- **Checked:** `tools/check_battle.sh`, 13 new `items_` starts and a battle start for key 3, all identical at every pass.
+  `tools/mutate_battle.py` (445): 19 new mutations, all caught; one left out with a note. ASan/UBSan clean on three starts.
+- **Not built:** the equipment screen (F6), which the item list's F6 opens; F7 to F10, keys 1 to 4 and A.

@@ -62,6 +62,10 @@ battle_t *battle_begin(walk_t *w, screen_t *scr);
  * over `scr`. Run it with battle_pass until battle_over says BATTLE_BACK, then battle_free. NULL (said on stderr) when RPG.LCP falls
  * short. */
 battle_t *battle_world_cast(walk_t *w, screen_t *scr);
+/* F5 in the world (0x156c7 .. 0x1572d): the same picker, then his item list as the world has it (three icons; key 3 gives the lit item
+ * to another member through a picker without faces; F6 or its button leaves with 0xff, battle_world_result). Run as battle_world_cast. */
+battle_t *battle_world_items(walk_t *w, screen_t *scr);
+unsigned battle_world_result(const battle_t *b);
 void battle_free(battle_t *b);
 /* With `show` set, it is called after each of the 48 steps of a helped member's face flash in the picker (three times 16 colours
  * down); the original draws each step 100 times and does not wait, so how long it showed depended on the machine. Without it only the

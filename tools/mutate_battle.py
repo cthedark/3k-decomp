@@ -201,8 +201,8 @@ m("battle.c", "picker: chosen face not crossed", "        pick_cross(scr, b->pk_
 m("battle.c", "picker: Esc chooses", "    } else if (k == 1) {\n        b->pk_m = 0xC8;", "    } else if (k == 1) {\n        b->pk_m = b->pk_m;")
 # the item list
 m("battle.c", "items: not packed", "                party[i] = 0;\n                party[j] = (uint8_t)v;", "                (void)v;")
-m("battle.c", "items: one icon", "memcpy(icon + 32 * r, b->mg_bar + 0x5A8 + 0x30 * r, 32);", "memcpy(icon + 32 * r, b->mg_bar + 0x5A8 + 0x30 * r, 16);")
-m("battle.c", "items: counter from 0", "b->it_count = 0x98;", "b->it_count = 0;")
+m("battle.c", "items: one icon", "memcpy(icon + iw * r, b->mg_bar + 0x5A8 + 0x30 * r, iw);", "memcpy(icon + iw * r, b->mg_bar + 0x5A8 + 0x30 * r, 16);")
+m("battle.c", "items: counter from 0", "b->it_count = b->world ? 0x70 : 0x98;", "b->it_count = b->world ? 0x70 : 0;")
 # "items: the lit row recoloured to its end" is left out: the two rows the original leaves out (the row picture's last and the next
 # row's first, or the field under the last row) had none of the colours 0x74 .. 0x77 in any start tried, so nothing showed.
 m("battle.c", "items: shadow colour", "silhouette(scr, at + 0x141, px, 96, 14, 0x16);", "silhouette(scr, at + 0x141, px, 96, 14, 0x17);")
@@ -459,14 +459,36 @@ m("walk.c", "look: talk's colour", "w->talk_msg, 0xB0, 1);", "w->talk_msg, 0x50,
 m("walk.c", "look: no chain", "    if (w->box.last == 0x7F) {\n        w->talk_msg++;\n        if (look_open(w, scr) == 0)", "    if (0) {\n        w->talk_msg++;\n        if (look_open(w, scr) == 0)")
 m("walk.c", "look: palette steps on the palette", "    palette_cycle_on(ctx, scr, ((walk_t *)ctx)->dimpal);   /* look */", "    palette_cycle(ctx, scr);   /* look */")
 m("walk.c", "look: pass not ended", "        look_key(w, w->scr);\n        return 1;", "        look_key(w, w->scr);\n        return 0;")
+# F5, items (step 30; RUNS=items). Left out: the battle's first item count (0x98) in the world (both are above 0x28: a palette step at
+# the first round either way).
+m("walk.c", "items: no prelude", "        fkey_begin(w, w->scr);\n        items_key(w, w->scr);", "        items_key(w, w->scr);")
+m("walk.c", "items: F6's button not pressed", "    walk_button_toggle(scr, 0x6684, 0x2F, 0x14);   /* 0x1566f, 0x15684 */\n    walk_button_toggle(scr, 0x7F84, 0x2F, 0x14);",
+  "    walk_button_toggle(scr, 0x6684, 0x2F, 0x14);   /* 0x1566f, 0x15684 */")
+m("walk.c", "items: F5's button not let go", "    if (items) {\n        walk_button_toggle(scr, 0x6684, 0x2F, 0x14);", "    if (items) {")
+m("walk.c", "items: the magic list instead", "    w->cast = battle_world_items(w, scr);", "    w->cast = battle_world_cast(w, scr);")
+m("walk.c", "items: pass not ended", "        items_key(w, w->scr);\n        return 1;", "        items_key(w, w->scr);\n        return 0;")
+m("battle.c", "items: two icons in the world", "    unsigned iw = b->world ? 48 : 32;", "    unsigned iw = 32;")
+m("battle.c", "items: palette on the palette", "        b->it_count = 0;\n        step_palette(b, scr);", "        b->it_count = 0;\n        walk_palette_step(b->w, scr);")
+m("battle.c", "items: no giving", "    } else if (k == 4 && party[slot] && b->world) {", "    } else if (k == 4 && party[slot] && 0) {")
+m("battle.c", "items: giving in a battle", "    } else if (k == 4 && party[slot] && b->world) {", "    } else if (k == 4 && party[slot]) {")
+m("battle.c", "items: giving an empty place", "    } else if (k == 4 && party[slot] && b->world) {", "    } else if (k == 4 && b->world) {")
+m("battle.c", "items: give picker with faces", "        pick_begin(b, scr, 0, 0);\n        b->world_stage = 3;", "        pick_begin(b, scr, 1, 0);\n        b->world_stage = 3;")
+m("battle.c", "items: give to a fallen one", "        pick_begin(b, scr, 0, 0);\n        b->world_stage = 3;", "        pick_begin(b, scr, 0, 1);\n        b->world_stage = 3;")
+m("battle.c", "items: give to himself", "    if (m == b->v44 || m >= 0xC8)\n        return;", "    if (m >= 0xC8)\n        return;")
+m("battle.c", "items: given item stays", "            party[m + j] = party[slot];\n            party[slot] = 0;", "            party[m + j] = party[slot];")
+m("battle.c", "items: given list not redrawn", "            party[slot] = 0;\n            b->it_redraw = 1;\n            return;", "            party[slot] = 0;\n            return;")
+m("battle.c", "items: give pointer not kept", "    uint8_t *party = party_of(b);\n    ptr_corner(b, scr, &b->it_ptr);\n    b->world_stage = 1;", "    uint8_t *party = party_of(b);\n    b->world_stage = 1;")
+m("battle.c", "items: picker count not left", "    b->last_gw = b->pk_count;\n", "")
+m("battle.c", "items: picker of F5 is F4's caster's", "    if (b->world_items)   /* F5 (0x156cf .. 0x1572d): his item list */\n            items_begin(b, scr);",
+  "    if (0)   /* F5 (0x156cf .. 0x1572d): his item list */\n            items_begin(b, scr);")
 # F4, casting (step 29; RUNS=cast). Left out: the records run again after F4 (no flag changes; as for F2); a fallen caster let through
 # the picker (its flag 0), or F4's own HP test after it (0x15570) taken away: the original refuses a fallen caster twice, so either alone
 # is hidden by the other.
 m("walk.c", "cast: no prelude", "        fkey_begin(w, w->scr);\n        cast_key(w, w->scr);", "        cast_key(w, w->scr);")
 m("walk.c", "cast: button not pressed", "    walk_button_toggle(scr, 0x4D84, 0x2F, 0x14);   /* 0x1c3ba: F4's button pressed */", "    (void)0;")
-m("walk.c", "cast: button stays pressed", "    w->cast = NULL;\n    walk_button_toggle(scr, 0x4D84, 0x2F, 0x14);", "    w->cast = NULL;")
-m("walk.c", "cast: pointer not kept again", "    w->cast = NULL;\n    walk_button_toggle(scr, 0x4D84, 0x2F, 0x14);\n    if (w->mouse_on) {",
-  "    w->cast = NULL;\n    walk_button_toggle(scr, 0x4D84, 0x2F, 0x14);\n    if (0) {")
+m("walk.c", "cast: button stays pressed", "    } else {\n        walk_button_toggle(scr, 0x4D84, 0x2F, 0x14);\n    }", "    } else {\n    }")
+m("walk.c", "cast: pointer not kept again", "        walk_button_toggle(scr, 0x4D84, 0x2F, 0x14);\n    }\n    if (w->mouse_on) {",
+  "        walk_button_toggle(scr, 0x4D84, 0x2F, 0x14);\n    }\n    if (0) {")
 m("walk.c", "cast: pass not ended", "        cast_key(w, w->scr);\n        return 1;", "        cast_key(w, w->scr);\n        return 0;")
 m("walk.c", "cast: no flash steps shown", "    battle_set_show(w->cast, w->show, w->show_ctx);", "    (void)0;")
 m("walk.c", "cast: palette on the palette", "void walk_palette_step_dim(walk_t *w, screen_t *scr)\n{\n    palette_cycle_on(w, scr, w->dimpal);",

@@ -16,6 +16,7 @@ Usage: tools/walk_keys.py fuzz SEED NPASSES    random presses and releases of th
        tools/walk_keys.py look SEED NPASSES    the same with F2 (look) three times in four and F1 the fourth
        tools/walk_keys.py take SEED NPASSES    the same with F3 (take) three times in four and F2 the fourth
        tools/walk_keys.py cast SEED NPASSES    short walks, and F4 (cast) with keys for its picker and list, then Esc
+       tools/walk_keys.py items SEED NPASSES   the same with F5 (items): use, turn the page, give
 Codes: 0x48 up, 0x50 down, 0x4b left, 0x4d right; the break code is the make code + 0x80.
 """
 import random
@@ -132,9 +133,10 @@ def take(seed, n):
     return talk(seed, n, (0x3D, 0x3D, 0x3D, 0x3C))
 
 
-def cast(seed, n):
+def cast(seed, n, fkey=0x3E, inner=(0x48, 0x50, 0x4B, 0x4D, 0x02, 0x02, 0x4D, 0x1C), guard=False):
     """Short walks, each followed now and then by F4: the picker gets an arrow or two and Enter or Esc, the list arrows, key 1 (cast)
-    and Enter for a helped member's picker, and at last Esc."""
+    and Enter for a helped member's picker, and at last Esc. With `guard` no list keys follow an Esc in the picker (they would be
+    the world's)."""
     rng = random.Random(seed)
     make = [0x48, 0x50, 0x4B, 0x4D]
     t, out = 8, []
@@ -150,15 +152,23 @@ def cast(seed, n):
         out += [f"--key {t}:{k:#x}", f"--key {t + hold}:{k + 0x80:#x}"]
         t += hold + rng.randint(1, 6)
         if rng.random() < 0.6:
-            tap(0x3E)
+            tap(fkey)
             for _ in range(rng.randint(0, 2)):
                 tap(rng.choice([0x4B, 0x4D]))
-            tap(rng.choice([0x1C, 0x1C, 0x1C, 0x01]))
+            first = rng.choice([0x1C, 0x1C, 0x1C, 0x01])
+            tap(first)
+            if guard and first == 0x01:
+                continue
             for _ in range(rng.randint(1, 6)):
-                tap(rng.choice([0x48, 0x50, 0x4B, 0x4D, 0x02, 0x02, 0x4D, 0x1C]))
+                tap(rng.choice(inner))
             tap(0x01)
             tap(0x01)
     return out
+
+
+def items(seed, n):
+    """cast with F5: in the item list arrows, key 1 (use), key 2 (page), key 3 (give: its picker gets an arrow or Enter)"""
+    return cast(seed, n, 0x3F, (0x48, 0x50, 0x4B, 0x4D, 0x02, 0x03, 0x04, 0x4D, 0x1C), True)
 
 
 def route(seed, n):
@@ -169,7 +179,8 @@ def route(seed, n):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4 or sys.argv[1] not in ("fuzz", "shoot", "volley", "yoyo", "door", "route", "talk", "look", "take", "cast"):
+    if len(sys.argv) != 4 or sys.argv[1] not in ("fuzz", "shoot", "volley", "yoyo", "door", "route", "talk", "look", "take", "cast",
+                                                 "items"):
         raise SystemExit(__doc__)
     print(" ".join({"fuzz": fuzz, "shoot": shoot, "volley": volley, "yoyo": yoyo, "door": door, "route": route, "talk": talk,
-                    "look": look, "take": take, "cast": cast}[sys.argv[1]](int(sys.argv[2]), int(sys.argv[3]))))
+                    "look": look, "take": take, "cast": cast, "items": items}[sys.argv[1]](int(sys.argv[2]), int(sys.argv[3]))))
