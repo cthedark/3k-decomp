@@ -184,12 +184,30 @@ static void test_ground_objects(void)
     memset(buf, 0x33, sizeof buf);
     walk_draw_objects(buf, &s, 37, 44);
     CHECK(buf[16 * WALK_W + 12] == 0x90);
-    /* A view centre left of 0x16 makes the first column negative, rounded down: (0x11 - 0x16) / 2 = -3. */
+    /* A view centre left of 0x16: the column is worked out in a byte (0x2c472), (0x11 - 0x16) & 0xff = 0xfb, halved: column 125
+     * of the same row (correction, 2026-10-24: this test had the column negative, -3, read from the row before) */
     s.omap[12 * 128 + 7] = 0xFF;
-    s.omap[12 * 128 - 3] = 5;
+    s.omap[12 * 128 + 125] = 5;
     memset(buf, 0x33, sizeof buf);
     walk_draw_objects(buf, &s, 0x11, 44);
     CHECK(buf[16 * WALK_W + 12] == 0x90);
+    s.omap[12 * 128 + 125] = 0xFF;
+    /* rows above the map: the row in a byte too (y / 2 - 10 = 0xfe for y = 16), 0xfe << 7 = 0x7f00 from the object map, past its end:
+     * the segment's bytes there (walk_seg_byte; 0x9300 + 0x7f00 + 7 wraps to 0x1207, inside the ground map) */
+    memset(s.gmap, 0, sizeof s.gmap);
+    s.gmap[0x1207 - 0x16] = 5;
+    memset(buf, 0x33, sizeof buf);
+    walk_draw_objects(buf, &s, 36, 16);
+    CHECK(buf[16 * WALK_W + 16] == 0x90);
+    s.gmap[0x1207 - 0x16] = 0;
+    /* the ground below the map: row 100 is the villagers' sprite bank, at the segment's 0x6416 */
+    static uint8_t bank[WS_BANK1_PAD];
+    s.bank1 = bank;
+    bank[(100 - 100) * 256 + 0] = 1;   /* the word of map cell (0, 100) */
+    memset(buf, 0, sizeof buf);
+    walk_draw_ground(buf, &s, 0x16, 220);   /* first row y / 2 - 10 = 100, first column 0 */
+    CHECK(buf[16 * WALK_W + 16] == 0x40);
+    s.bank1 = NULL;
     /* A tile number is a 16-bit word shifted left by 6 in 16 bits: 0x0401 selects tile 1 again. */
     memset(s.gmap, 0, sizeof s.gmap);
     s.gmap[(12 * 128 + 7) * 2] = 0x01;
@@ -1217,11 +1235,11 @@ static void test_walking(void)
     uint32_t rand_after = (uint32_t)st2[1000] | (uint32_t)st2[1001] << 8 | (uint32_t)st2[1002] << 16 | (uint32_t)st2[1003] << 24;
     CHECK(rand_after != rand_before);                /* the shake drew from rand() */
 
-    /* a key the port does not build is reported, once per pass it is seen (F2, 0x3c; F1 is built) */
-    const keyev f1[] = {{0, 0x3C}};
+    /* a key the port does not build is reported, once per pass it is seen (F3, 0x3d; F1 and F2 are built) */
+    const keyev f1[] = {{0, 0x3D}};
     CHECK(BEGIN());
     int rc = run_walk(w, &scr, f1, 1, 3, NULL, NULL, NULL);
-    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x3c"));
+    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x3d"));
 
     /* the keys 1, 2 and A are released while they repeat: reported on the first pass only */
     const keyev akey[] = {{3, 0x1E}};
@@ -1460,6 +1478,44 @@ static void test_zoom_scale(void)
         CHECK(dst[r * W] == 0 && dst[r * W + 9] == 0);
 }
 
+/* F2's record search (0x2c28f) and which message a kind 9 record gives (0x15959 .. 0x15a09). */
+static void test_look(void)
+{
+    printf("F2: the record looked at and its message\n");
+    static uint8_t tab_a[1750];
+    uint8_t *rec = tab_a + 1000;
+    rec[15 * 2 + 0] = 38, rec[15 * 2 + 1] = 55, rec[15 * 2 + 2] = 3;   /* the same cell, another kind: passed over */
+    rec[15 * 4 + 0] = 38, rec[15 * 4 + 1] = 55, rec[15 * 4 + 2] = 9;
+    rec[15 * 6 + 0] = 38, rec[15 * 6 + 1] = 55, rec[15 * 6 + 2] = 9;   /* a second one there: the first is taken */
+    rec[15 * 49 + 0] = 200, rec[15 * 49 + 1] = 7, rec[15 * 49 + 2] = 9;
+    rec[15 * 8 + 0] = 39, rec[15 * 8 + 1] = 55, rec[15 * 8 + 2] = 9;   /* x is compared as it is, odd or not */
+    CHECK(walk_look_record(tab_a, 38, 55) == 60);
+    CHECK(walk_look_record(tab_a, 200, 7) == 0x2DF);
+    CHECK(walk_look_record(tab_a, 39, 55) == 120);
+    CHECK(walk_look_record(tab_a, 38, 56) == 0x2EE);
+    CHECK(walk_look_record(tab_a, 200, 8) == 0x2EE);
+
+    static uint8_t party[WS_TAB_B];
+    uint8_t r[15] = {38, 55, 9, 0, 0, 10, 0, 6, 0, 20, 0, 49, 7, 30, 0};
+    party[200] = 1;   /* flag 0 bit 0: the first entry's */
+    CHECK(walk_look_entry(party, r) == 7);    /* the second entry's flag (6, bit 0) not set: the first message */
+    party[206] = 1;
+    CHECK(walk_look_entry(party, r) == 11);   /* the third's (49, bit 7) not set: the second */
+    party[249] = 0x80;
+    CHECK(walk_look_entry(party, r) == 15);   /* all three set: the third */
+    party[249] = 0x7F;
+    CHECK(walk_look_entry(party, r) == 11);
+    r[13] = r[14] = 0;
+    party[249] = 0;
+    CHECK(walk_look_entry(party, r) == 11);   /* the third has no message: the second, its flag not looked at */
+    r[9] = 0;
+    CHECK(walk_look_entry(party, r) == 7);    /* the second has none: the first */
+    party[200] = 0;
+    CHECK(walk_look_entry(party, r) == 3);    /* the first's flag not set: the word before it, bytes 1 and 2 */
+    r[4] = 31;
+    CHECK(walk_look_entry(party, r) == 7);    /* bit 31: (31 + 1) & 31 = 0, always set */
+}
+
 static void test_missing_data(void)
 {
     printf("missing data\n");
@@ -1496,6 +1552,7 @@ int main(int argc, char **argv)
     test_boss_after();
     test_doubling();
     test_zoom_scale();
+    test_look();
     test_mouse_key();
     test_foot();
     test_trail_and_records();

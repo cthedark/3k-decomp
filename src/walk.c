@@ -24,7 +24,8 @@ struct walk {
      * the palette's first 48 bytes the box's palette steps work on ([bp-0xb0]), the box, the villager talked to and his message */
     uint8_t font8[128 * 15], table[256], dimpal[48];
     msgbox_t box;
-    int talking;                        /* 1 the message box waits (0x1b506), 2 the yes / no buttons (0x18c36), 3 the number (0x18fdc) */
+    int talking;                        /* 1 the message box waits (0x1b506), 2 the yes / no buttons (0x18c36), 3 the number (0x18fdc),
+                                         * 4 a look's message box (F2) */
     uint8_t *talk_rec;
     unsigned talk_msg, talk_k;          /* the message shown, the entry used (its offset in the record) */
     uint8_t talk_under[SCREEN_W * 46];  /* [bp+6] + 0x9c40: the screen's rows 134 .. 179 under boxes that do not wait */
@@ -171,38 +172,65 @@ const walk_scene_t *walk_scene(const walk_t *w)
 
 /* ---- the ground and the objects ---- */
 
+/* The original's art segment (0xffdc bytes allocated at 0x10057, at offset 0x16; SEEN at pass 5 and compared): 0x16 the object
+ * sprites (s->sprites, 0x7f80 bytes, zero past their data), 0x7f96 the tiles (s->tiles), then the allocator's header of the next
+ * block from 0xfff2, and before 0x16 this block's own. Only tile numbers that wrap past the segment's end read the sprites and the
+ * headers: the words past the map's bottom do. The headers are the oracle run's (its segment numbers): a GUESS elsewhere. */
+static const uint8_t art_head[0x16] = {0xEB, 0x4D, 0x03, 0x00, 0x00, 0x00, 0x14, 0x00, 0x14, 0x00, 0xFE,
+                                       0xFF, 0x00, 0x00, 0xEB, 0x5D, 0x00, 0x00, 0xEB, 0x3D, 0xDC, 0xFF};
+static const uint8_t art_tail[14] = {0x00, 0x00, 0x00, 0x0B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFE, 0xFF};
+
+static unsigned art_byte(const walk_scene_t *s, unsigned off)
+{
+    off &= 0xFFFF;
+    if (off < 0x16)
+        return art_head[off];
+    if (off < 0x7F96)
+        return off - 0x16 < s->sprites_len ? s->sprites[off - 0x16] : 0;
+    if (off < 0xFFF2)
+        return s->tiles[off - 0x7F96];
+    return art_tail[off - 0xFFF2];
+}
+
 void walk_draw_ground(uint8_t *buf, const walk_scene_t *s, unsigned x, unsigned y)
 {
-    int bx = ((int)(y >> 1) - 10) * 256 + (int)(x & 0xFE) - 0x16;
+    /* row and column as bytes (bh = y / 2 - 10, bl = (x & ~1) - 0x16), the offset in 16 bits from the map's place in its segment */
+    unsigned bx = ((((y >> 1) - 10) & 0xFF) << 8) | (((x & 0xFE) - 0x16) & 0xFF);
     int dx = 0xE10 - ((x & 1) ? 4 : 0) - ((y & 1) ? 0x380 : 0);
     for (int row = 0; row < 23; row++) {
-        int b = bx, d = dx;
+        int d = dx;
         for (int col = 0; col < 25; col++) {
-            unsigned word = (b >= 0 && b + 2 <= WS_GMAP_BYTES) ? w16(s->gmap, (size_t)b) : 0;
-            unsigned off = (word << 6) & 0xFFFF;   /* the original shifts in 16 bits */
-            for (int k = 0; k < 8; k++)
-                memcpy(buf + d + k * WALK_W, s->tiles + off + k * 8, 8);
-            b += 2;
+            unsigned off = (0x16 + bx) & 0xFFFF, word;
+            if (off >= 0x16 && off + 2 <= 0x16 + WS_GMAP_BYTES)
+                word = w16(s->gmap, off - 0x16);
+            else
+                word = walk_seg_byte(s, off) | walk_seg_byte(s, off + 1) << 8;
+            unsigned t = (word << 6) & 0xFFFF;   /* the original shifts in 16 bits */
+            if (t + 64 <= 0xFFF2 - 0x7F96) {
+                for (int k = 0; k < 8; k++)
+                    memcpy(buf + d + k * WALK_W, s->tiles + t + k * 8, 8);
+            } else {   /* past the segment's end: the offset wraps (0x2c3b6) */
+                for (int k = 0; k < 64; k++)
+                    buf[d + (k >> 3) * WALK_W + (k & 7)] = (uint8_t)art_byte(s, 0x7F96 + t + (unsigned)k);
+            }
+            bx = (bx + 2) & 0xFFFF;
             d += 8;
         }
-        bx += 256;
+        bx = (bx + 0xCE) & 0xFFFF;
         dx += 8 * WALK_W;
     }
 }
 
-static int half_floor(int v)
-{
-    return v >= 0 ? v / 2 : -((-v + 1) / 2);
-}
-
 void walk_draw_objects(uint8_t *buf, const walk_scene_t *s, unsigned x, unsigned y)
 {
-    int bx = ((int)(y >> 1) - 10) * 128 + half_floor((int)(x & 0xFF) - 0x16);
+    /* (y / 2 - 10 as a byte) << 7 plus ((x - 0x16) as a byte) / 2, in 16 bits from the object map's place (0x9300) */
+    unsigned bx = (((((y >> 1) - 10) & 0xFF) << 7) + ((((x & 0xFF) - 0x16) & 0xFF) >> 1)) & 0xFFFF;
     int dx = 0xE10 - ((x & 1) ? 4 : 0) - ((y & 1) ? 0x380 : 0);
     for (int row = 0; row < 23; row++) {
-        int b = bx, d = dx;
+        int d = dx;
         for (int col = 0; col < 25; col++) {
-            unsigned id = (b >= 0 && b < WS_OMAP_BYTES) ? s->omap[b] : 0xFF;
+            unsigned off = (0x9300 + bx) & 0xFFFF;
+            unsigned id = off >= 0x9300 && off < 0x9300 + WS_OMAP_BYTES ? s->omap[off - 0x9300] : walk_seg_byte(s, off);
             if (id <= 0xFE) {
                 const uint8_t *spr = s->sprites + (id << 7);
                 for (int k = 0; k < 8; k++)
@@ -211,10 +239,10 @@ void walk_draw_objects(uint8_t *buf, const walk_scene_t *s, unsigned x, unsigned
                         *p = (uint8_t)((*p & spr[0x40 + k * 8 + j]) | spr[k * 8 + j]);
                     }
             }
-            b++;
+            bx = (bx + 1) & 0xFFFF;
             d += 8;
         }
-        bx += 128;
+        bx = (bx + 0x67) & 0xFFFF;
         dx += 8 * WALK_W;
     }
 }
@@ -1071,6 +1099,7 @@ static int talk_open(walk_t *w, screen_t *scr)
 
 static void yesno_open(walk_t *w, screen_t *scr);
 static void ask_open(walk_t *w, screen_t *scr);
+static void look_round(walk_t *w, screen_t *scr, unsigned port60);
 
 /* 0x19b9a: the talk itself. The world window doubled (0x2c658, as at a battle's start, then shown); which of the villager's five entries
  * (7 bytes from 0xc: a flag that must be set, the flag it sets or a member who joins, a kind, the first message) is the last one whose
@@ -1379,6 +1408,10 @@ static void talk_round(walk_t *w, screen_t *scr, unsigned port60)
         ask_round(w, scr, port60);
         return;
     }
+    if (w->talking == 4) {
+        look_round(w, scr, port60);
+        return;
+    }
     int mx, my;
     unsigned mb = 0;
     int on = walk_mouse(w, &mx, &my, &mb);
@@ -1392,13 +1425,10 @@ static void talk_round(walk_t *w, screen_t *scr, unsigned port60)
     talk_done(w, scr, 1);
 }
 
-/* F1 (0x14d62 .. 0x153ca): the world drawn again and darkened twice, a dimmed copy of the palette's first 45 bytes, the button pressed;
- * then the cell the hero faces and the two beside it are looked at, up to three cells away, for a villager who is not an enemy. One
- * found is turned to the hero for a drawing of the world (darkened once more, not shown) and the talk begins. */
-static void talk_key(walk_t *w, screen_t *scr)
+/* 0x14d62 .. 0x14e94, for every F-key (0x3b .. 0x44): the world drawn again and darkened twice (each shown), and a dimmed copy of the
+ * palette's first 45 bytes (the palette buffer's 48 copied to [bp-0xb0]): what the F-keys' message boxes step their palette on. */
+static void fkey_begin(walk_t *w, screen_t *scr)
 {
-    walk_scene_t *s = w->scene;
-    uint8_t *party = s->tab_b;
     fkey_frame(w);
     for (int t = 0; t < 2; t++) {
         fkey_shade(w);
@@ -1407,6 +1437,15 @@ static void talk_key(walk_t *w, screen_t *scr)
     memcpy(w->dimpal, w->palbuf, sizeof w->dimpal);
     for (int i = 0; i < 0x2D; i++)
         w->dimpal[i] = w->dimpal[i] > 0x10 ? (uint8_t)(w->dimpal[i] - 0x10) : 0;
+}
+
+/* F1 (0x14e94 .. 0x153ca): the button pressed; then the cell the hero faces and the two beside it are looked at, up to three cells
+ * away, for a villager who is not an enemy. One found is turned to the hero for a drawing of the world (darkened once more, not
+ * shown) and the talk begins. */
+static void talk_key(walk_t *w, screen_t *scr)
+{
+    walk_scene_t *s = w->scene;
+    uint8_t *party = s->tab_b;
     if (w->mouse_on)
         walk_mouse_put(scr, w->mprev, w->mbg, 0);
     walk_button_toggle(scr, 0x284, 0x2F, 0x14);   /* 0x1c3ba: F1's button pressed */
@@ -1458,12 +1497,151 @@ static void talk_key(walk_t *w, screen_t *scr)
     talk_done(w, scr, 0);
 }
 
+/* ---- F2: looking (0x157f5 .. 0x15a89) ---- */
+
+/* The end of a look: F2's button let go (no pointer kept again, unlike F1); then 0x1729e, as for every F-key. */
+static void look_done(walk_t *w, screen_t *scr)
+{
+    walk_button_toggle(scr, 0x1B84, 0x2F, 0x14);
+    w->talking = 0;
+    records_again(w, 0x384 / WS_RECORD_SIZE);
+}
+
+/* Opens the box of message w->talk_msg for a look (0x1afb0: colour 0xb0, the wait flag, the palette steps on [bp-0xb0]); 0 when it
+ * waits. */
+static int look_open(walk_t *w, screen_t *scr)
+{
+    int r = msgbox_open(&w->box, scr, w->font8, w->table, w->buf + 0x7305, w->talk_msg, 0xB0, 1);
+    if (r < 0) {
+        note_unbuilt(w, "a message that MES_TXT.LCC does not have", w->talk_msg);
+        return -1;
+    }
+    if (r > 0)
+        note_unbuilt(w, "a character the message font does not have", w->talk_msg);
+    w->talking = 4;
+    return 0;
+}
+
+/* 0x1c5e2: picture `pic` (1 ..) of SPIC.LCZ, 100 x 70 bytes not packed at (pic - 1) * 7000, read into the world buffer's start; a
+ * frame of colour 0x28 round it, 102 x 72 at (109, 45) (0x27123), and the picture inside it (0x25b94). */
+static void look_picture(walk_t *w, screen_t *scr, unsigned pic)
+{
+    if (assets_read_at("spic.lcz", (size_t)(pic - 1) * 7000, w->buf, 7000) != 0) {
+        note_unbuilt(w, "a picture that SPIC.LCZ does not have", pic);
+        return;
+    }
+    fill(scr, 0x38AD, 102, 1, 0x28);
+    fill(scr, 0x38AD + 71 * SCREEN_W, 102, 1, 0x28);
+    fill(scr, 0x38AD + SCREEN_W, 1, 70, 0x28);
+    fill(scr, 0x38AD + SCREEN_W + 101, 1, 70, 0x28);
+    put(scr, 0x39EE, w->buf, 100, 70);
+}
+
+/* F2: the button pressed (the pointer's corner put back first, not kept again); two cells, the hero's own and the one to its right
+ * (facing up or down) or below it (facing left or right), are looked at, then each a cell further the way he faces, three times, for
+ * a scene record of kind 9 (0x2c28f). The hero's walk counter and frame ([bp-0x3c], [bp-0x5e]) hold the first cell's x and y (in the
+ * records' units) as they step. A record found: its picture (byte 0xe, when not 0), then its message, one box each as long as a
+ * text ends in 0x7f. The message is the one before the first of its three entries (from byte 3: a flag, its bit, the message) whose
+ * flag is not set, or before the first whose message is 0, or the last: before the first entry, the record's bytes 1 and 2. */
+static void look_key(walk_t *w, screen_t *scr)
+{
+    walk_scene_t *s = w->scene;
+    uint8_t *party = s->tab_b;
+    if (w->mouse_on)
+        walk_mouse_put(scr, w->mprev, w->mbg, 0);
+    walk_button_toggle(scr, 0x1B84, 0x2F, 0x14);   /* 0x1c3ba: F2's button pressed */
+    uint8_t x0 = party[0] & 0xFE, y0 = party[1] >> 1, x1 = x0, y1 = y0;
+    unsigned dir = party[2];
+    if (dir < 2)
+        x1 = (uint8_t)(x1 + 2);
+    else
+        y1 = (uint8_t)(y1 + 1);
+    unsigned si = 0x2EE;
+    for (int step = 0; step < 3; step++) {
+        si = walk_look_record(s->tab_a, x0, y0);
+        if (si == 0x2EE)
+            si = walk_look_record(s->tab_a, x1, y1);
+        if (si < 0x2EE)
+            break;
+        if (dir == 0) {
+            y0--;
+            y1--;
+        } else if (dir == 1) {
+            y0++;
+            y1++;
+        } else if (dir == 2) {
+            x0 = (uint8_t)(x0 - 2);
+            x1 = (uint8_t)(x1 - 2);
+        } else if (dir == 3) {
+            x0 = (uint8_t)(x0 + 2);
+            x1 = (uint8_t)(x1 + 2);
+        }
+    }
+    w->ctr = x0;
+    w->hero_frame = y0;
+    if (si >= 0x2EE) {
+        look_done(w, scr);
+        return;
+    }
+    const uint8_t *r = s->tab_a + 1000 + si;
+    if (r[0xE] != 0)
+        look_picture(w, scr, r[0xE]);
+    w->talk_msg = w16(r, walk_look_entry(party, r) - 2);
+    if (look_open(w, scr) != 0)
+        look_done(w, scr);
+}
+
+/* The palette step of a look's box: on the dimmed copy, as a talk's (the same [bp-0xb0]). */
+static void look_step(void *ctx, screen_t *scr)
+{
+    palette_cycle_on(ctx, scr, ((walk_t *)ctx)->dimpal);   /* look */
+}
+
+/* A round of a look's message box: when it closes, the next message if the text ended in 0x7f, else the end of the look. */
+static void look_round(walk_t *w, screen_t *scr, unsigned port60)
+{
+    int mx, my;
+    unsigned mb = 0;
+    int on = walk_mouse(w, &mx, &my, &mb);
+    if (!msgbox_round(&w->box, scr, port60, on, mb, look_step, w))
+        return;
+    if (w->box.last == 0x7F) {
+        w->talk_msg++;
+        if (look_open(w, scr) == 0)
+            return;
+    }
+    look_done(w, scr);
+}
+
+unsigned walk_look_record(const uint8_t *tab_a, unsigned x, unsigned y)
+{
+    for (unsigned bx = 0; bx < 0x2EE; bx += WS_RECORD_SIZE) {
+        const uint8_t *r = tab_a + 1000 + bx;
+        if (r[0] == x && r[1] == y && r[2] == 9)
+            return bx;
+    }
+    return 0x2EE;
+}
+
+unsigned walk_look_entry(const uint8_t *party, const uint8_t *r)
+{
+    unsigned k = 3;
+    for (;;) {
+        if (!walk_flag_test(party, r[k], r[k + 1]))
+            break;
+        k += 4;
+        if (k == 15 || w16(r, k + 2) == 0)
+            break;
+    }
+    return k;
+}
+
 int walk_kind(const walk_t *w)
 {
-    static const int kind[4] = {0, 4, 8, 9};
+    static const int kind[5] = {0, 4, 8, 9, 4};
     if (w->boss_box)
         return 4;
-    return kind[w->talking & 3];
+    return kind[w->talking];
 }
 
 /* 0x2c8a0: the key a left press at (x, y) stands for. While an arrow was the last key (`last`), or over the play window, the arrow
@@ -1553,7 +1731,13 @@ static int walk_keys(walk_t *w, unsigned port60)
         return 0;
     }
     if (k == 0x3B && w->scr) {   /* F1: talk */
+        fkey_begin(w, w->scr);
         talk_key(w, w->scr);
+        return 1;
+    }
+    if (k == 0x3C && w->scr) {   /* F2: look */
+        fkey_begin(w, w->scr);
+        look_key(w, w->scr);
         return 1;
     }
     if (!arrow && k != 0) {
@@ -1982,14 +2166,19 @@ void walk_zoom_scale(uint8_t *dst, const uint8_t *src, unsigned sw, unsigned sh)
     }
 }
 
+void walk_zoom_keep(walk_t *w)
+{
+    fkey_frame(w);
+    for (int r = 0; r < WALK_ZOOM_H; r++)
+        memcpy(w->zoom_grab + r * WALK_ZOOM_W, w->buf + 0xE10 + r * WALK_W, WALK_ZOOM_W);
+    w->scene->view_head = w->zoom_grab;   /* the map buffer's start: what the view reads above the map's top */
+}
+
 void walk_zoom_step(walk_t *w, screen_t *scr, int k)
 {
     static uint8_t crop[WALK_ZOOM_W * WALK_ZOOM_H + 1], out[WALK_ZOOM_W * WALK_ZOOM_H];
-    if (k == 0) {   /* the world drawn as the F-keys draw it (the party standing; doubled in a dark scene), its window grabbed */
-        fkey_frame(w);
-        for (int r = 0; r < WALK_ZOOM_H; r++)
-            memcpy(w->zoom_grab + r * WALK_ZOOM_W, w->buf + 0xE10 + r * WALK_W, WALK_ZOOM_W);
-    }
+    if (k == 0)   /* the world drawn as the F-keys draw it (the party standing; doubled in a dark scene), its window grabbed */
+        walk_zoom_keep(w);
     /* step k: the w x h middle of the grab (24 x 24 growing by 14 x 12, the corner 0x3654 - 0x487 k) scaled to the window */
     unsigned cw = 24 + 14 * (unsigned)k, ch = 24 + 12 * (unsigned)k, off = 0x3654 - 0x487 * (unsigned)k;
     for (unsigned r = 0; r < ch; r++)

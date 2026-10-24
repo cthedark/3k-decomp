@@ -59,6 +59,9 @@ int walk_begin_shown(walk_t *w, screen_t *scr, uint32_t seed, uint32_t ticks, vo
  * (64, 16). The original waits for nothing between the steps. walk_zoom_step draws step k (0 .. 12; step 0 also draws and grabs). */
 enum { WALK_ZOOM_W = 192, WALK_ZOOM_H = 168, WALK_ZOOM_STEPS = 13 };
 void walk_zoom_step(walk_t *w, screen_t *scr, int k);
+/* Step 0's drawing and grab alone (0x172df: into the map buffer [bp-0xba], which the view reads above the map's top), nothing shown:
+ * for a start without the zoom on screen (tests/walk_dump.c). */
+void walk_zoom_keep(walk_t *w);
 /* 0x26e5f: `src` (sw x sh, one byte more readable) scaled to WALK_ZOOM_W x WALK_ZOOM_H in `dst`, which is cleared first. Steps of
  * 0xffff * sw / 192 across and 0xffff * sh / 168 down, added from 1: each source pixel is written only at the destination pixel where
  * the step carries, every other pixel and row stays 0, so a small part comes out as spaced dots. */
@@ -198,6 +201,12 @@ void walk_trail_step(uint8_t trail[WS_TRAIL_BYTES], uint8_t *party, unsigned x, 
 /* (0x2c098) The offset in the villager table's records of the first scene record at the hero's position (x with its low bit cleared,
  * y >> 1), 0x2ee if there is none (or 0x320 for a kind 5 record under odd coordinates). */
 unsigned walk_find_record(const uint8_t *tab_a, unsigned x, unsigned y);
+/* (0x2c28f) F2: the offset of the first scene record at (x, y) in the records' units whose kind is 9 (something to look at), 0x2ee if
+ * there is none. */
+unsigned walk_look_record(const uint8_t *tab_a, unsigned x, unsigned y);
+/* (0x15959 .. 0x15a09) The offset in kind 9 record `r` just past the message F2 shows, which is the word 2 bytes before it: entries of
+ * 4 bytes from byte 3 (a flag, its bit, the message) are passed while their flag is set and the next one has a message, at most 3. */
+unsigned walk_look_entry(const uint8_t *party, const uint8_t *r);
 /* (0x1252c) How far into the buffer the window is read for a bump of strength `v48` (2, then 1) given the random value `r` (0 .. 0x7fff):
  * t = 4 * v48, d = 0x7fff / t + 1, a = r / d; when a is above v48 the offset is (a - v48) * 224 (1 to 5 rows), else a (0 to 2 pixels). */
 unsigned walk_shake_offset(unsigned v48, unsigned r);
@@ -253,7 +262,9 @@ unsigned walk_rand(uint32_t *state);
 
 /* (0x2c362) 25 x 23 ground tiles from map tile (x/2 - 11, y/2 - 10); the first at buffer (16, 16), 4 pixels
  * further left for an odd x and 4 rows further up for an odd y. A tile number is a 16-bit word shifted left by 6
- * (in 16 bits) into the tile data. Map cells outside the map are taken as tile 0. */
+ * (in 16 bits) into the tile data. The cell's offset is worked out in bytes and 16 bits as the original's is, so past the map's
+ * edges it reads what follows the map in the original's segment (walk_seg_byte), and a tile offset past the tile data wraps into
+ * the object sprites (findings.md "WALK.SL step 27"). */
 void walk_draw_ground(uint8_t *buf, const walk_scene_t *s, unsigned x, unsigned y);
 
 /* (0x2c456) The same grid over the object map; a number below 0xff is blitted as (screen & mask) | pixel. */

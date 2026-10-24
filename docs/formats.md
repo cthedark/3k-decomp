@@ -136,7 +136,8 @@ known), **unknown**.
   How a literal `esc` byte is stored is not known.
 - 33 of the 36 non-voice `.LCZ` files parse cleanly to the end of the file with
   this rule. Failures: `NUMBER.LCZ` (raw font, not chunked), `SPIC.LCZ` and
-  `STORY5_1.LCZ` (a chunk size field is inconsistent: not understood).
+  `STORY5_1.LCZ` (a chunk size field is inconsistent: not understood). (2026-10-24: `SPIC.LCZ` is not chunked but 13 raw 100 x 70
+  pictures; `findings.md` "WALK.SL step 26".)
 - `STORY0_1.LCZ` is not an image container: it is a single Creative Voice File
   clip with **codec 1** (Creative 4-bit ADPCM, about 6,060 Hz, 20.87 s). (An earlier version
   of this file said "not decoded"; it is decoded now, see "VOC codec 1" below.) It is the
@@ -285,7 +286,8 @@ looked right.
 - `BOAT.LCZ`: chunks 0 and 1 (192x168, 192x29) decode, but the colours are wrong
   with the `ANI.LCP` palette (yellow clouds), so this scene probably uses its own
   palette. Chunk 2 (14,880 bytes) is still noise at 96x155.
-- `CAST2.LCZ` (24,900), `SPIC.LCZ` (both chunks), `STORY3_1.LCZ` chunk 1 (330
+- `CAST2.LCZ` (24,900), `SPIC.LCZ` (both chunks; answered 2026-10-24: 13 raw 100 x 70 pictures, `findings.md` "WALK.SL step 26"),
+  `STORY3_1.LCZ` chunk 1 (330
   bytes), `ENDING1T.LCZ` (14,160 = not a multiple of 600) and `ENDING4T.LCZ` (6,600 =
   11 x 600, probably subtitle lines like `STORYn_T`): not placed.
 - **Warning on width guessing:** the row-similarity heuristic prefers narrow

@@ -279,7 +279,7 @@ m("walk.c", "talk: palette not dimmed", "        w->dimpal[i] = w->dimpal[i] > 0
 m("walk.c", "talk: button not pressed", "    walk_button_toggle(scr, 0x284, 0x2F, 0x14);   /* 0x1c3ba: F1's button pressed */", "    (void)0;")
 m("walk.c", "button: inside turned too", "        memcpy(outer + (r + 2) * w + 2, inner + r * (w - 4), w - 4);", "        (void)inner;")
 m("walk.c", "talk: cells beside not looked at", "        px[1] = (uint8_t)(px[1] - 2);\n        px[2] = (uint8_t)(px[2] + 2);", "        px[1] = (uint8_t)(px[1] - 0);\n        px[2] = (uint8_t)(px[2] + 0);")
-m("walk.c", "talk: two cells only", "    for (int step = 0; step < 3; step++) {", "    for (int step = 0; step < 2; step++) {")
+m("walk.c", "talk: two cells only", "    for (int step = 0; step < 3; step++) {\n        for (int v = 0;", "    for (int step = 0; step < 2; step++) {\n        for (int v = 0;")
 m("walk.c", "talk: villager not turned", "                if (dir < 4)\n                    r[2] = facing[dir];", "                (void)facing;")
 m("walk.c", "talk: walk counter kept", "            w->ctr = vx;   /* [bp-0x3c]", "            (void)vx;   /* [bp-0x3c]")
 m("walk.c", "talk: no zoom", "            d[0] = p;\n            d[1] = q;\n            d[SCREEN_W] = q;\n            d[SCREEN_W + 1] = w->table[q];", "            (void)d; (void)q;")
@@ -287,7 +287,7 @@ m("walk.c", "talk: the first entry always", "    while (k < 0x2F && w16(r, k + 5
 m("walk.c", "talk: the entry after the last set flag", "    if (k > 0xC)\n        k -= 7;\n    unsigned e", "    unsigned e")
 # "talk: flag not set" is left out: every talk entry in scene 0 sets flag 0 bit 0, which is set from the start (a cleared one is set
 # again by the scene's records before any talk), so it cannot differ in the starts the comparison can run.
-m("walk.c", "talk: no next message", "    if (w->box.last == 0x7F) {", "    if (w->box.last == 0x17F) {")
+m("walk.c", "talk: no next message", "    if (w->box.last == 0x7F) {\n        w->talk_msg++;\n        if (talk_open", "    if (w->box.last == 0x17F) {\n        w->talk_msg++;\n        if (talk_open")
 m("walk.c", "talk: palette steps on the real palette", "    walk_t *w = ctx;\n    palette_cycle_on(w, scr, w->dimpal);", "    walk_t *w = ctx;\n    palette_cycle_on(w, scr, w->palbuf);")
 # "talk: gold not drawn again" is left out: the coins cannot change in a talk until selling is built, and drawing the same number again
 # changes nothing.
@@ -426,6 +426,57 @@ m("voc.c", "voc: 2-bit low bits first", "for (int s = 6; s >= 0; s -= 2)", "for 
 m("voc.c", "voc: step does not shrink", "    else if (m == 0 && *r > 0)\n        (*r)--;\n    return (uint8_t)*level;\n}\n\nsize_t voc_adpcm_decode",
   "    return (uint8_t)*level;\n}\n\nsize_t voc_adpcm_decode")
 m("voc.c", "voc: frames of a 2-bit block", "    return codec == 0 ? 1 : codec + 1;", "    return codec == 0 ? 1 : codec == 3 ? 3 : codec + 1;")
+# F2, looking (step 26; RUNS=look). Left out: the pointer's corner put back before the button (the pointer is not over F2 in any
+# start but look_mouse's click, and the click's press already shows it); the records run again after a look (a look sets no flag, and
+# with the shipped flags no scene's records change anything when run again, after up to 400 passes of animation: work/b8/rerun.c; a
+# kind 0x0d record turned on by an earlier talk could reset a villager who moved since).
+m("walk.c", "look: no prelude", "        fkey_begin(w, w->scr);\n        look_key(w, w->scr);", "        look_key(w, w->scr);")
+m("walk.c", "look: button not pressed", "    walk_button_toggle(scr, 0x1B84, 0x2F, 0x14);   /* 0x1c3ba: F2's button pressed */", "    (void)0;")
+m("walk.c", "look: button stays pressed", "static void look_done(walk_t *w, screen_t *scr)\n{\n    walk_button_toggle(scr, 0x1B84, 0x2F, 0x14);",
+  "static void look_done(walk_t *w, screen_t *scr)\n{\n    (void)0;")
+m("walk.c", "look: second cell to the left", "        x1 = (uint8_t)(x1 + 2);\n    else", "        x1 = (uint8_t)(x1 - 2);\n    else")
+m("walk.c", "look: second cell above", "        y1 = (uint8_t)(y1 + 1);\n    unsigned si", "        y1 = (uint8_t)(y1 - 1);\n    unsigned si")
+m("walk.c", "look: no second cell", "        if (si == 0x2EE)\n            si = walk_look_record(s->tab_a, x1, y1);", "        (void)x1; (void)y1;")
+m("walk.c", "look: two steps only", "    unsigned si = 0x2EE;\n    for (int step = 0; step < 3; step++) {", "    unsigned si = 0x2EE;\n    for (int step = 0; step < 2; step++) {")
+m("walk.c", "look: up goes down", "        if (dir == 0) {\n            y0--;\n            y1--;", "        if (dir == 0) {\n            y0++;\n            y1++;")
+m("walk.c", "look: left goes right", "            x0 = (uint8_t)(x0 - 2);\n            x1 = (uint8_t)(x1 - 2);", "            x0 = (uint8_t)(x0 + 2);\n            x1 = (uint8_t)(x1 + 2);")
+m("walk.c", "look: right one cell short", "            x0 = (uint8_t)(x0 + 2);\n            x1 = (uint8_t)(x1 + 2);\n        }\n    }", "            x0 = (uint8_t)(x0 + 1);\n            x1 = (uint8_t)(x1 + 1);\n        }\n    }")
+m("walk.c", "look: walk counter kept", "    w->ctr = x0;\n    w->hero_frame = y0;", "    w->hero_frame = y0;")
+m("walk.c", "look: hero frame kept", "    w->ctr = x0;\n    w->hero_frame = y0;", "    w->ctr = x0;")
+m("walk.c", "look: any kind", "        if (r[0] == x && r[1] == y && r[2] == 9)", "        if (r[0] == x && r[1] == y)")
+m("walk.c", "look: no picture", "    if (r[0xE] != 0)\n        look_picture(w, scr, r[0xE]);", "    (void)0;")
+m("walk.c", "look: next picture", "(size_t)(pic - 1) * 7000", "(size_t)pic * 7000")
+m("walk.c", "look: no frame", "    fill(scr, 0x38AD, 102, 1, 0x28);", "    (void)0;")
+m("walk.c", "look: frame's right side missing", "    fill(scr, 0x38AD + SCREEN_W + 101, 1, 70, 0x28);", "    (void)0;")
+m("walk.c", "look: frame colour", "    fill(scr, 0x38AD + 71 * SCREEN_W, 102, 1, 0x28);", "    fill(scr, 0x38AD + 71 * SCREEN_W, 102, 1, 0x29);")
+m("walk.c", "look: picture a pixel left", "    put(scr, 0x39EE, w->buf, 100, 70);", "    put(scr, 0x39ED, w->buf, 100, 70);")
+m("walk.c", "look: picture not into the world buffer", "assets_read_at(\"spic.lcz\", (size_t)(pic - 1) * 7000, w->buf, 7000)",
+  "assets_read_at(\"spic.lcz\", (size_t)(pic - 1) * 7000, w->buf + 0x8000, 7000)")
+m("walk.c", "look: message's own entry", "    w->talk_msg = w16(r, walk_look_entry(party, r) - 2);", "    w->talk_msg = w16(r, walk_look_entry(party, r) + 2);")
+m("walk.c", "look: entries' flags not tested", "        if (!walk_flag_test(party, r[k], r[k + 1]))\n            break;\n        k += 4;", "        k += 4;")
+m("walk.c", "look: entries go on past a 0", "        if (k == 15 || w16(r, k + 2) == 0)", "        if (k == 15)")
+m("walk.c", "look: talk's colour", "w->talk_msg, 0xB0, 1);", "w->talk_msg, 0x50, 1);")
+m("walk.c", "look: no chain", "    if (w->box.last == 0x7F) {\n        w->talk_msg++;\n        if (look_open(w, scr) == 0)", "    if (0) {\n        w->talk_msg++;\n        if (look_open(w, scr) == 0)")
+m("walk.c", "look: palette steps on the palette", "    palette_cycle_on(ctx, scr, ((walk_t *)ctx)->dimpal);   /* look */", "    palette_cycle(ctx, scr);   /* look */")
+m("walk.c", "look: pass not ended", "        look_key(w, w->scr);\n        return 1;", "        look_key(w, w->scr);\n        return 0;")
+# the view past the map's edges (step 27; RUNS=edge). Left out: the art segment's first bytes (only a tile number 0x806a .. 0x807f
+# reads them; no start's view has one) and the villager table in the map segment (only the ground's last row with y / 2 = 127 and x
+# above 228 reaches 0x8c16; no scene lets the hero stand there).
+m("walk.c", "edge: ground column not a byte", "| (((x & 0xFE) - 0x16) & 0xFF);", "| (((x & 0xFE) - 0x16) & 0x1FF);")
+m("walk.c", "edge: ground row not a byte", "    unsigned bx = ((((y >> 1) - 10) & 0xFF) << 8)", "    unsigned bx = ((((y >> 1) - 10) & 0x7F) << 8)")
+m("walk.c", "edge: object row not a byte", "    unsigned bx = (((((y >> 1) - 10) & 0xFF) << 7)", "    unsigned bx = (((((y >> 1) - 10) & 0x7F) << 7)")
+m("walk.c", "edge: object column not a byte", "+ ((((x & 0xFF) - 0x16) & 0xFF) >> 1)) & 0xFFFF;", "+ ((((x & 0xFF) - 0x16) & 0x1FF) >> 1)) & 0xFFFF;")
+m("walk.c", "edge: no objects past the map", ": walk_seg_byte(s, off);", ": 0xFF;")
+m("walk.c", "edge: tiles not wrapped", "            if (t + 64 <= 0xFFF2 - 0x7F96) {", "            if (1) {")
+m("walk.c", "edge: sprites not in the art segment", "        return off - 0x16 < s->sprites_len ? s->sprites[off - 0x16] : 0;", "        return 0;")
+m("walk.c", "edge: zoom's window not kept", "    w->scene->view_head = w->zoom_grab;", "    (void)0;")
+m("walkscene.c", "edge: segment head zero", "    if (off < 0x16)\n        return seg_head[off];", "    if (off < 0x16)\n        return 0;")
+m("walkscene.c", "edge: no bank below the map", "        return s->bank1 ? s->bank1[off - 0x6416] : 0;", "        return 0;")
+m("walkscene.c", "edge: no NUMBER bytes", "        return s->number_tail[off - 0xC500];", "        return 0;")
+m("walkscene.c", "edge: no oval in the segment", "        return s->dark_mask && off - 0xCA86 < s->dark_mask_len ? s->dark_mask[off - 0xCA86] : 0;", "        return 0;")
+m("walkscene.c", "edge: next head zero", "        return seg_next[off - 0xFB86];", "        return 0;")
+m("walkscene.c", "edge: no map buffer", "    return s->view_head ? s->view_head[off - 0xFBA6] : 0;", "    return 0;")
+m("walkscene.c", "edge: raw block not kept", "    s->view_head = s->raw_head;", "    s->view_head = NULL;")
 
 
 def main():

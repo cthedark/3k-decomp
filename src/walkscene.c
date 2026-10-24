@@ -25,6 +25,41 @@ void walk_flag_set(uint8_t *tab_b, unsigned idx, unsigned bit)
     tab_b[WS_FLAGS_AT + idx] |= (uint8_t)((1u << (bit & 31)) & 0xFF);
 }
 
+/* The original's map segment (the 0xfb70 bytes allocated at 0x1019c, at offset 0x16 of its segment; SEEN in the oracle at pass 5,
+ * work/b8/probe_gmap.py, and compared with the port's buffers): 0x16 the ground map (0x6400), 0x6416 the villagers' sprite bank
+ * (0x2800), 0x8c16 the villager table and records (0x6ea), 0x9300 the object map (0x3200), 0xc500 NUMBER.LCZ's 0x585 bytes, 0xca85 a 0,
+ * 0xca86 the dark scenes' oval (0x3100), then the allocator's header of the next block and the map buffer [bp-0xba] from 0xfba6.
+ * The two headers (0 .. 0x15 and 0xfb86 .. 0xfba5) hold the oracle's segment numbers and sizes: what DOS gave that run, a GUESS for
+ * any other machine. */
+static const uint8_t seg_head[0x16] = {0xC0, 0x6D, 0x03, 0x00, 0x90, 0xFB, 0x14, 0x00, 0x14, 0x00, 0x8E,
+                                       0xFB, 0x00, 0x00, 0x79, 0x7D, 0x00, 0x00, 0xEB, 0x5D, 0x70, 0xFB};
+static const uint8_t seg_next[0x20] = {0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFE, 0xFF, 0x79, 0x7D, 0x03, 0x00, 0x30, 0xEE,
+                                       0x14, 0x00, 0x20, 0xEE, 0x2E, 0xEE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, 0x6D, 0x0A, 0xEE};
+
+unsigned walk_seg_byte(const walk_scene_t *s, unsigned off)
+{
+    off &= 0xFFFF;
+    if (off < 0x16)
+        return seg_head[off];
+    if (off < 0x6416)
+        return s->gmap[off - 0x16];
+    if (off < 0x8C16)
+        return s->bank1 ? s->bank1[off - 0x6416] : 0;
+    if (off < 0x9300)
+        return s->tab_a[off - 0x8C16];
+    if (off < 0xC500)
+        return s->omap[off - 0x9300];
+    if (off < 0xCA85)
+        return s->number_tail[off - 0xC500];
+    if (off < 0xCA86)
+        return 0;
+    if (off < 0xFB86)
+        return s->dark_mask && off - 0xCA86 < s->dark_mask_len ? s->dark_mask[off - 0xCA86] : 0;
+    if (off < 0xFBA6)
+        return seg_next[off - 0xFB86];
+    return s->view_head ? s->view_head[off - 0xFBA6] : 0;   /* [bp-0xba]: only the rows above the map read it */
+}
+
 /* A write that stays inside its buffer; otherwise remember that the load must fail. */
 static int g_oob;
 static void put16(uint8_t *b, size_t len, unsigned o, unsigned v)
@@ -233,6 +268,8 @@ walk_scene_t *walk_scene_load(void)
     if (!raw)
         goto fail;
     memcpy(s->header, raw, 6);
+    memcpy(s->raw_head, raw, mlen < sizeof s->raw_head ? mlen : sizeof s->raw_head);
+    s->view_head = s->raw_head;
     s->weather = s->header[4];
     tb[518] = raw[1];
     size_t dlen = 0;
@@ -307,6 +344,10 @@ walk_scene_t *walk_scene_load(void)
         s->song_len = w16(rp, at + 3);
     }
     s->speed_class = rp[0];
+    /* 0x10aaf: NUMBER.LCZ 0x359b, 0x585 bytes as they are, into [bp-0x28] (the map segment's 0xc500 ..); only the view past the
+     * map's bottom reads it here */
+    if (assets_read_at("NUMBER.LCZ", 0x359B, s->number_tail, sizeof s->number_tail) != 0)
+        memset(s->number_tail, 0, sizeof s->number_tail);
 
     /* The party starts at (byte 512, 2 * byte 513); so does a trail of 13 entries. */
     unsigned x = tb[512], y = (tb[513] << 1) & 0xFF;

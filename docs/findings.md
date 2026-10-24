@@ -470,7 +470,8 @@ Method: Python byte analysis of the `.LCZ` files, then rendering with
 1. How are the 37 chunks that match neither the 64,000-byte rule nor the
    `w*h+4` rule laid out? Animation frames? Try rendering them as sub-images with
    various widths and compare against screenshots.
-2. `SPIC.LCZ` (91 KB) and `STORY5_1.LCZ`: why does a chunk size field look wrong?
+2. `SPIC.LCZ` (91 KB) and `STORY5_1.LCZ`: why does a chunk size field look wrong? (`SPIC.LCZ` answered 2026-10-24, step 26: it is not
+   chunked at all but 13 raw 100 x 70 pictures, the signs F2 shows.)
 3. (answered 2026-10-15) The 21-second sound in `STORY0_1.LCZ` is slide 0's audio, a plain VOC
    with 4-bit ADPCM; see `formats.md`. Still open: is it music or an effect (needs a listener)?
 4. Does `TITLE1.LCZ`'s 7-chunk layout form the title screen? What does the
@@ -517,7 +518,7 @@ Method: `tools/lcz_sheet.py` contact sheets, a row-similarity width estimator
    155, 125, 123, 96, 97, 84, 189, 160, 104, 94 ...) in `STORY2.SL`, `WALK.SL`,
    `MARK.EXE`.
 2. `BOAT.LCZ` chunk 2, `CAST2.LCZ`, `SPIC.LCZ`, `STORY3_1.LCZ` chunk 1,
-   `ENDING1T.LCZ`, `ENDING4T.LCZ`: unresolved.
+   `ENDING1T.LCZ`, `ENDING4T.LCZ`: unresolved. (`SPIC.LCZ` answered 2026-10-24, step 26: 13 raw 100 x 70 pictures.)
 3. Which palette does each file use? `ANI.LCP` fits `STORY*`, `ENDING4`, `ENDING1`
    and `CAST1`; `BOAT` looks wrong with it. Where are the other palettes (the
    rest of `RPG.LCP` and `ANI.LCP`, or inside the code)?
@@ -3184,3 +3185,97 @@ a won battle and the world after it (105 sounds), a party of five (146), spells,
 enemies, a right answer, a story enemy beaten, a walk-in with the monsters first, key 2 off and on again, the sound button clicked.
 Unit tests `test_adpcm_short` (hand-worked samples, blocks, `sfx_passes`) and the real blocks' codecs and lengths. `tools/mutate_battle.py`:
 34 new mutations, all caught (9 by the unit tests). ASan/UBSan clean on five starts. A real-time run with music off wrote sound.
+
+## WALK.SL step 26: F2, looking, 2026-10-24
+
+Built in C and compared pass by pass with the original (`tools/battle_check.py`; the look's box is the message box loop `0x1b506`).
+READ from the code (`0x157f5` .. `0x15a89`, `0x2c28f`, `0x1c5e2`, `0x27123`, `0x25b94`), SEEN in oracle runs (`work/b8/probe_look.py`:
+the calls made, `[bp-0xb0]` dumped at F2's entry), then CONFIRMED by the comparison unless it says otherwise.
+
+**The shared start:** as step 20 says, the world drawn and darkened twice and the dimmed palette copy (`0x14d62` .. `0x14e94`) come
+before every F-key's own code (`[bp-0x58]` 0x3b .. 0x44). The port had put them in F1's handler; they are now `fkey_begin`, called for
+F1 and F2. SEEN again: F2 never makes the copy itself, and the dump at its entry already held the current palette dimmed.
+
+**F2** (`0x157f5`): the pointer's corner is put back and F2's button pressed (47 x 20 at (4, 22), as F1's); the pointer's corner is not
+kept again afterwards, unlike F1. Two cells are looked at: the hero's own (x & ~1, y / 2) and the one to its right when he faces up or
+down, the one below it when he faces left or right; up to three times, a step further the way he faces each time, both cells moving. Each
+is searched for a scene record of kind 9 (`0x2c28f`: the first of the 50 whose x, y and kind match; 0x2ee for none). The hero's walk
+counter and frame (`[bp-0x3c]`, `[bp-0x5e]`) hold the first cell's x and y as they step. With nothing found the button is let go.
+
+**A kind 9 record:** byte 0xe is a picture of `SPIC.LCZ` (1 .. 13; 0 for none), byte 3 on three 4-byte entries (a flag, its bit, a word
+message). The message is the one before the first entry whose flag is not set, or before the first whose message is 0, or the third's:
+the loop at `0x15959` steps while the flag is set and the next entry has a message. Before the first entry are the record's bytes 1 and 2
+(y and the kind), so a record whose first flag is not set would give a message number of 0x09yy; every shipped record's first entry is
+flag 0 bit 0, which the shipped start sets. Shipped second entries: flag 6 bit 0 (scene 2), 49 bit 7 (scenes 16, 32), 5 bit 1 (16),
+42 bit 3 (27), 10 bit 0 (30). The third entry's message is bytes 0xd and 0xe, so its high byte is the picture: none of the records
+with a second entry has a picture, so no shipped third entry has a message.
+
+**The picture** (`0x1c5e2`): `SPIC.LCZ` is 13 pictures of 100 x 70 bytes, not packed (91,000 bytes; the name says LCZ). Picture N is read
+from (N - 1) * 7000 into the start of the world buffer, a frame of colour 0x28 is drawn 102 x 72 at (109, 45) (`0x27123`), and the
+picture is copied inside it at (110, 46) (`0x25b94`). Nothing puts the window back: the next pass draws over it. This answers the
+open questions of the picture files (above) on `SPIC.LCZ`: its pictures are signs (picture 4 is a map with the area of the 宏特羅
+continent).
+
+**The text:** the message box `0x1afb0` with colour 0xb0 and the wait flag, its palette steps on `[bp-0xb0]` (the copy above), then the
+next message while a text ends in 0x7f (scene 6's records 10 and 11 give five boxes). Its third argument, the scratch buffer it reads the
+text into, is the map buffer `[bp-0xba]` here (the screen's segment for a story enemy's box); the port reads the text into its own memory,
+so this has no effect in the port. After the look the button is let go and the pass ends through `0x1729e`, as for F1.
+
+**The facing at the start:** whatever byte 2 of the party record says, the world starts with the hero facing down (dir 1, SEEN in the
+calls; not traced to where it is set). The checks take a step first to face another way.
+
+**Checked:** `tools/check_battle.sh`, 22 new `look_` starts, all identical at every pass: a sign held 100 passes (two palette steps);
+found on the third step, not found from four cells, found by the second cell; facing left, right and up; pictures 2 to 6 and 8 (scene 6,
+dark); five boxes and two; scene 2's second entry with its flag set and not; F2 clicked with the mouse and closed with the right button;
+four 2,500-pass walks with F2 three times in four and F1 the fourth (`tools/walk_keys.py look`). F1's starts unchanged after the move.
+Unit test `test_look` (the record search and the entry rule, hand-worked). `tools/mutate_battle.py`: 27 new mutations, all caught (3 by
+the unit test); one left out with a note: the records run again after a look, which changes nothing in any scene with the shipped
+flags (`work/b8/rerun.c` re-ran every scene's records after up to 400 passes of animation). ASan/UBSan clean on five starts. A real-time
+run under SDL's dummy drivers looked twice without trouble.
+
+**Found on the way, not fixed:** a start with the hero within 9 cells of the map's top (y / 2 <= 9) differs from the original on its first
+pass, in lit and dark scenes alike (scene 1 at y / 2 = 5 and 9, scenes 6, 9 and 13 at 9): the original's window shows the map's top rows
+as a jumble of tiles where the port shows plain ground. `walk_draw_ground` reads nothing above the map (word 0 there); the original
+apparently reads whatever is before it. Not looked into further; no check started that near the top before. (Fixed the next day, the
+same date: step 27.)
+
+## WALK.SL step 27: the view past the map's edges, 2026-10-24
+
+Fixed in C and compared pass by pass. READ from the code (`0x2c362`, `0x2c456`, the start-up's allocations `0x10057`, `0x1019c`,
+`0x10204`, the reads `0x10aaf` and `0x172df`), SEEN in the oracle (`work/b8/probe_gmap.py`: both drawings' segments dumped at pass 5, then
+compared buffer by buffer with the port's, `work/b8/segcmp.c`, `artcmp.c`, `headcmp.c`), then CONFIRMED by the comparison.
+
+**What the drawing does at the edges.** The ground (`0x2c362`) works out its first cell in two bytes, `bh` = y / 2 - 10 and `bl` =
+(x & ~1) - 0x16, so above the map's top the row wraps to 0xf6 .. 0xff and left of its left edge the column wraps within the row; it
+then adds 2 a cell and 0xce a row in 16 bits, from the map's offset in its segment (0x16), and those wrap at 64 KB too. The objects
+(`0x2c456`) do the same in bytes (row << 7, column / 2, from the object map's 0x9300). So past an edge the view reads what lies there
+in the segment, never zeros. The port had taken cells outside the map as tile 0 (and the object columns as rounded-down negatives;
+the unit test that pinned that was wrong and is corrected).
+
+**The map segment** (0xfb70 bytes from `0x1019c`, at its segment's 0x16): the ground map (0x6400), the villagers' sprite bank
+(0x2800), the villager table and records (0x6ea), the object map (0x3200), `NUMBER.LCZ` 0x359b's 0x585 bytes as read (`0x10aaf`, for
+the rewards bar), a 0, the dark scenes' oval (0x3100); then the allocator's header of the next block and the map buffer `[bp-0xba]` from
+0xfba6, which holds the scene's `__2.ALL` block as read until the start zoom keeps its 192 x 168 window there (`0x172df`). Below the map
+the view reads the sprite bank (and the objects the end of the object map, the `NUMBER` bytes and the oval); above it, the oval's end,
+the header and the zoom's window, and at the top right the segment's own first 0x16 bytes.
+
+**The art segment** (0xffdc bytes from `0x10057`): the object sprites at 0x16 (0x7f80), the tiles at 0x7f96. A word read past the map
+gives tile numbers whose offset (word << 6, 16 bits) can pass the segment's end and wrap into the sprites (FOUND: below the bottom the
+original's tiles there were the sprites' pixels, not zeros).
+
+**A GUESS:** the allocator's headers (the segment's 0 .. 0x15, 0xfb86 .. 0xfba5, the art segment's 0 .. 0x15 and 0xfff2 ..) hold the
+segment numbers and sizes DOS gave the oracle's run; the port uses those bytes. Only the top edge's right end reads them, and no
+place there can be stood on.
+
+**Where it matters in play.** `work/b8/edges.c` tried every place the hero can stand in the 53 scenes: none is within 10 cells of the
+top or 11 of the left, but the bottom (y / 2 > 87) is reachable in scenes 2, 3, 4, 5, 7, 9, 24, 33 and 50 and the right (x > 228) in
+1, 2, 3, 7, 9, 38 and 42. The right edge already matched (the columns run on into the next row, in both). The bottom is the real fix.
+
+**Not modelled:** F1's cells and a look's text written into the map buffer's first bytes (step 20, step 26), which the rows above the
+map would then show; no place there can be stood on.
+
+**Checked:** `tools/check_battle.sh`, 11 new `edge_` starts, all identical at every pass: above the top (lit at y / 2 = 5 and 9, at the
+right end, dark scene 13), left of the left edge, below the bottom in scenes 2, 4, 7 and 24, and walks along the bottom of scenes 4 and 2.
+`tests/walk_dump.c` now keeps the zoom's window at its start (`walk_zoom_keep`), as the game does. Unit tests for an object column
+and row past the edges and a ground row below the map. `tools/mutate_battle.py`: 15 new mutations, all caught (3 by the unit tests);
+two left out with notes (no start reaches them).

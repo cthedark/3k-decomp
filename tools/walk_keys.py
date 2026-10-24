@@ -13,6 +13,7 @@ Usage: tools/walk_keys.py fuzz SEED NPASSES    random presses and releases of th
                                                around the house door (x 34 .. 44), so scene records are stepped on again and again
        tools/walk_keys.py talk SEED NPASSES    short walks with the arrows, each followed by F1 (talk) one time in two, then Space or Enter
                                                every 30 to 90 passes (a message box takes a key after a release)
+       tools/walk_keys.py look SEED NPASSES    the same with F2 (look) three times in four and F1 the fourth
 Codes: 0x48 up, 0x50 down, 0x4b left, 0x4d right; the break code is the make code + 0x80.
 """
 import random
@@ -100,7 +101,7 @@ def door(seed, n):
     return [f"--key {p}:{c:#x}" for p, c in ((10, 0x4D), (16, 0xCD), (30, 0x48), (130, 0xC8), (150, 0x50), (260, 0xD0))]
 
 
-def talk(seed, n):
+def talk(seed, n, fkeys=(0x3B,)):
     rng = random.Random(seed)
     make = [0x48, 0x50, 0x4B, 0x4D]
     t, out = 8, []
@@ -110,7 +111,8 @@ def talk(seed, n):
         out += [f"--key {t}:{k:#x}", f"--key {t + hold}:{k + 0x80:#x}"]
         t += hold + rng.randint(1, 6)
         if rng.random() < 0.5:
-            out += [f"--key {t}:0x3b", f"--key {t + 2}:0xbb"]
+            f = rng.choice(fkeys) if len(fkeys) > 1 else fkeys[0]   # one key: no draw, so the F1 scripts stay as they were
+            out += [f"--key {t}:{f:#x}", f"--key {t + 2}:{f + 0x80:#x}"]
             t += 4
             for _ in range(rng.randint(1, 3)):
                 t += rng.randint(30, 90)
@@ -118,6 +120,10 @@ def talk(seed, n):
                 out += [f"--key {t}:{c:#x}", f"--key {t + 2}:{c + 0x80:#x}"]
             t += 4
     return out
+
+
+def look(seed, n):
+    return talk(seed, n, (0x3C, 0x3C, 0x3C, 0x3B))
 
 
 def route(seed, n):
@@ -128,6 +134,7 @@ def route(seed, n):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4 or sys.argv[1] not in ("fuzz", "shoot", "volley", "yoyo", "door", "route", "talk"):
+    if len(sys.argv) != 4 or sys.argv[1] not in ("fuzz", "shoot", "volley", "yoyo", "door", "route", "talk", "look"):
         raise SystemExit(__doc__)
-    print(" ".join({"fuzz": fuzz, "shoot": shoot, "volley": volley, "yoyo": yoyo, "door": door, "route": route, "talk": talk}[sys.argv[1]](int(sys.argv[2]), int(sys.argv[3]))))
+    print(" ".join({"fuzz": fuzz, "shoot": shoot, "volley": volley, "yoyo": yoyo, "door": door, "route": route, "talk": talk,
+                    "look": look}[sys.argv[1]](int(sys.argv[2]), int(sys.argv[3]))))

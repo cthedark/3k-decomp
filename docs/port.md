@@ -1205,3 +1205,22 @@ Key 2 or the button turns them off and on in a battle. This finishes milestone 8
 - **A choice:** a sound's length in passes (35 a second) stands for the card's busy word in the comparisons; in the game it is the sink
   still playing. Nobody has listened to the sounds.
 - **Not built:** the sounds of actions not built (the six F-key handlers' `SND_EF.1` 0x1bf5, a scene record's 0x5571, `0x22c42`'s).
+
+## Milestone 9e: F2, looking (C), built 2026-10-24
+
+F2 (or its button) makes the hero look at a sign: its own cell and the next one across, up to three steps the way he faces, are
+searched for a scene record of kind 9. Found: its picture from `SPIC.LCZ` in a red frame over the window (when it has one), then its
+message boxes (`docs/findings.md` "WALK.SL step 26").
+
+- **Code:** `src/walk.c` (`fkey_begin`, now shared by F1 and F2; `look_key`, `look_picture`, `look_open`, `look_round`, `look_step`,
+  `look_done`, `walk_look_record`, `walk_look_entry`; `talking` 4), `src/walk.h`; `tools/walk_keys.py look`.
+- **Checked:** `tools/check_battle.sh`, 22 new `look_` starts, all identical at every pass; F1's starts unchanged. Unit test `test_look`.
+  `tools/mutate_battle.py` (364): 27 new mutations, all caught; one left out with a note (cannot differ with the shipped data).
+  ASan/UBSan clean on five starts; a real-time run looked twice.
+- **Found, then fixed the same day:** the view past the map's edges (findings step 27): below the map's bottom, reachable in nine
+  scenes, the original draws what follows the ground map in its segment (the villagers' sprite bank, as tile numbers that can wrap into
+  the object sprites), not plain ground. `walk_draw_ground` and `walk_draw_objects` now work out their offsets in bytes and 16 bits as
+  the original does and read the segment's layout past the maps (`walk_seg_byte` in `src/walkscene.c`, `art_byte` in `src/walk.c`;
+  `walk_zoom_keep`). 11 new `edge_` starts identical; 15 new mutations caught, two left out with notes. The allocator's header bytes are
+  the oracle run's (a GUESS; only unreachable places read them).
+- **Not built:** F3 to F10, keys 1 to 4 and A.

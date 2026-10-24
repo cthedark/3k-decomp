@@ -310,6 +310,32 @@ run sb_keys 1 106 36 1500 --sb --key 1:0x81 --key 10:0x03 --key 12:0x83 $KS --ke
     $($PY tools/battle_keys.py 4 1500 --attack --from 590)
 run sb_mouse 1 106 36 300 --sb --world-passes 0 --key 1:0x81 --mouse 0:160:100:0 --mouse 10:290:125:0 --mouse 12:290:125:1 \
     --mouse 14:290:125:0 --mouse 30:290:125:1 --mouse 32:290:125:0 $($PY tools/battle_keys.py 3 300 --attack --from 40)
+# F2, looking (step 26): scene 1's sign at (38, 55) (picture 4, message 219), looked at from above (the start faces the hero down), held
+# 100 passes (two palette steps); from three cells up it is found the third time, from four not at all; from the left by the second
+# cell; facing left, right (the cell below) and up, after a step; the signs with pictures 6, 3 and 5, scene 5's (2) and scene 6's
+# (8, a dark scene); texts that go on (scene 6: five boxes, scene 2: two); scene 2's record 24 with flag 6 bit 0 set (its second entry)
+# and not; F2 clicked and its box closed with the right button; walks with F2 (and F1) now and then in scenes 1 and 0
+L="--key 1:0x81 --key 3:0x3c --key 5:0xbc --key 60:0x39 --key 62:0xb9 --key 120:0x1c --key 122:0x9c --key 180:0x39 --key 182:0xb9"
+L="$L --key 240:0x39 --key 242:0xb9 --key 300:0x39 --key 302:0xb9"
+run look_held 1 38 54 200 --key 1:0x81 --key 50:0x3c --key 52:0xbc --key 150:0x39 --key 152:0xb9
+run look_far3 1 38 53 340 $L; run look_far4 1 38 52 340 $L; run look_second 1 36 54 340 $L
+# the other three ways (the start faces down whatever the party record says): a step first, then F2 as above from pass 20
+L2="$(echo "$L" | sed 's/--key 1:0x81 --key 3:0x3c --key 5:0xbc/--key 20:0x3c --key 22:0xbc/')"
+run look_left 1 42 55 340 --key 1:0x4b --key 3:0xcb $L2; run look_right 1 34 54 340 --key 1:0x4d --key 3:0xcd $L2
+run look_up 1 38 57 340 --key 1:0x48 --key 3:0xc8 $L2
+run look_pic6 1 116 21 340 $L; run look_pic3 1 220 42 340 $L; run look_pic5 1 150 76 340 $L; run look_pic2 5 128 30 340 $L
+run look_dark8 6 36 12 340 --key 1:0x48 --key 3:0xc8 $L2; run look_five 6 120 23 340 $L; run look_two 2 230 17 340 $L
+run look_flag0 2 98 31 340 $L; DOPTS="--byte 5:6:1"; run look_flag1 2 98 31 340 $L; DOPTS=""
+run look_mouse 1 38 54 200 --mouse 0:160:100:0 --mouse 3:20:25:1 --mouse 5:20:25:0 --mouse 60:200:100:2 --mouse 62:200:100:0 \
+    --mouse 90:200:100:2 --mouse 92:200:100:0
+for seed in 1 2 3; do run "look_walk$seed" 1 40 54 2500 $($PY tools/walk_keys.py look $seed 2500); done
+run look_walk0 0 86 35 2500 $($PY tools/walk_keys.py look 4 2500)
+# the view past the map's edges (step 27): above the top (lit, and dark scene 13), left of it, and below the bottom in scenes 2, 4, 7
+# and 24, idle; walks along the bottom of scenes 4 and 2 (tools/walk_keys.py fuzz); F2 near the top (a look's text over the map
+# buffer is not modelled: no start goes there)
+run edge_top5 1 116 5 300; run edge_top9 1 116 9 300; run edge_top9r 1 230 9 300; run edge_dark13 13 100 5 300; run edge_left 1 10 40 300
+run edge_s2 2 22 90 300; run edge_s4 4 22 94 300; run edge_s7 7 138 94 300; run edge_s24 24 26 92 300
+run edge_walk4 4 22 94 1500 $($PY tools/walk_keys.py fuzz 4 1500); run edge_walk2 2 22 90 1500 $($PY tools/walk_keys.py fuzz 2 1500)
 # the world's start zoom (step 23; tools/zoom_check.py): its 13 steps in scenes 0, 1, 34 and four dark scenes (6, 9, 23, 47), from the
 # data directories of the starts above
 case " ${RUNS:-zoom} " in *" zoom"*)

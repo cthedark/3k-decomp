@@ -12,7 +12,8 @@
  * Where the original would read memory it did not set (a tile or sprite number outside the data read, a record
  * pointing outside its map), this module does not guess: the tile and sprite buffers are zero-padded so that a
  * stray number reads zeros, and a record that writes outside its map makes the load fail (walk_scene_load returns
- * NULL and says why on stderr). The shipped data does neither.
+ * NULL and says why on stderr). The shipped data does neither. One exception is copied from the original on purpose: the
+ * view past the map's edges reads the original's segment layout (walk_seg_byte; findings.md "WALK.SL step 27").
  */
 #ifndef TK_WALKSCENE_H
 #define TK_WALKSCENE_H
@@ -71,7 +72,15 @@ typedef struct {
     size_t dark_mask_len;
     size_t song_pos, song_len;       /* where the scene's song is in MUC.ALL (read, not played here) */
     int events;                      /* scene records of kind 0x10 that fired (a cut scene starts; not modelled) */
+    uint8_t number_tail[0x585];      /* NUMBER.LCZ 0x359b, 0x585 bytes as read ([bp-0x28], after the object map in its segment) */
+    const uint8_t *view_head;        /* the map buffer [bp-0xba]'s first 0x45a bytes as walk.c keeps them (the start zoom's window), or
+                                      * raw_head before it: what the view reads above the map's top */
+    uint8_t raw_head[0x45A];         /* the scene's block of __2.ALL as read into [bp-0xba] at the start (0 past its end, a GUESS) */
 } walk_scene_t;
+
+/* A byte of the 64 KB segment the original keeps the ground map in (at offset 0x16), as the view's drawing reads it past the map's
+ * ends (0x2c362, 0x2c456: their offsets wrap in 16 bits). See walk.c. */
+unsigned walk_seg_byte(const walk_scene_t *s, unsigned off);
 
 /* Load the scene named by MAN_INFO.NOW from the data directory. Returns NULL (and a message on stderr) if a file
  * is missing or malformed, or a record writes outside its map. */

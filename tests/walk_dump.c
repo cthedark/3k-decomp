@@ -225,6 +225,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "idle: cannot start\n");
             rc = 1;
         } else {
+            walk_zoom_keep(w);   /* the start's zoom kept its window (the original's run had it), not shown */
             if (!fm_shown)
                 walk_sound_buttons(w, &scr);
             FILE *f = fopen(out, "wb");
