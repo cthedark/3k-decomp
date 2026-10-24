@@ -100,6 +100,9 @@ struct battle {
     int unbuilt_new;
     void (*show)(void *ctx, screen_t *scr);   /* battle_set_show: the steps of the picker face's flash on screen */
     void *show_ctx;
+    /* F4 in the world (battle_world_cast): the list's buffer byte 0 is 0 there ([bp-0xe] of 0x21486); 0 while the caster is being
+     * picked, 1 from his list on */
+    int world, world_stage;
 };
 
 void battle_set_show(battle_t *b, void (*show)(void *ctx, screen_t *scr), void *ctx)
@@ -563,10 +566,38 @@ battle_t *battle_begin(walk_t *w, screen_t *scr)
 void battle_free(battle_t *b)
 {
     if (b) {
-        *walk_battle_left(b->w) = b->v84;
+        if (!b->world)
+            *walk_battle_left(b->w) = b->v84;
         free(b->atk);
     }
     free(b);
+}
+
+static void pick_begin(battle_t *b, screen_t *scr, int faces, int dead);
+
+battle_t *battle_world_cast(walk_t *w, screen_t *scr)
+{
+    battle_t *b = calloc(1, sizeof *b);
+    if (!b)
+        return NULL;
+    b->w = w;
+    b->mon = b->bmem;
+    b->world = 1;
+    size_t len = 0;
+    uint8_t *g = read_unpack("RPG.LCP", 0xE95, 0x264, &len, NULL);   /* 0x214f5: the map buffer + 0xd5b1 holds the same bytes */
+    int ok = g && len >= sizeof b->mg_bar && assets_read_at("RPG.LCP", 0x1A6B7, b->font8, sizeof b->font8) == 0;
+    if (ok)
+        memcpy(b->mg_bar, g, sizeof b->mg_bar);
+    free(g);
+    if (!ok) {
+        fprintf(stderr, "walk: the magic list's pictures or font in RPG.LCP are missing or too short\n");
+        free(b);
+        return NULL;
+    }
+    pick_begin(b, scr, 1, 0);   /* 0x15549: faces, a fallen one not to be chosen */
+    /* [bp-0x16] is never set: 0x2d in every F4 tried (INFERRED constant; any value from 0x29 on gives a palette step at once) */
+    b->pk_count = 0x2D;
+    return b;
 }
 
 /* ---- one pass ---- */
@@ -1127,7 +1158,14 @@ static void put_clear(screen_t *scr, unsigned at, const uint8_t *px, unsigned w,
  * colour + 2 in the next as many. The 15th row of a character falls past the picture. */
 static void text_pic(battle_t *b, const uint8_t *s, unsigned n, uint8_t colour, uint8_t *px)
 {
+    if (battle_text_pic(b->font8, s, n, colour, px, &b->last_gw))
+        note(b, "a character the font does not have");
+}
+
+int battle_text_pic(const uint8_t *font8, const uint8_t *s, unsigned n, uint8_t colour, uint8_t *px, unsigned *last_gw)
+{
     unsigned w = 8 * n, x = 0;
+    int missing = 0;
     memset(px, 0, (size_t)w * 14);
     for (unsigned i = 0; i < n; i++) {
         uint8_t g[16 * 15];
@@ -1137,7 +1175,7 @@ static void text_pic(battle_t *b, const uint8_t *s, unsigned n, uint8_t colour, 
             gw = 8, split = 0x25;
             for (unsigned r = 0; r < 15; r++)
                 for (unsigned k = 0; k < 8; k++)
-                    g[r * 8 + k] = (b->font8[s[i] * 15 + r] << k) & 0x80 ? colour : 0;
+                    g[r * 8 + k] = (font8[s[i] * 15 + r] << k) & 0x80 ? colour : 0;
         } else {
             gw = 16, split = 0x50;
             unsigned hi = s[i], lo = i + 1 < n ? s[i + 1] : 0;
@@ -1145,7 +1183,7 @@ static void text_pic(battle_t *b, const uint8_t *s, unsigned n, uint8_t colour, 
             uint8_t bits[28];
             size_t off = battle_glyph_offset(hi, lo);
             if (off == (size_t)-1 || assets_read_at("NUMBER.LCZ", off, bits, sizeof bits) != 0) {
-                note(b, "a character the font does not have");
+                missing = 1;
                 memset(bits, 0, sizeof bits);
             }
             for (unsigned r = 0; r < 14; r++)
@@ -1162,8 +1200,9 @@ static void text_pic(battle_t *b, const uint8_t *s, unsigned n, uint8_t colour, 
                     px[at] = g[r * gw + k];
             }
         x += gw;
-        b->last_gw = gw;
+        *last_gw = gw;
     }
+    return missing;
 }
 
 /* 0x2723c, 0x2741b, 0x27328: the 94 x 13 pixels inside a row of the list with its colours 7 .. 10 turned 0x74 .. 0x77 (or back). */
@@ -1212,6 +1251,16 @@ static void strip_numbers(battle_t *b, screen_t *scr)
 static void magic_end(battle_t *b, screen_t *scr, unsigned r);
 static void magic_picked(battle_t *b, screen_t *scr, unsigned m);
 
+/* The lists' and the picker's palette step (0x1c284 on their palette argument): the palette itself in a battle, F4's dimmed copy
+ * ([bp-0xb0]) in the world. */
+static void step_palette(battle_t *b, screen_t *scr)
+{
+    if (b->world)
+        walk_palette_step_dim(b->w, scr);
+    else
+        walk_palette_step(b->w, scr);
+}
+
 /* 0x1a8a4 .. 0x1aa2d: the picker's boxes (18 x 18, from (70, 74), 18 apart), each member's face in his with `faces` (a fallen one
  * crossed out in colours 0x10 .. 0x17), the first box lit. */
 static void pick_begin(battle_t *b, screen_t *scr, int faces, int dead)
@@ -1248,7 +1297,7 @@ static void pick_round(battle_t *b, screen_t *scr, unsigned port60)
     uint8_t *party = party_of(b);
     if (++b->pk_count > 0x28) {
         b->pk_count = 0;
-        walk_palette_step(b->w, scr);
+        step_palette(b, scr);
     }
     if (b->pk_prev != b->pk_sel) {
         for (unsigned o = 3, pos = 0x5D06; pos < 0x5D60 && party[o] <= 4; o += 0x28, pos += 0x12)
@@ -1385,7 +1434,8 @@ static void magic_begin(battle_t *b, screen_t *scr)
     b->mg_cur = 0x8101;
     b->mg_idx = 0;
     b->mg_latch = 0;
-    b->mg_count = 3;   /* never set: what the stack holds there, 3 in every start tried (INFERRED constant) */
+    b->mg_count = b->world ? 0xC3 : 3;   /* never set: what the stack holds there, 3 in every battle tried and 0xc3 in every F4 (INFERRED
+                                          * constants; any value from 0x29 on gives a palette step in the first round) */
     b->phase = BATTLE_KIND_MAGIC;
 }
 
@@ -1395,7 +1445,7 @@ static void magic_round(battle_t *b, screen_t *scr, unsigned port60)
 {
     if (++b->mg_count > 0x28) {
         b->mg_count = 0;
-        walk_palette_step(b->w, scr);
+        step_palette(b, scr);
     }
     if (b->mg_prev != b->mg_cur) {
         ptr_hide(b, scr, b->mg_ptr);
@@ -1475,6 +1525,8 @@ static void magic_round(battle_t *b, screen_t *scr, unsigned port60)
         pick_begin(b, scr, 1, 1);
         return;
     }
+    if (b->world)   /* 0x22107: a spell on the monsters does nothing in the world; the list goes on */
+        return;
     uint8_t *party = party_of(b);   /* 0x22107: in a battle, the MP and the spell's strength (byte 0x13) */
     unsigned mp = (w16(party, b->v44 + 0xD) - t[0] * 2u) & 0xFFFF;
     party[b->v44 + 0xD] = (uint8_t)mp;
@@ -1488,6 +1540,16 @@ static void magic_round(battle_t *b, screen_t *scr, unsigned port60)
  * face is drawn again in the strip. */
 static void magic_picked(battle_t *b, screen_t *scr, unsigned m)
 {
+    if (b->world && b->world_stage == 0) {   /* F4's caster (0x15551 .. 0x155d4): one with HP left opens his list */
+        if (m >= 0xC8 || w16(party_of(b), m + 8) == 0) {
+            b->over = BATTLE_BACK;
+            return;
+        }
+        b->v44 = m;
+        b->world_stage = 1;
+        magic_begin(b, scr);
+        return;
+    }
     ptr_corner(b, scr, &b->mg_ptr);   /* 0x21d74: the list's pointer starts again from the corner */
     if (m >= 0xC8) {
         b->phase = BATTLE_KIND_MAGIC;
@@ -1536,7 +1598,7 @@ static void magic_picked(battle_t *b, screen_t *scr, unsigned m)
             if (b->show)
                 b->show(b->show_ctx, scr);
         }
-    if (res == 0x1F)
+    if (res == 0x1F && !b->world)   /* 0x220b3: only in a battle (the list's buffer byte 0) */
         put(scr, FACE_AT + k * 0x26, face, 16, 16);
     magic_end(b, scr, 1);
 }
@@ -1550,6 +1612,10 @@ static void magic_end(battle_t *b, screen_t *scr, unsigned r)
     uint8_t *party = party_of(b);
     unsigned m = b->v44;
     ptr_hide(b, scr, b->mg_ptr);    /* 0x2219c: the list's pointer off */
+    if (b->world) {   /* back to F4 (0x155dc), which lets its button go */
+        b->over = BATTLE_BACK;
+        return;
+    }
     ptr_corner(b, scr, &b->mptr);   /* 0x1f24a: the fight's starts again from the corner */
     b->phase = BATTLE_KIND_FIGHT;
     b->latch = r & 0xFF;

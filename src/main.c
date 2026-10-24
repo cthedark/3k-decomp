@@ -971,6 +971,14 @@ static void sfx_cut(void *ctx)
     audio_stop();
 }
 
+/* The original spins until the card's busy word is 0, so the game stands still while the sound plays; a closed window ends it */
+static void sfx_wait(void *ctx)
+{
+    (void)ctx;
+    while (audio_playing() && platform_poll())
+        platform_sleep_ms(2);
+}
+
 /* WALK.SL's world (walk.h) over what is on `scr` now (the menu's last frame, whose palette it keeps): the first
  * screen, then one pass of the main loop per tick of TK_WALK_PASS_HZ, until the window is closed, with the keys, the
  * mouse (the pointer, walking and shooting in the world, the battle's buttons) and the music. Returns 1 when the window was closed, 2
@@ -992,9 +1000,10 @@ static int play_walk(screen_t *scr)
      * sound flag is 0x81 and that button starts pressed; key 2 or the button turns the sounds off and on in a battle. */
     sfx_bank_t *bank = audio_enabled() ? sfx_bank_load() : NULL;
     walk_set_sound(w, song ? 0x81 : 0, bank ? 0x81 : 0);
-    const walk_sfx_t sfx = {sfx_play, sfx_busy, sfx_cut, bank};
+    const walk_sfx_t sfx = {sfx_play, sfx_busy, sfx_cut, bank, sfx_wait};
     if (bank)
         walk_set_sfx(w, &sfx);
+    walk_set_show(w, show_flash_step, NULL);   /* F4's picker: the face flash's steps, as in a battle */
     /* WALK.SL draws its own mouse pointer (a driver is taken to be there whenever the window reports a pointer): the world's and the
      * battle's (walk_set_mouse before each pass). In the world the left button walks towards the pointer and the right one shoots; a
      * press on an on-screen button is its key, whose action (the F-keys, 1 to 4, A) is not built yet. */
@@ -1074,6 +1083,8 @@ static int play_walk(screen_t *scr)
         }
         feed_mouse(w);
         got = walk_pass(w, scr, ticks, platform_port60());
+        /* Esc closes the window in the world, but F3's wait, F4's picker and list take it (they give up or end on it) */
+        platform_escape_quits(walk_kind(w) == 0);
         if ((got & WALK_PASS_VILLAGER_EVENT) && !event_reported) {
             fprintf(stderr, "walk: a villager reached the case where the original starts an event (not built)\n");
             event_reported = 1;

@@ -35,10 +35,12 @@ WORLD_TOP, BATTLE_TOP, REWARDS_TOP, DIALOG_TOP = 0x11D36, 0x1D418, 0x1FB7D, 0x1B
 MAGIC_TOP, PICK_TOP, ITEMS_TOP = 0x217A6, 0x1AA30, 0x207B2
 # a talk's yes / no buttons (0x18c36) and its number to set (0x18fdc): screen, palette and rand
 YESNO_TOP, NUMBER_TOP = 0x18D23, 0x19166
+# F3's wait after something is taken (an item, coins): screen, palette and rand
+TAKE_TOPS = (0x160B0, 0x164AD)
 KIND = {WORLD_TOP: 0, BATTLE_TOP: 1, REWARDS_TOP: 3, DIALOG_TOP: 4, MAGIC_TOP: 5, PICK_TOP: 6, ITEMS_TOP: 7, YESNO_TOP: 8,
-        NUMBER_TOP: 9}
+        NUMBER_TOP: 9, TAKE_TOPS[0]: 10, TAKE_TOPS[1]: 10}
 KIND_NAME = {0: 'world', 1: 'battle', 2: 'lost', 3: 'rewards', 4: 'message box', 5: 'magic list', 6: 'member picker',
-             7: 'item list', 8: 'yes / no', 9: 'number', 'flash': 'face flash steps', 'sounds': 'sounds'}
+             7: 'item list', 8: 'yes / no', 9: 'number', 10: 'take', 'flash': 'face flash steps', 'sounds': 'sounds'}
 MON = 0x3C
 LOCALS = (0x52, 0x70, 0x44, 0x5E, 0x82, 0x72, 0x38, 0x42, 0x8C, 0x0C, 0x58, 0x14, 0x84, 0x36, 0x10, 0x78)
 BSTATE = 4 + MON + len(LOCALS) + 200 + 60

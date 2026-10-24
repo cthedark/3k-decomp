@@ -1235,11 +1235,11 @@ static void test_walking(void)
     uint32_t rand_after = (uint32_t)st2[1000] | (uint32_t)st2[1001] << 8 | (uint32_t)st2[1002] << 16 | (uint32_t)st2[1003] << 24;
     CHECK(rand_after != rand_before);                /* the shake drew from rand() */
 
-    /* a key the port does not build is reported, once per pass it is seen (F3, 0x3d; F1 and F2 are built) */
-    const keyev f1[] = {{0, 0x3D}};
+    /* a key the port does not build is reported, once per pass it is seen (F5, 0x3f; F1 to F4 are built) */
+    const keyev f1[] = {{0, 0x3F}};
     CHECK(BEGIN());
     int rc = run_walk(w, &scr, f1, 1, 3, NULL, NULL, NULL);
-    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x3d"));
+    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x3f"));
 
     /* the keys 1, 2 and A are released while they repeat: reported on the first pass only */
     const keyev akey[] = {{3, 0x1E}};
@@ -1514,6 +1514,27 @@ static void test_look(void)
     CHECK(walk_look_entry(party, r) == 3);    /* the first's flag not set: the word before it, bytes 1 and 2 */
     r[4] = 31;
     CHECK(walk_look_entry(party, r) == 7);    /* bit 31: (31 + 1) & 31 = 0, always set */
+
+    /* F3's search for kind 2 and where a taken item goes */
+    rec[15 * 3 + 0] = 38, rec[15 * 3 + 1] = 55, rec[15 * 3 + 2] = 2;
+    CHECK(walk_record_of_kind(tab_a, 38, 55, 2) == 45 && walk_record_of_kind(tab_a, 38, 55, 9) == 60);
+    static uint8_t pt[WS_TAB_B];
+    for (int m = 0; m < 5; m++) {
+        pt[m * 40 + 3] = (uint8_t)m;
+        pt[m * 40 + 8] = 10;
+        memset(pt + m * 40 + 0x14, 7, 20);
+    }
+    CHECK(walk_take_slot(pt) == 0);   /* every place full */
+    pt[2 * 40 + 0x14 + 19] = 0;
+    CHECK(walk_take_slot(pt) == 2 * 40 + 0x27);   /* member 2's last place */
+    pt[1 * 40 + 0x14 + 5] = 0;
+    CHECK(walk_take_slot(pt) == 1 * 40 + 0x19);   /* member 1 before him */
+    pt[1 * 40 + 8] = 0;
+    CHECK(walk_take_slot(pt) == 2 * 40 + 0x27);   /* member 1 has no HP: passed over */
+    pt[2 * 40 + 3] = 5;
+    CHECK(walk_take_slot(pt) == 0);   /* number 5: passed over too, and the search goes on to the end */
+    pt[4 * 40 + 0x14] = 0;
+    CHECK(walk_take_slot(pt) == 4 * 40 + 0x14);
 }
 
 static void test_missing_data(void)

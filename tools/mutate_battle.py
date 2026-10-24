@@ -172,14 +172,14 @@ m("battle.c", "magic: shadow one pixel", "silhouette(scr, at + 0x141, px, 96, 14
 m("battle.c", "text: no colour bands", "g[j] = (uint8_t)(colour + 1 + j / split);", "g[j] = colour;")
 # "text: an ASCII character 16 wide" is left out: no spell or item name in MAGICT.LCC or OBJECT.LCC has an ASCII byte other than
 # trailing spaces, so the width of an ASCII character never shows.
-m("battle.c", "magic: palette counter from 0", "b->mg_count = 3;", "b->mg_count = 0;")
+m("battle.c", "magic: palette counter from 0", "b->mg_count = b->world ? 0xC3 : 3;", "b->mg_count = b->world ? 0xC3 : 0;")
 m("battle.c", "magic: row not lit", "list_row(scr, b->mg_cur, 1);\n        b->mg_prev", "b->mg_prev")
 m("battle.c", "magic: Down wraps to column 2 early", "if (b->mg_idx == 0x32)\n            b->mg_cur = 0x8161;", "if (b->mg_idx == 0x28)\n            b->mg_cur = 0x8161;")
 m("battle.c", "magic: Space casts", "    if (k != 2)\n        return;\n    const uint8_t *t = b->mg_tab", "    if (k != 2 && k != 0x39)\n        return;\n    const uint8_t *t = b->mg_tab")
 m("battle.c", "magic: attack spell costs nothing", "    party[b->v44 + 0xD] = (uint8_t)mp;\n    party[b->v44 + 0xE] = (uint8_t)(mp >> 8);\n    magic_end(b, scr, t[7]);", "    (void)mp;\n    magic_end(b, scr, t[7]);")
 m("battle.c", "magic: heal a fallen one", "        if (hp != 0) {\n            hp = (hp + v) & 0xFFFF;", "        if (1) {\n            hp = (hp + v) & 0xFFFF;")
 m("battle.c", "magic: heal not capped", "            if (hp > w16(party, m + 0xA))\n                hp = w16(party, m + 0xA);\n            party[m + 8] = (uint8_t)hp;\n            party[m + 9] = (uint8_t)(hp >> 8);\n            res = 0x2F;", "            party[m + 8] = (uint8_t)hp;\n            party[m + 9] = (uint8_t)(hp >> 8);\n            res = 0x2F;")
-m("battle.c", "magic: revive face not drawn", "    if (res == 0x1F)\n        put(scr, FACE_AT", "    if (res == 0)\n        put(scr, FACE_AT")
+m("battle.c", "magic: revive face not drawn", "    if (res == 0x1F && !b->world)   /* 0x220b3", "    if (0)   /* 0x220b3")
 m("battle.c", "magic: flash colour", "        for (unsigned s = 0; s < 16; s++) {\n            silhouette(scr, k * 0x12 + 0x5E47",
   "        for (unsigned s = 0; s < 15; s++) {\n            silhouette(scr, k * 0x12 + 0x5E47")
 m("battle.c", "magic: latch not the result", "b->latch = r & 0xFF;", "b->latch = 0;")
@@ -443,7 +443,7 @@ m("walk.c", "look: left goes right", "            x0 = (uint8_t)(x0 - 2);\n     
 m("walk.c", "look: right one cell short", "            x0 = (uint8_t)(x0 + 2);\n            x1 = (uint8_t)(x1 + 2);\n        }\n    }", "            x0 = (uint8_t)(x0 + 1);\n            x1 = (uint8_t)(x1 + 1);\n        }\n    }")
 m("walk.c", "look: walk counter kept", "    w->ctr = x0;\n    w->hero_frame = y0;", "    w->hero_frame = y0;")
 m("walk.c", "look: hero frame kept", "    w->ctr = x0;\n    w->hero_frame = y0;", "    w->ctr = x0;")
-m("walk.c", "look: any kind", "        if (r[0] == x && r[1] == y && r[2] == 9)", "        if (r[0] == x && r[1] == y)")
+m("walk.c", "look: any kind", "        if (r[0] == x && r[1] == y && r[2] == kind)", "        if (r[0] == x && r[1] == y)")
 m("walk.c", "look: no picture", "    if (r[0xE] != 0)\n        look_picture(w, scr, r[0xE]);", "    (void)0;")
 m("walk.c", "look: next picture", "(size_t)(pic - 1) * 7000", "(size_t)pic * 7000")
 m("walk.c", "look: no frame", "    fill(scr, 0x38AD, 102, 1, 0x28);", "    (void)0;")
@@ -459,6 +459,67 @@ m("walk.c", "look: talk's colour", "w->talk_msg, 0xB0, 1);", "w->talk_msg, 0x50,
 m("walk.c", "look: no chain", "    if (w->box.last == 0x7F) {\n        w->talk_msg++;\n        if (look_open(w, scr) == 0)", "    if (0) {\n        w->talk_msg++;\n        if (look_open(w, scr) == 0)")
 m("walk.c", "look: palette steps on the palette", "    palette_cycle_on(ctx, scr, ((walk_t *)ctx)->dimpal);   /* look */", "    palette_cycle(ctx, scr);   /* look */")
 m("walk.c", "look: pass not ended", "        look_key(w, w->scr);\n        return 1;", "        look_key(w, w->scr);\n        return 0;")
+# F4, casting (step 29; RUNS=cast). Left out: the records run again after F4 (no flag changes; as for F2); a fallen caster let through
+# the picker (its flag 0), or F4's own HP test after it (0x15570) taken away: the original refuses a fallen caster twice, so either alone
+# is hidden by the other.
+m("walk.c", "cast: no prelude", "        fkey_begin(w, w->scr);\n        cast_key(w, w->scr);", "        cast_key(w, w->scr);")
+m("walk.c", "cast: button not pressed", "    walk_button_toggle(scr, 0x4D84, 0x2F, 0x14);   /* 0x1c3ba: F4's button pressed */", "    (void)0;")
+m("walk.c", "cast: button stays pressed", "    w->cast = NULL;\n    walk_button_toggle(scr, 0x4D84, 0x2F, 0x14);", "    w->cast = NULL;")
+m("walk.c", "cast: pointer not kept again", "    w->cast = NULL;\n    walk_button_toggle(scr, 0x4D84, 0x2F, 0x14);\n    if (w->mouse_on) {",
+  "    w->cast = NULL;\n    walk_button_toggle(scr, 0x4D84, 0x2F, 0x14);\n    if (0) {")
+m("walk.c", "cast: pass not ended", "        cast_key(w, w->scr);\n        return 1;", "        cast_key(w, w->scr);\n        return 0;")
+m("walk.c", "cast: no flash steps shown", "    battle_set_show(w->cast, w->show, w->show_ctx);", "    (void)0;")
+m("walk.c", "cast: palette on the palette", "void walk_palette_step_dim(walk_t *w, screen_t *scr)\n{\n    palette_cycle_on(w, scr, w->dimpal);",
+  "void walk_palette_step_dim(walk_t *w, screen_t *scr)\n{\n    palette_cycle(w, scr);")
+m("battle.c", "cast: no faces in the caster's picker", "    pick_begin(b, scr, 1, 0);   /* 0x15549", "    pick_begin(b, scr, 0, 0);   /* 0x15549")
+m("battle.c", "cast: picker count", "    b->pk_count = 0x2D;", "    b->pk_count = 0x10;")
+m("battle.c", "cast: list count", "    b->mg_count = b->world ? 0xC3 : 3;", "    b->mg_count = 3;")
+m("battle.c", "cast: monsters' spell takes MP", "    if (b->world)   /* 0x22107: a spell on the monsters does nothing in the world; the list goes on */\n        return;",
+  "    if (b->world) {   /* 0x22107 */\n        party_of(b)[b->v44 + 0xD] -= 2;\n        return;\n    }")
+m("battle.c", "cast: monsters' spell ends the list", "    if (b->world)   /* 0x22107: a spell on the monsters does nothing in the world; the list goes on */\n        return;",
+  "    if (b->world) {   /* 0x22107 */\n        b->over = BATTLE_BACK;\n        return;\n    }")
+m("battle.c", "cast: revived face in the strip", "    if (res == 0x1F && !b->world)", "    if (res == 0x1F)")
+m("battle.c", "cast: battle's step in the world", "    if (b->world)\n        walk_palette_step_dim(b->w, scr);", "    if (0)\n        walk_palette_step_dim(b->w, scr);")
+# F3, taking (step 28; RUNS=take). Left out: the hero's frame from the first cell's y instead of the third's (they differ by one, and
+# any frame of 3 or more draws the same sprite, walk_sprite_off_party, and is reset at the next step; both are below 3 only for
+# y / 2 < 3, where no scene lets the hero stand).
+m("walk.c", "take: no prelude", "        fkey_begin(w, w->scr);\n        take_key(w, w->scr);", "        take_key(w, w->scr);")
+m("walk.c", "take: button not pressed", "    walk_button_toggle(scr, 0x3484, 0x2F, 0x14);   /* 0x1c3ba: F3's button pressed */", "    (void)0;")
+m("walk.c", "take: button stays pressed", "static void take_done(walk_t *w, screen_t *scr)\n{\n    walk_button_toggle(scr, 0x3484, 0x2F, 0x14);",
+  "static void take_done(walk_t *w, screen_t *scr)\n{\n    (void)0;")
+m("walk.c", "take: no third cell", "        for (int j = 0; j < 3 && si == 0x2EE; j++)", "        for (int j = 0; j < 2 && si == 0x2EE; j++)")
+m("walk.c", "take: third cell on the right", "        x[2] = (uint8_t)(x[2] - 2);\n    } else {", "        x[2] = (uint8_t)(x[2] + 4);\n    } else {")
+m("walk.c", "take: two steps only", "    unsigned si = 0x2EE, ok = dir;\n    for (int step = 0; step < 3; step++) {", "    unsigned si = 0x2EE, ok = dir;\n    for (int step = 0; step < 2; step++) {")
+m("walk.c", "take: flag not tested", "            ok = walk_flag_test(party, r[3], r[4]);", "            ok = 1;")
+m("walk.c", "take: walk counter kept", "    w->ctr = x[2];\n    w->hero_frame = y[2];", "    w->hero_frame = y[2];")
+m("walk.c", "take: item stays", "        party[slot] = (uint8_t)item;\n        r[0xD] = 0;", "        party[slot] = (uint8_t)item;")
+m("walk.c", "take: item not given", "        party[slot] = (uint8_t)item;\n        r[0xD] = 0;", "        r[0xD] = 0;")
+m("walk.c", "take: item's flag not set", "        r[0xD] = 0;\n        walk_flag_set(party, r[0xB], r[0xC]);", "        r[0xD] = 0;")
+m("walk.c", "take: next item's name", "assets_read_at(\"OBJECT.LCC\", (size_t)(item - 1) * 30", "assets_read_at(\"OBJECT.LCC\", (size_t)item * 30")
+m("walk.c", "take: dead member gets it", "        if (party[di + 3] >= 5 || w16(party, di + 8) == 0)", "        if (party[di + 3] >= 5)")
+m("walk.c", "take: strip's shadow colour", "                scr->pix[shadow[s] + (i / 96) * SCREEN_W + i % 96] = 0x1E;", "                scr->pix[shadow[s] + (i / 96) * SCREEN_W + i % 96] = 0x1F;")
+m("walk.c", "take: no shadow below", "    static const unsigned shadow[4] = {0x9530, 0x97B0, 0x966F, 0x9671};", "    static const unsigned shadow[4] = {0x9530, 0x9530, 0x966F, 0x9671};")
+m("walk.c", "take: strip's colour", "    if (battle_text_pic(w->font8, text, 12, 0x10, px, &gw))", "    if (battle_text_pic(w->font8, text, 12, 0x20, px, &gw))")
+m("walk.c", "take: silent", "    walk_sfx_play(w, SFX_EF, 0x1BF5);\n    if (w->sb == 0x81) {", "    if (w->sb == 0x81) {")
+m("walk.c", "take: sound not waited for", "        walk_sfx_wait(w);\n        walk_sfx_stop(w);", "        walk_sfx_stop(w);")
+m("walk.c", "take: item palette count 0", "        take_strip(w, scr, text, 1);", "        take_strip(w, scr, text, 0);")
+m("walk.c", "take: coins palette count 0", "    take_strip(w, scr, text, y[0]);", "    take_strip(w, scr, text, 0);")
+m("walk.c", "take: palette never steps", "    if (w->take_count > 0x28) {", "    if (w->take_count > 0x128) {")
+m("walk.c", "take: Esc does not end", "    if (k == 1 || k == 0x39 || k == 0x1C ||", "    if (k == 0x39 || k == 0x1C ||")
+m("walk.c", "take: Enter does not end", "    if (k == 1 || k == 0x39 || k == 0x1C ||", "    if (k == 1 || k == 0x39 ||")
+m("walk.c", "take: any button ends", "(walk_mouse(w, &mx, &my, &mb) && (mb & 0xFF) == 2)", "(walk_mouse(w, &mx, &my, &mb) && (mb & 2))")
+m("walk.c", "take: full box's colour", "0xB, 0x20, 1);", "0xB, 0x50, 1);")
+m("walk.c", "take: full box steps the dimmed palette", "static void take_box_step(void *ctx, screen_t *scr)\n{\n    palette_cycle(ctx, scr);",
+  "static void take_box_step(void *ctx, screen_t *scr)\n{\n    palette_cycle_on(ctx, scr, ((walk_t *)ctx)->dimpal);")
+m("walk.c", "take: coins over 60,000", "    if (60000u - gold < coins) {", "    if (65535u - gold < coins) {")
+m("walk.c", "take: coins stay", "    r[0xD] = r[0xE] = 0;\n    walk_show_gold(w, scr);", "    walk_show_gold(w, scr);")
+m("walk.c", "take: coins not drawn", "    walk_show_gold(w, scr);   /* 0x1bd6e */\n    walk_flag_set(party, r[0xB], r[0xC]);", "    walk_flag_set(party, r[0xB], r[0xC]);")
+m("walk.c", "take: leading zeros kept", "    for (int i = 0; i < 4 && text[i] <= '0'; i++)", "    for (int i = 0; i < 0 && text[i] <= '0'; i++)")
+m("walk.c", "take: coins' unit word", "{' ', 0xAA, 0x54, 0xAA, 0xF7, 0xB9, 0xF4};", "{' ', 0xAA, 0x54, 0xAA, 0xF7, 0xB9, 0xF5};")
+m("walk.c", "take: no records again", "    w->talking = 0;\n    records_again(w, 0x384 / WS_RECORD_SIZE);\n}\n\n/* 0x15fea",
+  "    w->talking = 0;\n}\n\n/* 0x15fea")
+m("walk.c", "take: pass not ended", "        take_key(w, w->scr);\n        return 1;", "        take_key(w, w->scr);\n        return 0;")
+m("walk.c", "take: any kind", "            si = walk_record_of_kind(s->tab_a, x[j], y[j], 2);", "            si = walk_record_of_kind(s->tab_a, x[j], y[j], 9);")
 # the view past the map's edges (step 27; RUNS=edge). Left out: the art segment's first bytes (only a tile number 0x806a .. 0x807f
 # reads them; no start's view has one) and the villager table in the map segment (only the ground's last row with y / 2 = 127 and x
 # above 228 reaches 0x8c16; no scene lets the hero stand there).

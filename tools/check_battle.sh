@@ -336,6 +336,66 @@ run look_walk0 0 86 35 2500 $($PY tools/walk_keys.py look 4 2500)
 run edge_top5 1 116 5 300; run edge_top9 1 116 9 300; run edge_top9r 1 230 9 300; run edge_dark13 13 100 5 300; run edge_left 1 10 40 300
 run edge_s2 2 22 90 300; run edge_s4 4 22 94 300; run edge_s7 7 138 94 300; run edge_s24 24 26 92 300
 run edge_walk4 4 22 94 1500 $($PY tools/walk_keys.py fuzz 4 1500); run edge_walk2 2 22 90 1500 $($PY tools/walk_keys.py fuzz 2 1500)
+# F3, taking (step 28): scene 1's item at (126, 45) (item 1; its object goes when taken), from above (the start faces down), held 100
+# passes; then F3 again (nothing left) and from the second and third cells and three cells away; the sound waited for (--sb); closed
+# with Esc, Enter and the right button; F3 clicked; every item place full (message 11); a first member with no HP (the second gets it);
+# scene 5's record 5 with its flag (3, 3) not set and set; coins in scenes 6 (dark, 50) and 11 (10), and too many (message 11); walks
+# with F3 now and then (tools/walk_keys.py take)
+T="--key 1:0x81 --key 3:0x3d --key 5:0xbd --key 100:0x39 --key 102:0xb9 --key 140:0x3d --key 142:0xbd --key 200:0x39 --key 202:0xb9"
+run take_held 1 126 44 260 $T
+run take_second 1 124 44 160 --key 1:0x81 --key 3:0x3d --key 5:0xbd --key 100:0x1c --key 102:0x9c
+run take_third 1 128 44 160 --key 1:0x81 --key 3:0x3d --key 5:0xbd --key 100:0x01 --key 102:0x81
+run take_far 1 126 43 160 --key 1:0x81 --key 3:0x3d --key 5:0xbd --key 100:0x39 --key 102:0xb9
+run take_far4 1 126 42 160 --key 1:0x81 --key 3:0x3d --key 5:0xbd --key 100:0x39 --key 102:0xb9
+run take_sb 1 126 44 160 --sb --key 1:0x81 --key 3:0x3d --key 5:0xbd --key 100:0x39 --key 102:0xb9
+run take_mouse 1 126 44 200 --mouse 0:160:100:0 --mouse 3:20:45:1 --mouse 5:20:45:0 --mouse 60:200:100:3 --mouse 62:200:100:0 \
+    --mouse 90:200:100:2 --mouse 92:200:100:0
+# facing left and right (a step first): the item from the third cell and the second, the hero's frame from the third cell's y
+TL="--key 20:0x3d --key 22:0xbd --key 120:0x39 --key 122:0xb9"
+run take_left 1 130 45 200 --key 1:0x4b --key 3:0xcb $TL; run take_right 1 122 46 200 --key 1:0x4d --key 3:0xcd $TL
+FULL=""; for o in $(seq 20 39); do FULL="$FULL --byte 0:$o:1"; done
+DOPTS="$FULL"; run take_full 1 126 44 200 $T; DOPTS="--join 1 --hp 0:0"; run take_second_member 1 126 44 200 $T
+DOPTS=""; run take_flag0 5 148 33 200 $T; DOPTS="--byte 5:3:8"; run take_flag1 5 148 33 200 $T
+DOPTS=""; run take_coins6 6 68 9 260 $T; run take_coins11 11 64 70 200 $T
+DOPTS="--word 7:10:59995"; run take_rich 11 64 70 200 $T; DOPTS=""
+for seed in 1 2; do run "take_walk$seed" 1 126 40 2500 $($PY tools/walk_keys.py take $seed 2500); done
+run take_walk11 11 66 66 2500 $($PY tools/walk_keys.py take 3 2500)
+# F4, casting (step 29): the hero at level 120 with 300 MP and member 1 with 5 HP (step 17's spells): the caster picked with Enter, his
+# second spell (a heal) on member 1, with long waits in the picker and the list; a spell on the monsters (nothing; the list stays);
+# Esc in the caster's picker; a fallen caster (nothing); Esc in the helped member's picker (back to the list); a defence spell and a
+# revive (level 200, member 1 fallen); a greyed spell (MP 99); member 1 casting (his own list); the mouse; a dark scene; walks with F4
+# (tools/walk_keys.py cast)
+CA="--byte 0:0xc:120 --word 0:0xd:300 --join 1 --hp 1:5"
+DOPTS="$CA"
+run cast_heal 1 106 30 200 --key 1:0x81 --key 3:0x3e --key 5:0xbe --key 40:0x1c --key 42:0x9c --key 80:0x50 --key 82:0xd0 \
+    --key 100:0x02 --key 102:0x82 --key 140:0x4d --key 142:0xcd --key 150:0x1c --key 152:0x9c
+run cast_attack 1 106 30 160 --key 1:0x81 --key 3:0x3e --key 5:0xbe --key 20:0x1c --key 22:0x9c --key 40:0x02 --key 42:0x82 \
+    --key 80:0x01 --key 82:0x81
+run cast_esc 1 106 30 100 --key 1:0x81 --key 3:0x3e --key 5:0xbe --key 40:0x01 --key 42:0x81
+run cast_cancel 1 106 30 200 --key 1:0x81 --key 3:0x3e --key 5:0xbe --key 20:0x1c --key 22:0x9c --key 40:0x50 --key 42:0xd0 \
+    --key 60:0x02 --key 62:0x82 --key 80:0x01 --key 82:0x81 --key 120:0x01 --key 122:0x81
+DOPTS="$CA --byte 0:0xc:200 --word 0:0xd:600"
+run cast_defence 1 106 30 200 --key 1:0x81 --key 3:0x3e --key 5:0xbe --key 20:0x1c --key 22:0x9c --key 40:0x50 --key 42:0xd0 \
+    --key 50:0x50 --key 52:0xd0 --key 60:0x50 --key 62:0xd0 --key 80:0x02 --key 82:0x82 --key 100:0x1c --key 102:0x9c
+DOPTS="$CA --byte 0:0xc:200 --word 0:0xd:600 --hp 1:0"
+run cast_dead 1 106 30 100 --key 1:0x81 --key 3:0x3e --key 5:0xbe --key 20:0x4d --key 22:0xcd --key 40:0x1c --key 42:0x9c
+run cast_revive 1 106 30 200 --key 1:0x81 --key 3:0x3e --key 5:0xbe --key 20:0x1c --key 22:0x9c --key 30:0x4d --key 32:0xcd \
+    --key 40:0x50 --key 42:0xd0 --key 45:0x50 --key 47:0xd0 --key 50:0x02 --key 52:0x82 --key 80:0x4d --key 82:0xcd --key 100:0x1c \
+    --key 102:0x9c
+DOPTS="$CA --word 0:0xd:99"
+run cast_grey 1 106 30 160 --key 1:0x81 --key 3:0x3e --key 5:0xbe --key 20:0x1c --key 22:0x9c --key 40:0x50 --key 42:0xd0 \
+    --key 60:0x02 --key 62:0x82 --key 100:0x01 --key 102:0x81
+DOPTS="$CA --byte 1:0xc:60 --word 1:0xd:300"
+run cast_member1 1 106 30 200 --key 1:0x81 --key 3:0x3e --key 5:0xbe --key 20:0x4d --key 22:0xcd --key 40:0x1c --key 42:0x9c \
+    --key 60:0x50 --key 62:0xd0 --key 80:0x02 --key 82:0x82 --key 120:0x1c --key 122:0x9c
+DOPTS="$CA"
+run cast_mouse 1 106 30 300 --mouse 0:160:100:0 --mouse 3:20:65:1 --mouse 5:20:65:0 --mouse 30:140:80:0 --mouse 40:140:80:1 \
+    --mouse 42:140:80:0 --mouse 70:100:125:1 --mouse 72:100:125:0 --mouse 100:90:80:1 --mouse 102:90:80:0 --mouse 130:160:80:0 \
+    --mouse 140:160:80:1 --mouse 142:160:80:0 --mouse 200:160:100:2 --mouse 202:160:100:0
+run cast_dark13 13 100 50 200 --key 1:0x81 --key 3:0x3e --key 5:0xbe --key 40:0x1c --key 42:0x9c --key 80:0x50 --key 82:0xd0 \
+    --key 100:0x02 --key 102:0x82 --key 140:0x4d --key 142:0xcd --key 150:0x1c --key 152:0x9c
+for seed in 1 2 3; do run "cast_walk$seed" 1 106 30 2500 $($PY tools/walk_keys.py cast $seed 2500); done
+DOPTS=""
 # the world's start zoom (step 23; tools/zoom_check.py): its 13 steps in scenes 0, 1, 34 and four dark scenes (6, 9, 23, 47), from the
 # data directories of the starts above
 case " ${RUNS:-zoom} " in *" zoom"*)

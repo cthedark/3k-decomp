@@ -119,6 +119,14 @@ static void sb_stop(void *ctx)
     g_sb.playing = 0;
 }
 
+/* A wait for the sound ends it, in pass time (tools/sb_stub.py logs the same) */
+static void sb_wait(void *ctx)
+{
+    if (sb_busy(ctx) && g_sb.log)
+        fprintf(g_sb.log, "%d wait\n", g_pass);
+    g_sb.playing = 0;
+}
+
 static int write_bytes(const char *path, const void *a, size_t na, const void *b, size_t nb)
 {
     FILE *f = fopen(path, "wb");
@@ -172,7 +180,7 @@ int main(int argc, char **argv)
             }
             if (!strcmp(argv[a], "sb") || !strcmp(argv[a], "sb-shown")) {   /* a Sound Blaster, sounds on; "sb-shown": START shows
                                                                              * its button pressed already */
-                static const walk_sfx_t ops = {sb_play, sb_busy, sb_stop, NULL};
+                static const walk_sfx_t ops = {sb_play, sb_busy, sb_stop, NULL, sb_wait};
                 if (!g_sb.bank && !(g_sb.bank = sfx_bank_load())) {
                     walk_free(w);
                     return 1;
@@ -226,6 +234,7 @@ int main(int argc, char **argv)
             rc = 1;
         } else {
             walk_zoom_keep(w);   /* the start's zoom kept its window (the original's run had it), not shown */
+            walk_set_show(w, flash_step, NULL);
             if (!fm_shown)
                 walk_sound_buttons(w, &scr);
             FILE *f = fopen(out, "wb");
@@ -259,6 +268,8 @@ int main(int argc, char **argv)
                     st[0] = bt == NULL ? (uint8_t)walk_kind(w) : battle_over(bt) == BATTLE_LOST ? 2 : (uint8_t)battle_kind(bt);
                     if (bt) {
                         battle_state_dump(bt, st + 1);
+                    } else if (walk_cast(w)) {   /* F4's picker and list: as in a battle (the party table where the lists have it) */
+                        battle_state_dump(walk_cast(w), st + 1);
                     } else {
                         uint32_t r = *walk_rng(w);
                         for (int j = 0; j < 4; j++)

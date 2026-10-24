@@ -3279,3 +3279,81 @@ right end, dark scene 13), left of the left edge, below the bottom in scenes 2, 
 `tests/walk_dump.c` now keeps the zoom's window at its start (`walk_zoom_keep`), as the game does. Unit tests for an object column
 and row past the edges and a ground row below the map. `tools/mutate_battle.py`: 15 new mutations, all caught (3 by the unit tests);
 two left out with notes (no start reaches them).
+
+## WALK.SL step 28: F3, taking, 2026-10-24
+
+Built in C and compared pass by pass with the original (`tools/battle_check.py`, which now also counts F3's two wait loops,
+`0x160b0` and `0x164ad`, as loop kind 10). READ from the code (`0x15bbd` .. `0x165df`), then CONFIRMED by the comparison.
+
+**The search.** After the F-keys' shared start, F3's button is pressed (at (4, 42); the pointer's corner put back, not kept again).
+Three cells are looked at: the hero's own (x & ~1, y / 2), the next one right and the next one left when he faces up or down (below and
+above when he faces left or right); then each one cell further the way he faces, three times, for a scene record of kind 2
+(`0x2c28f`). The third cell's x and y are left in the hero's walk counter and frame (`[bp-0x3c]`, `[bp-0x5e]`). A record found must have
+its flag (bytes 3, 4) set.
+
+**An item** (byte 5 = 0, byte 0xd the item, not 0): it goes into the first empty one of the 20 item places of the first member whose
+number is below 5 and whose HP is not 0 (others are passed over; unlike a seller's, the search does not stop at a member who is not in
+the party). The record's item byte is cleared and the flag at bytes 0xb, 0xc set. Its name, the first 12 bytes of its `OBJECT.LCC`
+record ((item - 1) * 30), is read into the map buffer `[bp-0xba]` and shown.
+
+**Coins** (byte 5 = 1, the word at 0xd, not 0): added when the total stays at most 60,000; the word cleared, the coins drawn again
+(`0x1bd6e`), the flag set; the text is the sum as five digits (`0x26450`) with up to four leading zeros turned to spaces, a space and
+Big5 銀兩 (`aa54 aaf7 b9f4` as bytes).
+
+**No place, or too many coins:** message 11 in a box (colour 0x20, the wait flag), its palette steps on the palette itself.
+
+**What is shown:** the 12 bytes as a 96 x 14 picture in colour 0x10 (`0x243ec`, the battle's `text_pic`, now `battle_text_pic`), its
+shape in colour 0x1e one pixel up, down, left and right (`0x25b54` four times), the picture over it (`0x27371`) at (112, 120); nothing
+puts the window back (the next pass draws over it). Then `SND_EF.1` 0x1bf5, and with the sounds on the game stands still until it has
+played (`0x1609e`, `0x1649b`; the port's real-time build waits for the sink, `walk_dump` and `sb_stub.py` log a 'wait'). Then a loop
+(`0x160b0`, `0x164ad`): the palette step every 41st round, on the palette itself; Esc, Space or Enter, no release needed, or the right
+button alone ends it. Its count starts from `[bp-0x9a]` as it is: 1 for an item (the loop that works out the file offset counts the
+item down to 1), the first cell's y for coins (SEEN as the same in the comparison).
+
+**After it** the button is let go and the pass ends through `0x1729e`: the record loop runs again, so a taken chest's picture changes
+(scene 1's item 1 at (126, 45): its object, byte 6 = 1, becomes 0xff).
+
+**The shipped data:** 233 kind 2 records, 178 of them with flag 0 bit 0 (set at the start); 9 hold coins (10 to 7,400).
+
+**Checked:** `tools/check_battle.sh`, 19 new `take_` starts, all identical at every pass: an item from each of the three cells and three
+cells away (and not from four), facing down, left and right, held 100 passes, taken again (nothing left), with the sound waited for
+(`--sb`), closed with Esc, Enter and the right button (both buttons do not), F3 clicked, every place full, a first member with no HP, a
+flag not set and set, coins in a dark scene and another, too many coins, and three 2,500-pass walks with F3 now and then
+(`tools/walk_keys.py take`). Unit test: the search for kind 2 and `walk_take_slot`. `tools/mutate_battle.py`: 34 new mutations, all
+caught; one left out with a note (the hero's frame from the first cell's y instead of the third's draws the same sprite wherever the hero
+can stand). ASan/UBSan clean on six starts; a real-time run took the item.
+
+## WALK.SL step 29: F4, casting, 2026-10-24
+
+Built in C and compared pass by pass. READ from the code (`0x154e0` .. `0x15620`; the picker `0x1a8a4` and the magic list `0x21486`
+again, for what differs out of a battle), SEEN in the oracle (`work/b8/probe_cast.py`: the list's art source and the two loops' first
+counters), then CONFIRMED by the comparison.
+
+**F4** (`0x154e0`): after the F-keys' shared start its button is pressed (at (4, 62); the pointer's corner put back). The member picker
+(`0x1a8a4`) asks who casts: faces drawn, a fallen member not taken (its flags 1, 0), its palette steps on the dimmed copy `[bp-0xb0]`.
+A member with HP left gets his magic list (`0x21486`); the world buffer's byte 0 is set to 0 first (`0x15585`). After it (or a refusal)
+the button is let go, the pointer's place set to 0 and the corner kept, and the pass ends through `0x1729e`.
+
+**The list out of a battle.** `0x21486` reads its buffer's byte 0 into `[bp-0xe]`: 1 in a battle, 0 from F4. With 0:
+- its art is decoded from the map buffer + 0xd5b1 instead of the battle's buffer + 0xab6d; SEEN to be the same bytes as `RPG.LCP` 0xe95,
+  which the port's battle already decodes;
+- a spell on the monsters (no heal, defence or revive) does nothing when key 1 casts it: no MP is spent and the list goes on (`0x22107`);
+- a revived member's face is not drawn into the battle's strip (`0x220b3`);
+- its palette steps (and those of the picker it opens for a helped member) are on its palette argument, the dimmed copy from F4.
+A heal, a defence spell or a revive is cast as in a battle: the helped member's picker, the MP spent, the face's 48-step flash, and back
+in the world.
+
+**Stack values, a GUESS:** neither loop sets its palette count. The caster's picker starts from 0x2d and the list from 0xc3 in all three
+F4 starts tried (scenes 1, 0 and 13); in a battle the list's was 3. Any value from 0x29 on gives a palette step in the first round.
+
+**In the port:** `battle_world_cast` runs the battle's picker and list with a world flag (`src/battle.c`); `walk.c`'s F4 hands each pass
+to it while it runs. `tests/walk_dump.c` dumps its state as a battle's, so the comparison checks the party table in its loops too.
+In the real-time build Esc closes the window only in the world loop now: F3's wait and F4's picker and list take it.
+
+**Checked:** `tools/check_battle.sh`, 14 new `cast_` starts, all identical at every pass (the flash steps included): a heal on the second
+member with long waits; a spell on the monsters (nothing, the list stays); Esc in the caster's picker; a fallen caster; Esc in the helped
+member's picker (back to the list); a defence spell; a revive; a greyed spell; member 1's own list; the mouse; a dark scene; three
+2,500-pass walks with F4 (`tools/walk_keys.py cast`, 490 to 694 rounds in each loop). `tools/mutate_battle.py`: 14 new mutations, all
+caught (the revived face's one after the revive start was made to reach the revive spell); three left out with notes (the records run
+again with no flag changed; each of the two refusals of a fallen caster hides the other). ASan/UBSan clean on four starts; a real-time
+run cast a heal.

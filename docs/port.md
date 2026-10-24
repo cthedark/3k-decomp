@@ -1224,3 +1224,28 @@ message boxes (`docs/findings.md` "WALK.SL step 26").
   `walk_zoom_keep`). 11 new `edge_` starts identical; 15 new mutations caught, two left out with notes. The allocator's header bytes are
   the oracle run's (a GUESS; only unreachable places read them).
 - **Not built:** F3 to F10, keys 1 to 4 and A.
+
+## Milestone 9f: F3, taking (C), built 2026-10-24
+
+F3 (or its button) makes the hero take what lies in his cell or the next ones across, up to three steps the way he faces: an item goes to
+the first free item place of a member with HP left, coins to the purse (at most 60,000). Its name or the sum comes up in a shadowed
+strip with a sound until Esc, Space, Enter or the right button; with no room, message 11 (`docs/findings.md` "WALK.SL step 28").
+
+- **Code:** `src/walk.c` (`take_key`, `take_strip`, `take_round`, `take_full`, `take_box_round`, `take_done`, `walk_take_slot`,
+  `walk_record_of_kind`, `walk_sfx_wait`; `talking` 5 and 6), `battle_text_pic` out of `src/battle.c`; `walk_sfx_t` has a `wait`
+  (`src/main.c` waits for the sink, `tests/walk_dump.c` logs it); `tools/battle_check.py` loop kind 10; `tools/walk_keys.py take`.
+- **Checked:** `tools/check_battle.sh`, 19 new `take_` starts, all identical at every pass. Unit tests for the search and the item place.
+  `tools/mutate_battle.py` (413): 34 new mutations, all caught; one left out with a note. ASan/UBSan clean on six starts.
+- **Not built:** F4 to F10, keys 1 to 4 and A.
+
+## Milestone 9g: F4, casting (C), built 2026-10-24
+
+F4 (or its button) picks who casts, then opens his magic list over the world: heals, defence spells and revives are cast on a member as
+in a battle; spells on monsters do nothing there (`docs/findings.md` "WALK.SL step 29").
+
+- **Code:** `src/battle.c` (`battle_world_cast`; the picker and the list with a world flag, `step_palette`), `src/walk.c` (`cast_key`,
+  `cast_round`, `cast_done`, `walk_palette_step_dim`, `walk_set_show`, `walk_cast`; `talking` 7), `src/main.c` (Esc closes the window
+  only in the world loop), `tests/walk_dump.c`; `tools/walk_keys.py cast`.
+- **Checked:** `tools/check_battle.sh`, 14 new `cast_` starts, all identical at every pass. `tools/mutate_battle.py` (427): 14 new
+  mutations, all caught; three left out with notes. ASan/UBSan clean on four starts.
+- **Not built:** F5 to F10, keys 1 to 4 and A.

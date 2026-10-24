@@ -57,6 +57,11 @@ enum {
 /* Start the battle the last walk_pass reported (WALK_PASS_BATTLE): does what the original does between the touch and the battle loop's
  * first pass, drawing into `scr`. Returns NULL, with a message on stderr, if a file cannot be read. `w` must outlive the battle. */
 battle_t *battle_begin(walk_t *w, screen_t *scr);
+/* F4 in the world (0x15549 .. 0x155d4): the member picker for who casts (faces drawn, a fallen one not taken), then his magic list as
+ * the world has it (0x21486 with its buffer's byte 0 = 0: spells on monsters do nothing, palette steps on the dimmed copy), drawing
+ * over `scr`. Run it with battle_pass until battle_over says BATTLE_BACK, then battle_free. NULL (said on stderr) when RPG.LCP falls
+ * short. */
+battle_t *battle_world_cast(walk_t *w, screen_t *scr);
 void battle_free(battle_t *b);
 /* With `show` set, it is called after each of the 48 steps of a helped member's face flash in the picker (three times 16 colours
  * down); the original draws each step 100 times and does not wait, so how long it showed depended on the machine. Without it only the
@@ -81,6 +86,9 @@ int battle_kind(const battle_t *b);
 unsigned battle_result(const battle_t *b);
 /* (0x2464a) A Big5 character's 28-byte glyph in NUMBER.LCZ; (size_t)-1 when its lead byte has none. */
 size_t battle_glyph_offset(unsigned hi, unsigned lo);
+/* 0x243ec: `n` bytes of text as an (8 n) x 14 picture `px` in `colour` (font8: RPG.LCP 0x1a6b7; Big5 pairs from NUMBER.LCZ); the last
+ * character's width in *last_gw. Returns 1 when a character the font does not have was drawn blank. See battle.c. */
+int battle_text_pic(const uint8_t *font8, const uint8_t *s, unsigned n, uint8_t colour, uint8_t *px, unsigned *last_gw);
 /* N bytes at POS of the data file NAME run-length decoded (0x25eeb); malloc'd, its length in *len; NULL (and a message) on failure. */
 uint8_t *battle_read_unpack(const char *name, size_t pos, size_t n, size_t *len);
 /* (0x130e2 .. 0x13246) A party record's level-up after a won battle: when its experience (word 4) has reached the next level's

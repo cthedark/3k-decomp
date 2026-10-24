@@ -30,6 +30,10 @@ struct walk {
     unsigned talk_msg, talk_k;          /* the message shown, the entry used (its offset in the record) */
     uint8_t talk_under[SCREEN_W * 46];  /* [bp+6] + 0x9c40: the screen's rows 134 .. 179 under boxes that do not wait */
     unsigned talk_count, talk_mprev;    /* the two loops' palette count; where their pointer is */
+    unsigned take_count;                /* F3's loop: its palette count ([bp-0x9a]) */
+    battle_t *cast;                     /* F4: the picker and the magic list (battle_world_cast), while talking is 7 */
+    void (*show)(void *ctx, screen_t *scr);   /* walk_set_show, handed to F4's picker */
+    void *show_ctx;
     uint8_t talk_mbg[60];               /* the 6 x 10 under their pointer (the pointer's own + 0x40) */
     uint8_t yn_pic[3][47 * 20];         /* the buttons' place as it was, with "yes" pressed, with "no" pressed */
     unsigned yn_shown, yn_sel;          /* [bp-4], [bp-0xc]: 1 yes, 0 no (2: none shown yet) */
@@ -158,6 +162,7 @@ void walk_free(walk_t *w)
 {
     if (!w)
         return;
+    battle_free(w->cast);
     walk_scene_free(w->scene);
     free(w->buf);
     free(w->dbuf);
@@ -1100,6 +1105,9 @@ static int talk_open(walk_t *w, screen_t *scr)
 static void yesno_open(walk_t *w, screen_t *scr);
 static void ask_open(walk_t *w, screen_t *scr);
 static void look_round(walk_t *w, screen_t *scr, unsigned port60);
+static void take_round(walk_t *w, screen_t *scr, unsigned port60);
+static void take_box_round(walk_t *w, screen_t *scr, unsigned port60);
+static void cast_round(walk_t *w, screen_t *scr, unsigned port60);
 
 /* 0x19b9a: the talk itself. The world window doubled (0x2c658, as at a battle's start, then shown); which of the villager's five entries
  * (7 bytes from 0xc: a flag that must be set, the flag it sets or a member who joins, a kind, the first message) is the last one whose
@@ -1412,6 +1420,18 @@ static void talk_round(walk_t *w, screen_t *scr, unsigned port60)
         look_round(w, scr, port60);
         return;
     }
+    if (w->talking == 5) {
+        take_round(w, scr, port60);
+        return;
+    }
+    if (w->talking == 6) {
+        take_box_round(w, scr, port60);
+        return;
+    }
+    if (w->talking == 7) {
+        cast_round(w, scr, port60);
+        return;
+    }
     int mx, my;
     unsigned mb = 0;
     int on = walk_mouse(w, &mx, &my, &mb);
@@ -1615,12 +1635,207 @@ static void look_round(walk_t *w, screen_t *scr, unsigned port60)
 
 unsigned walk_look_record(const uint8_t *tab_a, unsigned x, unsigned y)
 {
+    return walk_record_of_kind(tab_a, x, y, 9);
+}
+
+unsigned walk_record_of_kind(const uint8_t *tab_a, unsigned x, unsigned y, unsigned kind)
+{
     for (unsigned bx = 0; bx < 0x2EE; bx += WS_RECORD_SIZE) {
         const uint8_t *r = tab_a + 1000 + bx;
-        if (r[0] == x && r[1] == y && r[2] == 9)
+        if (r[0] == x && r[1] == y && r[2] == kind)
             return bx;
     }
     return 0x2EE;
+}
+
+/* ---- F3: taking (0x15bbd .. 0x165df) ---- */
+
+/* The end of a take: F3's button let go (the pointer's corner not kept again), then 0x1729e. */
+static void take_done(walk_t *w, screen_t *scr)
+{
+    walk_button_toggle(scr, 0x3484, 0x2F, 0x14);
+    w->talking = 0;
+    records_again(w, 0x384 / WS_RECORD_SIZE);
+}
+
+/* 0x15fea .. 0x16085 (and 0x163e7 ..): what was taken, 12 bytes of text, as a 96 x 14 picture in colour 0x10 (0x243ec) with a shadow of
+ * colour 0x1e a pixel up, down, left and right of it (0x25b54) and over it (0x27371), at (112, 120); then SND_EF.1's 0x1bf5, waited
+ * for when the sounds are on (0x1609e), and the loop that waits for a key. Its palette count starts from [bp-0x9a] as it is. */
+static void take_strip(walk_t *w, screen_t *scr, const uint8_t text[12], unsigned count)
+{
+    uint8_t px[96 * 14];
+    unsigned gw = 0;
+    memcpy(w->zoom_grab, text, 12);   /* the map buffer [bp-0xba] holds the text */
+    if (battle_text_pic(w->font8, text, 12, 0x10, px, &gw))
+        note_unbuilt(w, "a character the font does not have", 0);
+    static const unsigned shadow[4] = {0x9530, 0x97B0, 0x966F, 0x9671};
+    for (int s = 0; s < 4; s++)
+        for (unsigned i = 0; i < sizeof px; i++)
+            if (px[i])
+                scr->pix[shadow[s] + (i / 96) * SCREEN_W + i % 96] = 0x1E;
+    for (unsigned i = 0; i < sizeof px; i++)
+        if (px[i])
+            scr->pix[0x9670 + (i / 96) * SCREEN_W + i % 96] = px[i];
+    walk_sfx_play(w, SFX_EF, 0x1BF5);
+    if (w->sb == 0x81) {   /* 0x16088: until the sound has played, then 0x6d */
+        walk_sfx_wait(w);
+        walk_sfx_stop(w);
+    }
+    w->take_count = count & 0xFF;
+    w->talking = 5;
+}
+
+/* A round of the take's loop (0x160b0, 0x164ad): the palette step every 41st round; Esc, Space or Enter (no release needed) or the
+ * right button alone ends it. */
+static void take_round(walk_t *w, screen_t *scr, unsigned port60)
+{
+    w->take_count = (w->take_count + 1) & 0xFF;
+    if (w->take_count > 0x28) {
+        w->take_count = 0;
+        palette_cycle(w, scr);
+    }
+    unsigned k = port60 & 0xFF;
+    int mx, my;
+    unsigned mb = 0;
+    if (k == 1 || k == 0x39 || k == 0x1C || (walk_mouse(w, &mx, &my, &mb) && (mb & 0xFF) == 2))
+        take_done(w, scr);
+}
+
+/* 0x161a3, 0x165a0: nowhere to put it: message 11 (colour 0x20, the wait flag, the palette steps on the palette itself). */
+static void take_full(walk_t *w, screen_t *scr)
+{
+    int r = msgbox_open(&w->box, scr, w->font8, w->table, w->buf + 0x7305, 0xB, 0x20, 1);
+    if (r < 0) {
+        note_unbuilt(w, "a message that MES_TXT.LCC does not have", 0xB);
+        take_done(w, scr);
+        return;
+    }
+    if (r > 0)
+        note_unbuilt(w, "a character the message font does not have", 0xB);
+    w->talking = 6;
+}
+
+static void take_box_step(void *ctx, screen_t *scr)
+{
+    palette_cycle(ctx, scr);
+}
+
+static void take_box_round(walk_t *w, screen_t *scr, unsigned port60)
+{
+    int mx, my;
+    unsigned mb = 0;
+    int on = walk_mouse(w, &mx, &my, &mb);
+    if (msgbox_round(&w->box, scr, port60, on, mb, take_box_step, w))
+        take_done(w, scr);
+}
+
+unsigned walk_take_slot(const uint8_t *party)
+{
+    for (unsigned di = 0; di < 0xC8; di += 0x28) {
+        if (party[di + 3] >= 5 || w16(party, di + 8) == 0)
+            continue;
+        for (unsigned j = di + 0x14; j < di + 0x28; j++)
+            if (party[j] == 0)
+                return j;
+    }
+    return 0;
+}
+
+/* F3: the button pressed (the pointer's corner put back first); three cells, the hero's own, the one to its right and the one to its
+ * left (facing up or down; below and above facing left or right), are looked at, then each a cell further the way he faces, three
+ * times, for a scene record of kind 2 (something to take). The third cell's x and y are the hero's walk counter and frame ([bp-0x3c],
+ * [bp-0x5e]); when nothing is found [bp-0x58] keeps his facing. A record found: its flag (bytes 3, 4) must be set. Byte 5 = 0, an item
+ * (byte 0xd, not 0): into the first empty one of the 20 item places of the first member with HP left (a member's number 5 or more is
+ * passed over); the record's item cleared, the flag at bytes 0xb, 0xc set, its name (OBJECT.LCC) shown. Byte 5 = 1, coins (the word at
+ * 0xd, not 0): added when the total stays at most 60,000; the word cleared, the flag set, the coins drawn, the sum shown. No place or
+ * too many coins: message 11. */
+static void take_key(walk_t *w, screen_t *scr)
+{
+    walk_scene_t *s = w->scene;
+    uint8_t *party = s->tab_b;
+    if (w->mouse_on)
+        walk_mouse_put(scr, w->mprev, w->mbg, 0);
+    walk_button_toggle(scr, 0x3484, 0x2F, 0x14);   /* 0x1c3ba: F3's button pressed */
+    uint8_t x[3], y[3];
+    x[0] = x[1] = x[2] = party[0] & 0xFE;
+    y[0] = y[1] = y[2] = party[1] >> 1;
+    unsigned dir = party[2];
+    if (dir < 2) {
+        x[1] = (uint8_t)(x[1] + 2);
+        x[2] = (uint8_t)(x[2] - 2);
+    } else {
+        y[1] = (uint8_t)(y[1] + 1);
+        y[2] = (uint8_t)(y[2] - 1);
+    }
+    unsigned si = 0x2EE, ok = dir;
+    for (int step = 0; step < 3; step++) {
+        for (int j = 0; j < 3 && si == 0x2EE; j++)
+            si = walk_record_of_kind(s->tab_a, x[j], y[j], 2);
+        if (si < 0x2EE) {
+            const uint8_t *r = s->tab_a + 1000 + si;
+            ok = walk_flag_test(party, r[3], r[4]);
+            break;
+        }
+        for (int j = 0; j < 3; j++) {
+            if (dir == 0)
+                y[j]--;
+            else if (dir == 1)
+                y[j]++;
+            else if (dir == 2)
+                x[j] = (uint8_t)(x[j] - 2);
+            else if (dir == 3)
+                x[j] = (uint8_t)(x[j] + 2);
+        }
+    }
+    w->ctr = x[2];
+    w->hero_frame = y[2];
+    if (si >= 0x2EE || !ok) {
+        take_done(w, scr);
+        return;
+    }
+    uint8_t *r = s->tab_a + 1000 + si;
+    uint8_t text[12];
+    if (r[5] == 0 && r[0xD] != 0) {
+        unsigned slot = walk_take_slot(party);
+        if (!slot) {
+            take_full(w, scr);
+            return;
+        }
+        unsigned item = r[0xD];
+        party[slot] = (uint8_t)item;
+        r[0xD] = 0;
+        walk_flag_set(party, r[0xB], r[0xC]);
+        if (assets_read_at("OBJECT.LCC", (size_t)(item - 1) * 30, text, sizeof text) != 0) {
+            note_unbuilt(w, "an item that OBJECT.LCC does not have", item);
+            memset(text, ' ', sizeof text);
+        }
+        take_strip(w, scr, text, 1);   /* [bp-0x9a]: the item, counted down to 1 for the file offset */
+        return;
+    }
+    unsigned coins = w16(r, 0xD);
+    if (r[5] != 1 || coins == 0) {
+        take_done(w, scr);
+        return;
+    }
+    unsigned gold = w16(party, WALK_GOLD_AT);
+    if (60000u - gold < coins) {
+        take_full(w, scr);
+        return;
+    }
+    gold += coins;
+    party[WALK_GOLD_AT] = (uint8_t)gold;
+    party[WALK_GOLD_AT + 1] = (uint8_t)(gold >> 8);
+    r[0xD] = r[0xE] = 0;
+    walk_show_gold(w, scr);   /* 0x1bd6e */
+    walk_flag_set(party, r[0xB], r[0xC]);
+    char d[8];
+    snprintf(d, sizeof d, "%05u", coins % 100000u);   /* 0x26450 into 10 spaces (0x273f8) */
+    memcpy(text, d, 5);
+    for (int i = 0; i < 4 && text[i] <= '0'; i++)
+        text[i] = ' ';
+    static const uint8_t tail[7] = {' ', 0xAA, 0x54, 0xAA, 0xF7, 0xB9, 0xF4};
+    memcpy(text + 5, tail, sizeof tail);
+    take_strip(w, scr, text, y[0]);   /* [bp-0x9a] is still the first cell's y */
 }
 
 unsigned walk_look_entry(const uint8_t *party, const uint8_t *r)
@@ -1638,10 +1853,54 @@ unsigned walk_look_entry(const uint8_t *party, const uint8_t *r)
 
 int walk_kind(const walk_t *w)
 {
-    static const int kind[5] = {0, 4, 8, 9, 4};
+    static const int kind[7] = {0, 4, 8, 9, 4, 10, 4};
     if (w->boss_box)
         return 4;
+    if (w->talking == 7)
+        return battle_kind(w->cast);
     return kind[w->talking];
+}
+
+/* ---- F4: casting (0x154e0 .. 0x15620) ---- */
+
+/* The end of F4 (0x155dc .. 0x15618): the button let go, the pointer's place 0 and the corner kept; then 0x1729e. */
+static void cast_done(walk_t *w, screen_t *scr)
+{
+    battle_free(w->cast);
+    w->cast = NULL;
+    walk_button_toggle(scr, 0x4D84, 0x2F, 0x14);
+    if (w->mouse_on) {
+        w->mprev = 0;
+        walk_mouse_grab(scr, 0, w->mbg);
+    }
+    w->talking = 0;
+    records_again(w, 0x384 / WS_RECORD_SIZE);
+}
+
+/* F4: the button pressed (the pointer's corner put back first); the member picker for who casts, then his magic list
+ * (battle_world_cast). The world buffer's byte 0 is set to 0 (0x15585), which tells the list it is not in a battle. */
+static void cast_key(walk_t *w, screen_t *scr)
+{
+    if (w->mouse_on)
+        walk_mouse_put(scr, w->mprev, w->mbg, 0);
+    walk_button_toggle(scr, 0x4D84, 0x2F, 0x14);   /* 0x1c3ba: F4's button pressed */
+    w->buf[0] = 0;
+    w->cast = battle_world_cast(w, scr);
+    if (!w->cast) {
+        note_unbuilt(w, "the magic list's pictures", 0);
+        walk_button_toggle(scr, 0x4D84, 0x2F, 0x14);
+        return;
+    }
+    battle_set_show(w->cast, w->show, w->show_ctx);
+    w->talking = 7;
+}
+
+static void cast_round(walk_t *w, screen_t *scr, unsigned port60)
+{
+    if (battle_pass(w->cast, scr, port60) & WALK_PASS_UNBUILT)
+        note_unbuilt(w, battle_unbuilt(w->cast) ? battle_unbuilt(w->cast) : "?", 0);
+    if (battle_over(w->cast))
+        cast_done(w, scr);
 }
 
 /* 0x2c8a0: the key a left press at (x, y) stands for. While an arrow was the last key (`last`), or over the play window, the arrow
@@ -1738,6 +1997,16 @@ static int walk_keys(walk_t *w, unsigned port60)
     if (k == 0x3C && w->scr) {   /* F2: look */
         fkey_begin(w, w->scr);
         look_key(w, w->scr);
+        return 1;
+    }
+    if (k == 0x3D && w->scr) {   /* F3: take */
+        fkey_begin(w, w->scr);
+        take_key(w, w->scr);
+        return 1;
+    }
+    if (k == 0x3E && w->scr) {   /* F4: cast */
+        fkey_begin(w, w->scr);
+        cast_key(w, w->scr);
         return 1;
     }
     if (!arrow && k != 0) {
@@ -2303,6 +2572,22 @@ void walk_palette_step(walk_t *w, screen_t *scr)
     palette_cycle(w, scr);
 }
 
+void walk_palette_step_dim(walk_t *w, screen_t *scr)
+{
+    palette_cycle_on(w, scr, w->dimpal);
+}
+
+void walk_set_show(walk_t *w, void (*show)(void *ctx, screen_t *scr), void *ctx)
+{
+    w->show = show;
+    w->show_ctx = ctx;
+}
+
+battle_t *walk_cast(const walk_t *w)
+{
+    return w->talking == 7 ? w->cast : NULL;
+}
+
 void walk_show_gold(walk_t *w, screen_t *scr)
 {
     walk_draw_gold(scr, w16(w->scene->tab_b, WALK_GOLD_AT), w->art + ART_DIGITS);
@@ -2395,6 +2680,12 @@ void walk_sfx_stop(walk_t *w)
 {
     if (w->sb == 0x81 && w->sfx.stop)
         w->sfx.stop(w->sfx.ctx);
+}
+
+void walk_sfx_wait(walk_t *w)
+{
+    if (w->sb == 0x81 && w->sfx.wait)
+        w->sfx.wait(w->sfx.ctx);
 }
 
 void walk_battle_info(const walk_t *w, unsigned *member, unsigned *group, unsigned *boss, unsigned *rec)

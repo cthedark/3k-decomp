@@ -123,11 +123,18 @@ void walk_mouse_hide(walk_t *w, screen_t *scr);
 void walk_mouse_reset(walk_t *w, screen_t *scr);
 /* (0x2c8a0) The key a left press at (x, y) stands for in the world, `last` the key of the pass before. */
 unsigned walk_mouse_key(unsigned x, unsigned y, unsigned last);
-/* Which loop the world's next pass is in, for comparing with the original's loop tops: 0 the world (0x11d36), 4 a talk's message box
- * (0x1b506). */
+/* Which loop the world's next pass is in, for comparing with the original's loop tops: 0 the world (0x11d36), 4 a message box
+ * (0x1b506), 8 a talk's yes / no (0x18d23), 9 its number (0x19166), 10 F3's wait after a take (0x160b0, 0x164ad). */
 int walk_kind(const walk_t *w);
 /* The palette cycle of 0x1c284 (the battle runs it too, on the same counters). */
 void walk_palette_step(walk_t *w, screen_t *scr);
+/* The same on the dimmed copy of the palette the F-keys make ([bp-0xb0]): what F4's picker and magic list step. */
+void walk_palette_step_dim(walk_t *w, screen_t *scr);
+/* With `show` set, F4's picker shows the steps of a helped member's face flash through it (battle_set_show). */
+void walk_set_show(walk_t *w, void (*show)(void *ctx, screen_t *scr), void *ctx);
+/* F4's picker and magic list while they run (a battle_t in its world mode, battle.h), else NULL. */
+struct battle;
+struct battle *walk_cast(const walk_t *w);
 /* The touch: the member's offset in the party table (0, 0x28, ...), the monster group, the enemy record's byte 0x2f and the record's
  * offset in the villager table. */
 void walk_battle_info(const walk_t *w, unsigned *member, unsigned *group, unsigned *boss, unsigned *rec);
@@ -151,6 +158,7 @@ typedef struct {
     int (*busy)(void *ctx);
     void (*stop)(void *ctx);
     void *ctx;
+    void (*wait)(void *ctx);   /* the loops that spin until the busy word is 0 (0x1609e, 0x1649b); NULL: nothing waits */
 } walk_sfx_t;
 void walk_set_sfx(walk_t *w, const walk_sfx_t *sfx);
 /* (0x1c68e) A sound started, when the sound flag is 0x81. */
@@ -159,6 +167,8 @@ void walk_sfx_play(walk_t *w, unsigned file, unsigned off);
 int walk_sfx_busy(walk_t *w);
 /* (0x2914d) The sound cut, when the flag is 0x81 (the callers test it). */
 void walk_sfx_stop(walk_t *w);
+/* A loop that waits until the sound has played (0x1609e, 0x1649b), with the sounds on. */
+void walk_sfx_wait(walk_t *w);
 /* (0x1c3ba) A button pressed or let go: the w x h picture at screen offset `at` turned round, its inside put back two in. */
 void walk_button_toggle(screen_t *scr, unsigned at, unsigned w, unsigned h);
 /* The world drawn again at the hero with walk frame 0 and its middle 96 x 84 doubled through `table` (0x2c658): the 192 x 168 picture
@@ -204,6 +214,11 @@ unsigned walk_find_record(const uint8_t *tab_a, unsigned x, unsigned y);
 /* (0x2c28f) F2: the offset of the first scene record at (x, y) in the records' units whose kind is 9 (something to look at), 0x2ee if
  * there is none. */
 unsigned walk_look_record(const uint8_t *tab_a, unsigned x, unsigned y);
+/* (0x2c28f) The same for any kind: F3 looks for kind 2 (something to take). */
+unsigned walk_record_of_kind(const uint8_t *tab_a, unsigned x, unsigned y, unsigned kind);
+/* (0x15dfa .. 0x15eaa) F3: the party table offset of the empty item place a taken item goes to: the first of the 20 (0x14 .. 0x27) of
+ * the first member whose number is below 5 and whose HP is not 0; 0 when there is none. */
+unsigned walk_take_slot(const uint8_t *party);
 /* (0x15959 .. 0x15a09) The offset in kind 9 record `r` just past the message F2 shows, which is the word 2 bytes before it: entries of
  * 4 bytes from byte 3 (a flag, its bit, the message) are passed while their flag is set and the next one has a message, at most 3. */
 unsigned walk_look_entry(const uint8_t *party, const uint8_t *r);
