@@ -209,7 +209,14 @@ static unsigned scancode_set1(SDL_Scancode sc)
     case SDL_SCANCODE_RETURN: case SDL_SCANCODE_KP_ENTER: return 0x1c;
     case SDL_SCANCODE_SPACE: return 0x39;
     case SDL_SCANCODE_ESCAPE: return 0x01;
-    default: return 0;
+    case SDL_SCANCODE_A: return 0x1e;
+    default:
+        /* 1..9, 0 are set-1 codes 0x02..0x0b; F1..F10 are 0x3b..0x44 (WALK.SL's keys 1-4 and F-keys) */
+        if (sc >= SDL_SCANCODE_1 && sc <= SDL_SCANCODE_0)
+            return 0x02 + (unsigned)(sc - SDL_SCANCODE_1);
+        if (sc >= SDL_SCANCODE_F1 && sc <= SDL_SCANCODE_F10)
+            return 0x3b + (unsigned)(sc - SDL_SCANCODE_F1);
+        return 0;
     }
 }
 
