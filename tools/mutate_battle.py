@@ -202,7 +202,7 @@ m("battle.c", "picker: Esc chooses", "    } else if (k == 1) {\n        b->pk_m 
 # the item list
 m("battle.c", "items: not packed", "                party[i] = 0;\n                party[j] = (uint8_t)v;", "                (void)v;")
 m("battle.c", "items: one icon", "memcpy(icon + iw * r, b->mg_bar + 0x5A8 + 0x30 * r, iw);", "memcpy(icon + iw * r, b->mg_bar + 0x5A8 + 0x30 * r, 16);")
-m("battle.c", "items: counter from 0", "b->it_count = b->world ? 0x70 : 0x98;", "b->it_count = b->world ? 0x70 : 0;")
+m("battle.c", "items: counter from 0", "        b->it_count = 0x98;", "        b->it_count = 0;")
 # "items: the lit row recoloured to its end" is left out: the two rows the original leaves out (the row picture's last and the next
 # row's first, or the field under the last row) had none of the colours 0x74 .. 0x77 in any start tried, so nothing showed.
 m("battle.c", "items: shadow colour", "silhouette(scr, at + 0x141, px, 96, 14, 0x16);", "silhouette(scr, at + 0x141, px, 96, 14, 0x17);")
@@ -459,14 +459,59 @@ m("walk.c", "look: talk's colour", "w->talk_msg, 0xB0, 1);", "w->talk_msg, 0x50,
 m("walk.c", "look: no chain", "    if (w->box.last == 0x7F) {\n        w->talk_msg++;\n        if (look_open(w, scr) == 0)", "    if (0) {\n        w->talk_msg++;\n        if (look_open(w, scr) == 0)")
 m("walk.c", "look: palette steps on the palette", "    palette_cycle_on(ctx, scr, ((walk_t *)ctx)->dimpal);   /* look */", "    palette_cycle(ctx, scr);   /* look */")
 m("walk.c", "look: pass not ended", "        look_key(w, w->scr);\n        return 1;", "        look_key(w, w->scr);\n        return 0;")
+# F6, the equipment screen (step 31; RUNS=equip)
+m("walk.c", "equip: F6 is F5", "        items_key(w, w->scr, 1);", "        items_key(w, w->scr, 0);")
+m("walk.c", "equip: no prelude", "        fkey_begin(w, w->scr);\n        items_key(w, w->scr, 1);", "        items_key(w, w->scr, 1);")
+m("battle.c", "equip: F6 opens the item list", "    if (b->world_items == 2) {   /* F6", "    if (b->world_items == 9) {   /* F6")
+m("battle.c", "equip: count after the picker", "            b->eq_count = 0xEB;", "            b->eq_count = 0;")
+m("battle.c", "equip: count from the list", "            b->eq_count = b->frame_1c;", "            b->eq_count = 0;")
+m("battle.c", "equip: list count not left", "    b->frame_1c = slot & 0xFF;", "    b->frame_1c = 0x14;")
+m("battle.c", "equip: list pointer stays", "            ptr_hide(b, scr, b->it_ptr);\n            b->eq_count = b->frame_1c;", "            b->eq_count = b->frame_1c;")
+m("battle.c", "equip: no box", "    fill(scr, 0x7340, 0x60, 0x5A, 0x5C);", "")
+m("battle.c", "equip: no corner", "    fill(scr, 0x7340, 0x60, 0x5A, 0x5C);\n    ptr_corner(b, scr, &b->eq_ptr);", "    fill(scr, 0x7340, 0x60, 0x5A, 0x5C);")
+m("battle.c", "equip: picture opaque", "        put_clear(scr, 0x74E0, pic + 4, w16(pic, 0), w16(pic, 2));", "        put(scr, 0x74E0, pic + 4, w16(pic, 0), w16(pic, 2));")
+m("battle.c", "equip: one colour", "        uint8_t c = n == rec[0x16] ? 0xA0 : 0x27;", "        uint8_t c = 0xA0;")
+m("battle.c", "equip: one shadow", "        silhouette(scr, at + 1, px, 96, 14, (uint8_t)(c + 5));\n", "")
+m("battle.c", "equip: defence never shown", "        unsigned v = rec[0xE] ? rec[0xE] : rec[0xF];", "        unsigned v = rec[0xE];")
+m("battle.c", "equip: list count kept", "        b->it_count = v;   /* [bp-0x1e]", "        (void)v;   /* [bp-0x1e]")
+m("battle.c", "equip: count not the colour", "        b->eq_count = c;\n", "")
+m("battle.c", "equip: leading zero", "        if (div && d == 0 && !started)\n            continue;", "        if (0)\n            continue;")
+m("battle.c", "equip: first row not lit", "    b->eq_prev = 0x8600;", "    b->eq_prev = 0x7340;")
+m("battle.c", "equip: old row stays lit", "        eq_recolour(scr, b->eq_prev, 0xD, 0x5C);\n", "")
+m("battle.c", "equip: palette never", "    if (b->eq_count > 0x28) {\n        b->eq_count = 0;", "    if (b->eq_count > 0x128) {\n        b->eq_count = 0;")
+m("battle.c", "equip: keys without a release", "    if (!b->eq_latch)\n        k = 0x82;", "")
+m("battle.c", "equip: presses without a release", "        if (!b->eq_mlatch)\n            mb = 0;", "")
+m("battle.c", "equip: y not left", "        b->it_count = y & 0xFF;\n", "")
+m("battle.c", "equip: hover does not light", "            b->eq_cur = ((y - 0x5C) / 0xF) * 0x12C0 + 0x7340;\n            if (mb == 1)",
+  "            if (mb == 1)")
+m("battle.c", "equip: F5 button dead", "            k = 0x3F;\n        if (mb == 2) {", "            ;\n        if (mb == 2) {")
+m("battle.c", "equip: right button dead", "        if (mb == 2) {\n            equip_end(b, scr, k);", "        if (mb == 9) {\n            equip_end(b, scr, k);")
+m("battle.c", "equip: up wraps", "    if (k == 0x48 && b->eq_cur > 0x7340)", "    if (k == 0x48)")
+m("battle.c", "equip: down stops early", "    if (k == 0x50 && b->eq_cur < 0xD100)", "    if (k == 0x50 && b->eq_cur < 0xBE40)")
+m("battle.c", "equip: F5 does nothing", "    if (k == 0x3F) {\n        equip_end(b, scr, 0x3F);", "    if (k == 0x3F && 0) {\n        equip_end(b, scr, 0x3F);")
+m("battle.c", "equip: F5 leaves", "    if (k == 0x3F) {\n        items_begin(b, scr);", "    if (0) {\n        items_begin(b, scr);")
+m("battle.c", "equip: space dead", "    if (k != 0x1C && k != 0x39)", "    if (k != 0x1C)")
+m("battle.c", "equip: count not the item", "    b->eq_count = id;\n", "")
+m("battle.c", "equip: list count not the place", "    b->it_count = e & 0xFF;\n", "")
+m("battle.c", "equip: taken off stays worn", "        party[e] = 0;\n        party[j] = (uint8_t)id;", "        party[j] = (uint8_t)id;")
+m("battle.c", "equip: row not wiped", "        fill(scr, b->eq_cur, 0x60, 0xF, 0x5C);\n", "")
+m("battle.c", "equip: pointer under the wipe", "        ptr_hide(b, scr, b->eq_ptr);\n        fill(scr, b->eq_cur, 0x60, 0xF, 0x5C);", "        fill(scr, b->eq_cur, 0x60, 0xF, 0x5C);")
+m("battle.c", "equip: stats not halved", "            if (t[8] != n) {\n                ra >>= 1;", "            if (0) {\n                ra >>= 1;")
+m("battle.c", "equip: stats kept", "        party[m + 0x12] = d;\n        party[m + 0x13] = a;\n        b->eq_latch", "        b->eq_latch")
+m("battle.c", "equip: latches cleared", "        b->eq_latch = a;\n        b->eq_mlatch = d;", "        b->eq_latch = 0;\n        b->eq_mlatch = 0;")
+m("battle.c", "equip: count not his number", "        b->eq_count = n;\n        uint8_t a = 0", "        uint8_t a = 0")
+m("battle.c", "equip: number kept", "    if (slot < 6)\n        fill(scr, EQ_NUM_AT[slot], 0x18, 6, 0);", "")
+m("battle.c", "equip: number kept when no room", "    if (slot < 6)\n        fill(scr, EQ_NUM_AT[slot], 0x18, 6, 0);",
+  "    if (slot < 6 && j < m + 0x28)\n        fill(scr, EQ_NUM_AT[slot], 0x18, 6, 0);")
 # F5, items (step 30; RUNS=items). Left out: the battle's first item count (0x98) in the world (both are above 0x28: a palette step at
 # the first round either way).
-m("walk.c", "items: no prelude", "        fkey_begin(w, w->scr);\n        items_key(w, w->scr);", "        items_key(w, w->scr);")
+m("walk.c", "items: no prelude", "        fkey_begin(w, w->scr);\n        items_key(w, w->scr, 0);", "        items_key(w, w->scr, 0);")
 m("walk.c", "items: F6's button not pressed", "    walk_button_toggle(scr, 0x6684, 0x2F, 0x14);   /* 0x1566f, 0x15684 */\n    walk_button_toggle(scr, 0x7F84, 0x2F, 0x14);",
   "    walk_button_toggle(scr, 0x6684, 0x2F, 0x14);   /* 0x1566f, 0x15684 */")
 m("walk.c", "items: F5's button not let go", "    if (items) {\n        walk_button_toggle(scr, 0x6684, 0x2F, 0x14);", "    if (items) {")
-m("walk.c", "items: the magic list instead", "    w->cast = battle_world_items(w, scr);", "    w->cast = battle_world_cast(w, scr);")
-m("walk.c", "items: pass not ended", "        items_key(w, w->scr);\n        return 1;", "        items_key(w, w->scr);\n        return 0;")
+m("walk.c", "items: the magic list instead", "    w->cast = equip ? battle_world_equip(w, scr) : battle_world_items(w, scr);",
+  "    w->cast = equip ? battle_world_equip(w, scr) : battle_world_cast(w, scr);")
+m("walk.c", "items: pass not ended", "        items_key(w, w->scr, 0);\n        return 1;", "        items_key(w, w->scr, 0);\n        return 0;")
 m("battle.c", "items: two icons in the world", "    unsigned iw = b->world ? 48 : 32;", "    unsigned iw = 32;")
 m("battle.c", "items: palette on the palette", "        b->it_count = 0;\n        step_palette(b, scr);", "        b->it_count = 0;\n        walk_palette_step(b->w, scr);")
 m("battle.c", "items: no giving", "    } else if (k == 4 && party[slot] && b->world) {", "    } else if (k == 4 && party[slot] && 0) {")
@@ -479,8 +524,8 @@ m("battle.c", "items: given item stays", "            party[m + j] = party[slot]
 m("battle.c", "items: given list not redrawn", "            party[slot] = 0;\n            b->it_redraw = 1;\n            return;", "            party[slot] = 0;\n            return;")
 m("battle.c", "items: give pointer not kept", "    uint8_t *party = party_of(b);\n    ptr_corner(b, scr, &b->it_ptr);\n    b->world_stage = 1;", "    uint8_t *party = party_of(b);\n    b->world_stage = 1;")
 m("battle.c", "items: picker count not left", "    b->last_gw = b->pk_count;\n", "")
-m("battle.c", "items: picker of F5 is F4's caster's", "    if (b->world_items)   /* F5 (0x156cf .. 0x1572d): his item list */\n            items_begin(b, scr);",
-  "    if (0)   /* F5 (0x156cf .. 0x1572d): his item list */\n            items_begin(b, scr);")
+m("battle.c", "items: picker of F5 is F4's caster's", "    } else if (b->world_items) {   /* F5 (0x156cf .. 0x1572d): his item list */",
+  "    } else if (0) {   /* F5 (0x156cf .. 0x1572d): his item list */")
 # F4, casting (step 29; RUNS=cast). Left out: the records run again after F4 (no flag changes; as for F2); a fallen caster let through
 # the picker (its flag 0), or F4's own HP test after it (0x15570) taken away: the original refuses a fallen caster twice, so either alone
 # is hidden by the other.

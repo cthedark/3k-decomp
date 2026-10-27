@@ -1864,13 +1864,11 @@ int walk_kind(const walk_t *w)
 
 /* ---- F4: casting (0x154e0 .. 0x15620) ---- */
 
-/* The end of F4 (0x155dc .. 0x15618): the button let go, the pointer's place 0 and the corner kept; then 0x1729e. F5 lets both its
- * buttons go (0x1579c .. 0x157f2). */
+/* The end of F4 (0x155dc .. 0x15618): the button let go, the pointer's place 0 and the corner kept; then 0x1729e. F5 and F6 let both
+ * their buttons go (0x1579c .. 0x157f2). */
 static void cast_done(walk_t *w, screen_t *scr)
 {
     int items = w->cast_items;
-    if (items && battle_world_result(w->cast) == 0xFF)   /* the item list's F6: 0x1577b, the equipment screen */
-        note_unbuilt(w, "the equipment screen (F6, 0x221d2)", 0);
     battle_free(w->cast);
     w->cast = NULL;
     if (items) {
@@ -1906,16 +1904,17 @@ static void cast_key(walk_t *w, screen_t *scr)
     w->talking = 7;
 }
 
-/* F5 (0x15620 .. 0x157f5 with key 0x3f): both F5's and F6's buttons pressed (the pointer's corner put back first), the same picker,
- * then the member's item list (battle_world_items). The world buffer's byte 0 is 0 for it too. */
-static void items_key(walk_t *w, screen_t *scr)
+/* F5 and F6 (0x15620 .. 0x157f5, keys 0x3f and 0x40): both buttons pressed (the pointer's corner put back first), the same picker,
+ * then the member's item list (battle_world_items) or equipment screen (battle_world_equip). The world buffer's byte 0 is 0 for
+ * them too. */
+static void items_key(walk_t *w, screen_t *scr, int equip)
 {
     if (w->mouse_on)
         walk_mouse_put(scr, w->mprev, w->mbg, 0);
     walk_button_toggle(scr, 0x6684, 0x2F, 0x14);   /* 0x1566f, 0x15684 */
     walk_button_toggle(scr, 0x7F84, 0x2F, 0x14);
     w->buf[0] = 0;
-    w->cast = battle_world_items(w, scr);
+    w->cast = equip ? battle_world_equip(w, scr) : battle_world_items(w, scr);
     if (!w->cast) {
         note_unbuilt(w, "the item list's pictures", 0);
         walk_button_toggle(scr, 0x6684, 0x2F, 0x14);
@@ -2042,7 +2041,12 @@ static int walk_keys(walk_t *w, unsigned port60)
     }
     if (k == 0x3F && w->scr) {   /* F5: items */
         fkey_begin(w, w->scr);
-        items_key(w, w->scr);
+        items_key(w, w->scr, 0);
+        return 1;
+    }
+    if (k == 0x40 && w->scr) {   /* F6: equipment */
+        fkey_begin(w, w->scr);
+        items_key(w, w->scr, 1);
         return 1;
     }
     if (!arrow && k != 0) {

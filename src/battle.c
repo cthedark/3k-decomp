@@ -103,8 +103,12 @@ struct battle {
     /* F4 in the world (battle_world_cast): the list's buffer byte 0 is 0 there ([bp-0xe] of 0x21486); 0 while the caster is being
      * picked, 1 from his list on */
     int world, world_stage;
-    int world_items;                   /* F5 (battle_world_items): the item list after the picker, not the magic list */
-    unsigned world_result;             /* what the item list returns to F5: 0, or 0xff for the equipment screen (F6) */
+    int world_items;                   /* F5 (battle_world_items, 1) or F6 (battle_world_equip, 2): after the picker, not the magic list */
+    /* the equipment screen (0x221d2), F5's and F6's; its frame is the item list's (both get 13 words from F5's handler), so each starts
+     * from what the other left: its [bp-0x1c] (eq_count) is the list's [bp-0x1c] (frame_1c), its [bp-0x1e] the list's it_count */
+    unsigned eq_cur, eq_prev, eq_count, eq_latch, eq_mlatch, eq_ptr, frame_1c;
+    uint8_t eq_tab[6 * 20];            /* buffer + 0x2710: 16 bytes from byte 0xe of each worn thing's record, 20 apart */
+    uint8_t digits[350];               /* the map buffer + 0xd070: RPG.LCP 0x9b8, ten 7 x 5 digits */
 };
 
 void battle_set_show(battle_t *b, void (*show)(void *ctx, screen_t *scr), void *ctx)
@@ -587,7 +591,8 @@ battle_t *battle_world_cast(walk_t *w, screen_t *scr)
     b->world = 1;
     size_t len = 0;
     uint8_t *g = read_unpack("RPG.LCP", 0xE95, 0x264, &len, NULL);   /* 0x214f5: the map buffer + 0xd5b1 holds the same bytes */
-    int ok = g && len >= sizeof b->mg_bar && assets_read_at("RPG.LCP", 0x1A6B7, b->font8, sizeof b->font8) == 0;
+    int ok = g && len >= sizeof b->mg_bar && assets_read_at("RPG.LCP", 0x1A6B7, b->font8, sizeof b->font8) == 0 &&
+             assets_read_at("RPG.LCP", 0x9B8, b->digits, sizeof b->digits) == 0;
     if (ok)
         memcpy(b->mg_bar, g, sizeof b->mg_bar);
     free(g);
@@ -610,9 +615,12 @@ battle_t *battle_world_items(walk_t *w, screen_t *scr)
     return b;
 }
 
-unsigned battle_world_result(const battle_t *b)
+battle_t *battle_world_equip(walk_t *w, screen_t *scr)
 {
-    return b->world_result;
+    battle_t *b = battle_world_cast(w, scr);
+    if (b)
+        b->world_items = 2;
+    return b;
 }
 
 /* ---- one pass ---- */
@@ -1267,6 +1275,7 @@ static void magic_end(battle_t *b, screen_t *scr, unsigned r);
 static void magic_picked(battle_t *b, screen_t *scr, unsigned m);
 static void items_begin(battle_t *b, screen_t *scr);
 static void item_given(battle_t *b, screen_t *scr, unsigned m);
+static void equip_begin(battle_t *b, screen_t *scr);
 
 /* The lists' and the picker's palette step (0x1c284 on their palette argument): the palette itself in a battle, F4's dimmed copy
  * ([bp-0xb0]) in the world. */
@@ -1567,10 +1576,15 @@ static void magic_picked(battle_t *b, screen_t *scr, unsigned m)
         }
         b->v44 = m;
         b->world_stage = 1;
-        if (b->world_items)   /* F5 (0x156cf .. 0x1572d): his item list */
+        if (b->world_items == 2) {   /* F6 (0x15748 .. 0x1577b): his equipment */
+            b->eq_count = 0xEB;   /* [bp-0x1c] is never set: 0xeb after the picker in every F6 tried (INFERRED) */
+            equip_begin(b, scr);
+        } else if (b->world_items) {   /* F5 (0x156cf .. 0x1572d): his item list */
+            b->it_count = 0x70;   /* never set: 0x70 after the picker in every F5 tried (INFERRED) */
             items_begin(b, scr);
-        else
+        } else {
             magic_begin(b, scr);
+        }
         return;
     }
     if (b->world && b->world_stage == 3) {   /* the item list's key 3 (0x2132d .. 0x21423): to whom */
@@ -1748,8 +1762,9 @@ static void items_begin(battle_t *b, screen_t *scr)
     b->it_page = 0x14;
     b->it_redraw = 1;
     b->it_latch = 0;
-    b->it_count = b->world ? 0x70 : 0x98;   /* never set: what the stack holds there, 0x98 in every battle tried (after the magic list
-                                             * too) and 0x70 in F5 (INFERRED) */
+    if (!b->world)   /* never set: what the stack holds there, 0x98 in every battle tried (after the magic list too; INFERRED); in the
+                      * world it is set by whoever opens the list */
+        b->it_count = 0x98;
     b->phase = BATTLE_KIND_ITEMS;
 }
 
@@ -1953,6 +1968,7 @@ static void items_round(battle_t *b, screen_t *scr, unsigned port60)
         b->it_cur += 0x60;
     }
     unsigned slot = m + b->it_page + b->it_idx;
+    b->frame_1c = slot & 0xFF;   /* 0x20e63, [bp-0x1c]: the equipment screen's palette count if it opens now */
     if (k == 2 && party[slot]) {
         item_use(b, slot);
     } else if (k == 3) {
@@ -1965,13 +1981,209 @@ static void items_round(battle_t *b, screen_t *scr, unsigned port60)
         pick_begin(b, scr, 0, 0);
         b->world_stage = 3;
     } else if (k == 0x40) {   /* 0x21427: F6 (or its button); in the world the list returns 0xff, the equipment screen */
-        if (b->world)
-            b->world_result = 0xFF;
+        if (b->world) {
+            ptr_hide(b, scr, b->it_ptr);
+            b->eq_count = b->frame_1c;
+            equip_begin(b, scr);
+            return;
+        }
         items_end(b, scr);
     }
 }
 
 static void start_rewards(battle_t *b, screen_t *scr);
+
+/* ---- F6: the equipment screen (0x221d2 .. 0x22c41) ---- */
+
+static const unsigned EQ_NUM_AT[6] = {0x7622, 0x87A2, 0x9A62, 0xAD22, 0xBFE2, 0xD162};   /* 0x22335 .. 0x223b7 */
+
+/* 0x24302 with its flag set: a number below 1000 in three 7 x 5 digits 8 apart (0x25bda, colour 0 clear), leading zeros left out. */
+static void eq_number(battle_t *b, screen_t *scr, unsigned at, unsigned v)
+{
+    int started = 0;
+    for (unsigned div = 100; div; at += 8) {
+        unsigned d = (v / div) & 0xFF;
+        v -= d * div;
+        div /= 10;
+        if (div && d == 0 && !started)
+            continue;
+        if (d)
+            started = 1;
+        if (d < 10)
+            put_clear(scr, at, b->digits + d * 35, 7, 5);
+        if (!div)
+            break;
+    }
+}
+
+/* 0x2723c, 0x2741b, 0x27328: the 96 x 15 row at `at` with its colour `from` turned `to` */
+static void eq_recolour(screen_t *scr, unsigned at, uint8_t from, uint8_t to)
+{
+    for (unsigned r = 0; r < 15; r++)
+        for (unsigned x = 0; x < 96; x++) {
+            unsigned o = at + r * SCREEN_W + x;
+            if (o < SCREEN_W * SCREEN_H && scr->pix[o] == from)
+                scr->pix[o] = to;
+        }
+}
+
+/* 0x221d2 .. 0x22567: a box of colour 0x5c at (64, 92), 96 x 90; RPG.LCP 0x168f9 (a 96 x 90 picture, a body with six boxes) at
+ * (160, 93), colour 0 clear; then each of the six things the member wears (party table 0x12c + 6 x his number) from OBJECT.LCC: its
+ * name (12 bytes) in a row of the box in colour 0xa0, 0x27 when byte 0x16 is not his number, over a shadow of that colour + 5 one pixel
+ * down and down right; byte 0xe of the record (byte 0xf when 0) in three digits in the picture's box for it. The first row is lit in
+ * the first round. The pointer's place is 0 and the corner kept. */
+static void equip_begin(battle_t *b, screen_t *scr)
+{
+    uint8_t *party = party_of(b);
+    unsigned m = b->v44, n = party[m + 3];
+    fill(scr, 0x7340, 0x60, 0x5A, 0x5C);
+    ptr_corner(b, scr, &b->eq_ptr);
+    size_t len = 0;
+    uint8_t *pic = read_unpack("RPG.LCP", 0x168F9, 0x1D98, &len, NULL);
+    if (pic && len >= 4 + 96 * 90)
+        put_clear(scr, 0x74E0, pic + 4, w16(pic, 0), w16(pic, 2));
+    else
+        note(b, "the equipment screen's picture in RPG.LCP");
+    free(pic);
+    memset(b->eq_tab, 0, sizeof b->eq_tab);
+    for (unsigned i = 0, at = 0x7480; i < 6; i++, at += 0x12C0) {
+        unsigned id = party[0x12C + n * 6 + i];
+        if (!id)
+            continue;
+        uint8_t rec[30];
+        read_object(b, id, rec);
+        memcpy(b->eq_tab + 20 * i, rec + 0xE, 16);   /* 0x27503, eight words */
+        unsigned v = rec[0xE] ? rec[0xE] : rec[0xF];
+        b->it_count = v;   /* [bp-0x1e]: what the item list starts from if F5 follows */
+        uint8_t c = n == rec[0x16] ? 0xA0 : 0x27;
+        uint8_t px[96 * 14];
+        text_pic(b, rec, 12, c, px);
+        silhouette(scr, at, px, 96, 14, (uint8_t)(c + 5));
+        silhouette(scr, at + 1, px, 96, 14, (uint8_t)(c + 5));
+        put_clear(scr, at - 0x140, px, 96, 14);
+        eq_number(b, scr, EQ_NUM_AT[i], v);
+        b->eq_count = c;
+    }
+    b->eq_cur = 0x7340;
+    b->eq_prev = 0x8600;
+    b->eq_mlatch = 0;
+    b->eq_latch = 0;
+    b->phase = BATTLE_KIND_EQUIP;
+}
+
+/* 0x22c0d: the pointer off; the screen returns its key: 0x3f opens the item list (0x20412 again), anything else ends F5 or F6 */
+static void equip_end(battle_t *b, screen_t *scr, unsigned k)
+{
+    ptr_hide(b, scr, b->eq_ptr);
+    if (k == 0x3F) {
+        items_begin(b, scr);
+        return;
+    }
+    b->over = BATTLE_BACK;
+}
+
+/* 0x2256a .. 0x22c0a: a round of the equipment screen. A new lit row: its colour 0x5c turned 0xd, the old one's back. Up and Down
+ * move; Esc leaves; F5 (or its button) goes to the item list; Enter or Space takes the lit thing off into his first empty item place
+ * (his attack and defence summed again as an item worn changes them, item_use); with no room the thing stays, but its number is wiped
+ * all the same. Keys only after a release, presses only after all buttons are up; the pointer over a row lights it. */
+static void equip_round(battle_t *b, screen_t *scr, unsigned port60)
+{
+    uint8_t *party = party_of(b);
+    unsigned m = b->v44;
+    if (b->eq_cur != b->eq_prev) {
+        ptr_hide(b, scr, b->eq_ptr);
+        eq_recolour(scr, b->eq_cur, 0x5C, 0xD);
+        eq_recolour(scr, b->eq_prev, 0xD, 0x5C);
+        b->eq_prev = b->eq_cur;
+        ptr_show(b, scr, b->eq_ptr);
+    }
+    b->eq_count = (b->eq_count + 1) & 0xFF;
+    if (b->eq_count > 0x28) {
+        b->eq_count = 0;
+        step_palette(b, scr);
+    }
+    unsigned k = port60 & 0xFF;
+    if (k > 0x7F)
+        b->eq_latch = 1;
+    if (!b->eq_latch)
+        k = 0x82;
+    int mx, my;
+    unsigned mb;
+    if (walk_mouse(b->w, &mx, &my, &mb)) {   /* 0x2270d */
+        unsigned x = (unsigned)mx, y = (unsigned)my;
+        if (mb == 0)
+            b->eq_mlatch = 1;
+        if (!b->eq_mlatch)
+            mb = 0;
+        if (mb)
+            b->eq_mlatch = 0;
+        b->it_count = y & 0xFF;
+        ptr_move(b, scr, &b->eq_ptr, y * SCREEN_W + x);
+        if (x > 0x3F && x < 0xA0 && y > 0x5B && y < 0xB6) {
+            b->eq_cur = ((y - 0x5C) / 0xF) * 0x12C0 + 0x7340;
+            if (mb == 1)
+                k = 0x1C;
+        }
+        if (x > 4 && x < 0x32 && y > 0x52 && y < 0x65 && mb == 1)
+            k = 0x3F;
+        if (mb == 2) {
+            equip_end(b, scr, k);
+            return;
+        }
+    }
+    if (k >= 0x7F)
+        return;
+    b->eq_latch = 0;
+    if (k == 1) {
+        equip_end(b, scr, 1);
+        return;
+    }
+    if (k == 0x48 && b->eq_cur > 0x7340)
+        b->eq_cur -= 0x12C0;
+    if (k == 0x50 && b->eq_cur < 0xD100)
+        b->eq_cur += 0x12C0;
+    if (k == 0x3F) {
+        equip_end(b, scr, 0x3F);
+        return;
+    }
+    if (k != 0x1C && k != 0x39)
+        return;
+    unsigned slot = ((b->eq_cur + 0x8CC0) & 0xFFFF) / 0x12C0, n = party[m + 3], e = 0x12C + n * 6 + slot;
+    b->it_count = e & 0xFF;
+    unsigned id = party[e];
+    b->eq_count = id;
+    if (!id)
+        return;
+    unsigned j = m + 0x14;
+    while (j < m + 0x28 && party[j])
+        j++;
+    if (j < m + 0x28) {
+        party[e] = 0;
+        party[j] = (uint8_t)id;
+        memset(b->eq_tab + 20 * slot, 0, 20);
+        ptr_hide(b, scr, b->eq_ptr);
+        fill(scr, b->eq_cur, 0x60, 0xF, 0x5C);
+        ptr_show(b, scr, b->eq_ptr);
+        b->eq_count = n;
+        uint8_t a = 0, d = 0;   /* the sums are kept in the two latches' bytes ([bp-0x1a], [bp-8]) */
+        for (unsigned i = 0; i < 6; i++) {
+            const uint8_t *t = b->eq_tab + 20 * i;
+            unsigned ra = t[0], rd = t[1] / 5;
+            if (t[8] != n) {
+                ra >>= 1;
+                rd >>= 1;
+            }
+            a = (uint8_t)(a + ra);
+            d = (uint8_t)(d + rd);
+        }
+        party[m + 0x12] = d;
+        party[m + 0x13] = a;
+        b->eq_latch = a;
+        b->eq_mlatch = d;
+    }
+    if (slot < 6)
+        fill(scr, EQ_NUM_AT[slot], 0x18, 6, 0);
+}
 
 /* 0x1e82e .. 0x1e8df, 0x1e8f1 .. 0x1e98f: key 1 or 2 with its card there: the flag switched, the right-hand button (47 x 20 at `at`)
  * pressed or let go with the pointer taken off first and only kept again after (the next move draws it). */
@@ -2317,6 +2529,10 @@ int battle_pass(battle_t *b, screen_t *scr, unsigned port60)
     }
     if (b->phase == BATTLE_KIND_ITEMS) {
         items_round(b, scr, port60);
+        return b->unbuilt_new ? WALK_PASS_UNBUILT : 0;
+    }
+    if (b->phase == BATTLE_KIND_EQUIP) {
+        equip_round(b, scr, port60);
         return b->unbuilt_new ? WALK_PASS_UNBUILT : 0;
     }
     uint8_t *party = party_of(b);

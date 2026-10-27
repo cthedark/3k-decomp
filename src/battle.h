@@ -63,9 +63,11 @@ battle_t *battle_begin(walk_t *w, screen_t *scr);
  * short. */
 battle_t *battle_world_cast(walk_t *w, screen_t *scr);
 /* F5 in the world (0x156c7 .. 0x1572d): the same picker, then his item list as the world has it (three icons; key 3 gives the lit item
- * to another member through a picker without faces; F6 or its button leaves with 0xff, battle_world_result). Run as battle_world_cast. */
+ * to another member through a picker without faces; F6 or its button opens the equipment screen). Run as battle_world_cast. */
 battle_t *battle_world_items(walk_t *w, screen_t *scr);
-unsigned battle_world_result(const battle_t *b);
+/* F6 (0x15748 .. 0x1577b): the same picker, then his equipment screen (0x221d2: Enter takes the lit thing off; F5 or its button opens
+ * the item list). F5 and F6 go back and forth until Esc. */
+battle_t *battle_world_equip(walk_t *w, screen_t *scr);
 void battle_free(battle_t *b);
 /* With `show` set, it is called after each of the 48 steps of a helped member's face flash in the picker (three times 16 colours
  * down); the original draws each step 100 times and does not wait, so how long it showed depended on the machine. Without it only the
@@ -84,7 +86,7 @@ int battle_over(const battle_t *b);
 /* Which loop the next pass is in, for comparing with the original's loop tops: the fight (0x1d418), the rewards bar (0x1fb7d), a
  * message box's wait (0x1b506), the magic list (0x217a6), the member picker (0x1aa30) or the item list (0x207b2). */
 enum { BATTLE_KIND_FIGHT = 1, BATTLE_KIND_REWARDS = 3, BATTLE_KIND_DIALOG = 4, BATTLE_KIND_MAGIC = 5, BATTLE_KIND_PICK = 6,
-       BATTLE_KIND_ITEMS = 7 };
+       BATTLE_KIND_ITEMS = 7, BATTLE_KIND_EQUIP = 11 };
 int battle_kind(const battle_t *b);
 /* What the battle returns: the number of slots whose monster died (0 after a loss). */
 unsigned battle_result(const battle_t *b);

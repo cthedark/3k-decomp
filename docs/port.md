@@ -1259,4 +1259,15 @@ third icon) gives the lit item to another member (`docs/findings.md` "WALK.SL st
   (`items_key`; `cast_done` lets F5's two buttons go); `tools/walk_keys.py items`.
 - **Checked:** `tools/check_battle.sh`, 13 new `items_` starts and a battle start for key 3, all identical at every pass.
   `tools/mutate_battle.py` (445): 19 new mutations, all caught; one left out with a note. ASan/UBSan clean on three starts.
-- **Not built:** the equipment screen (F6), which the item list's F6 opens; F7 to F10, keys 1 to 4 and A.
+- **Not built:** F7 to F10, keys 1 to 4 and A (F6, the equipment screen: 9i).
+
+## Milestone 9i: F6, the equipment screen (C), built 2026-10-24
+
+F6 (or its button, or F6 in the item list) picks a member and shows the six things he wears with their numbers; Enter takes the lit one
+off into his items, F5 goes to the item list and back (`docs/findings.md` "WALK.SL step 31").
+
+- **Code:** `src/battle.c` (`battle_world_equip`, `equip_begin`, `equip_round`, `equip_end`; the item list's F6), `src/walk.c`
+  (`items_key` for both keys); `tools/battle_check.py` loop kind 11 (`0x2256a`); `tools/walk_keys.py equip`.
+- **Checked:** `tools/check_battle.sh`, 14 `equip_` starts, all identical at every pass; `tools/mutate_battle.py` (486): 41 new
+  mutations, all caught. ASan/UBSan clean on three starts.
+- **Not built:** F7 to F10, keys 1 to 4 and A.

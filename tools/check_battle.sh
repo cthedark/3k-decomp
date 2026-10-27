@@ -434,6 +434,47 @@ run items_mouse 1 106 30 300 --key 1:0x81 --mouse 0:160:100:0 --mouse 3:20:85:1 
 run items_dark13 13 100 50 200 --key 1:0x81 --key 3:0x3f --key 5:0xbf --key 40:0x1c --key 42:0x9c --key 100:0x04 --key 102:0x84 \
     --key 140:0x4d --key 142:0xcd --key 160:0x1c --key 162:0x9c
 for seed in 1 2 3; do run "items_walk$seed" 1 106 30 2500 $($PY tools/walk_keys.py items $seed 2500); done
+# F6, the equipment screen (step 31): the hero wears a hat, another's armour (0x27, halved), a sword, gloves, member 1's shield and
+# boots: Enter and Space take two off, F5 to the list and F6 back, Esc; Esc in the picker; nothing worn (Enter on nothing); no room
+# for what is taken off; member 1 (his own shield in 0xa0); F6 from the item list's second page and the second row; a long wait; the
+# mouse (rows lit by the pointer, a press takes off, F5's button, the right button); a dark scene; walks with F5 and F6
+EQ="$IT --byte 0:0x12c:14 --byte 0:0x12d:27 --byte 0:0x12e:5 --byte 0:0x12f:12 --byte 0:0x130:42 --byte 0:0x131:13"
+DOPTS="$EQ"
+run equip_off 1 106 30 300 --key 1:0x81 --key 3:0x40 --key 5:0xc0 --key 40:0x1c --key 42:0x9c --key 70:0x50 --key 72:0xd0 \
+    --key 90:0x1c --key 92:0x9c --key 110:0x50 --key 112:0xd0 --key 130:0x39 --key 132:0xb9 --key 150:0x48 --key 152:0xc8 \
+    --key 170:0x3f --key 172:0xbf --key 200:0x40 --key 202:0xc0 --key 240:0x01 --key 242:0x81
+run equip_esc 1 106 30 100 --key 1:0x81 --key 3:0x40 --key 5:0xc0 --key 40:0x01 --key 42:0x81
+run equip_wait 1 106 30 400 --key 1:0x81 --key 3:0x40 --key 5:0xc0 --key 20:0x1c --key 22:0x9c --key 300:0x50 --key 302:0xd0 \
+    --key 310:0x50 --key 312:0xd0 --key 320:0x50 --key 322:0xd0 --key 330:0x50 --key 332:0xd0 --key 340:0x50 --key 342:0xd0 \
+    --key 350:0x50 --key 352:0xd0 --key 360:0x1c --key 362:0x9c --key 380:0x01 --key 382:0x81
+# the pointer kept at (0, 0), where the item list does not move it, so the list's palette count starts from the screen's last y; then a
+# left press held from the item list into the screen over a row (it takes nothing off until released)
+run equip_corner 1 106 30 160 --key 1:0x81 --mouse 0:0:0:0 --key 3:0x40 --key 5:0xc0 --key 20:0x1c --key 22:0x9c --key 50:0x3f \
+    --key 52:0xbf --key 120:0x01 --key 122:0x81
+run equip_held 1 106 30 200 --key 1:0x81 --key 3:0x40 --key 5:0xc0 --key 20:0x1c --key 22:0x9c --key 40:0x3f --key 42:0xbf \
+    --mouse 0:300:30:0 --mouse 60:100:110:0 --mouse 70:100:110:1 --key 80:0x40 --key 82:0xc0 --mouse 120:100:110:0 \
+    --mouse 140:100:126:1 --mouse 142:100:126:0 --key 170:0x01 --key 172:0x81
+run equip_fromlist 1 106 30 300 --key 1:0x81 --key 3:0x3f --key 5:0xbf --key 20:0x1c --key 22:0x9c --key 40:0x03 --key 42:0x83 \
+    --key 50:0x50 --key 52:0xd0 --key 60:0x40 --key 62:0xc0 --key 90:0x50 --key 92:0xd0 --key 100:0x1c --key 102:0x9c \
+    --key 120:0x3f --key 122:0xbf --key 160:0x40 --key 162:0xc0 --key 200:0x01 --key 202:0x81
+DOPTS="$EQ --join 1 --hp 1:30 --byte 0:0x132:40 --byte 0:0x133:51 --byte 0:0x134:83 --byte 0:0x136:42"
+run equip_member1 1 106 30 200 --key 1:0x81 --key 3:0x40 --key 5:0xc0 --key 20:0x4d --key 22:0xcd --key 40:0x1c --key 42:0x9c \
+    --key 70:0x50 --key 72:0xd0 --key 90:0x1c --key 92:0x9c --key 140:0x01 --key 142:0x81
+DOPTS="$IT"
+run equip_none 1 106 30 200 --key 1:0x81 --key 3:0x40 --key 5:0xc0 --key 40:0x1c --key 42:0x9c --key 60:0x1c --key 62:0x9c \
+    --key 80:0x50 --key 82:0xd0 --key 100:0x39 --key 102:0xb9 --key 140:0x01 --key 142:0x81
+FULL0=""; for o in $(seq 20 39); do FULL0="$FULL0 --byte 0:$o:1"; done
+DOPTS="$EQ$FULL0"
+run equip_full 1 106 30 200 --key 1:0x81 --key 3:0x40 --key 5:0xc0 --key 40:0x1c --key 42:0x9c --key 60:0x1c --key 62:0x9c \
+    --key 80:0x50 --key 82:0xd0 --key 100:0x1c --key 102:0x9c --key 140:0x01 --key 142:0x81
+DOPTS="$EQ"
+run equip_mouse 1 106 30 360 --key 1:0x81 --mouse 0:160:100:0 --mouse 3:20:105:1 --mouse 5:20:105:0 --mouse 30:140:80:0 \
+    --mouse 40:140:80:1 --mouse 42:140:80:0 --mouse 60:100:96:0 --mouse 70:100:115:0 --mouse 80:100:115:1 --mouse 82:100:115:0 \
+    --mouse 100:100:150:0 --mouse 110:100:150:1 --mouse 112:100:150:0 --mouse 130:20:90:0 --mouse 140:20:90:1 --mouse 142:20:90:0 \
+    --mouse 230:20:105:1 --mouse 232:20:105:0 --mouse 260:100:130:0 --mouse 290:100:130:2 --mouse 292:100:130:0
+run equip_dark13 13 100 50 200 --key 1:0x81 --key 3:0x40 --key 5:0xc0 --key 40:0x1c --key 42:0x9c --key 100:0x50 --key 102:0xd0 \
+    --key 120:0x1c --key 122:0x9c --key 160:0x01 --key 162:0x81
+for seed in 1 2 3; do run "equip_walk$seed" 1 106 30 2500 $($PY tools/walk_keys.py equip $seed 2500); done
 DOPTS=""
 # the world's start zoom (step 23; tools/zoom_check.py): its 13 steps in scenes 0, 1, 34 and four dark scenes (6, 9, 23, 47), from the
 # data directories of the starts above

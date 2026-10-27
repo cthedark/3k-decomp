@@ -17,6 +17,7 @@ Usage: tools/walk_keys.py fuzz SEED NPASSES    random presses and releases of th
        tools/walk_keys.py take SEED NPASSES    the same with F3 (take) three times in four and F2 the fourth
        tools/walk_keys.py cast SEED NPASSES    short walks, and F4 (cast) with keys for its picker and list, then Esc
        tools/walk_keys.py items SEED NPASSES   the same with F5 (items): use, turn the page, give
+       tools/walk_keys.py equip SEED NPASSES   the same with F6 or F5, and the equipment screen
 Codes: 0x48 up, 0x50 down, 0x4b left, 0x4d right; the break code is the make code + 0x80.
 """
 import random
@@ -171,6 +172,12 @@ def items(seed, n):
     return cast(seed, n, 0x3F, (0x48, 0x50, 0x4B, 0x4D, 0x02, 0x03, 0x04, 0x4D, 0x1C), True)
 
 
+def equip(seed, n):
+    """cast with F6 or F5: the equipment screen's Up, Down, Enter and Space, the item list's keys, F5 and F6 between them"""
+    rng = random.Random(seed + 1000)
+    return cast(seed, n, rng.choice([0x40, 0x3F]), (0x48, 0x50, 0x1C, 0x39, 0x50, 0x02, 0x03, 0x4D, 0x3F, 0x40), True)
+
+
 def route(seed, n):
     import walk_route
     events, end, _m = walk_route.plan([(60, 46), (86, 73), (40, 46)])
@@ -180,7 +187,7 @@ def route(seed, n):
 
 if __name__ == "__main__":
     if len(sys.argv) != 4 or sys.argv[1] not in ("fuzz", "shoot", "volley", "yoyo", "door", "route", "talk", "look", "take", "cast",
-                                                 "items"):
+                                                 "items", "equip"):
         raise SystemExit(__doc__)
     print(" ".join({"fuzz": fuzz, "shoot": shoot, "volley": volley, "yoyo": yoyo, "door": door, "route": route, "talk": talk,
-                    "look": look, "take": take, "cast": cast, "items": items}[sys.argv[1]](int(sys.argv[2]), int(sys.argv[3]))))
+                    "look": look, "take": take, "cast": cast, "items": items, "equip": equip}[sys.argv[1]](int(sys.argv[2]), int(sys.argv[3]))))

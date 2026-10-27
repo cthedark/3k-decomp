@@ -3385,6 +3385,7 @@ character the list drew. When key 3 opens the picker a second time with nothing 
 stopped (FOUND: one palette step a pass early in a start that gave twice; the port now leaves it there, `b->last_gw`).
 
 **Not built:** the equipment screen (F6, `0x221d2`); the item list's F6 reports it and F5 ends there. F6 itself is still an unbuilt key.
+(Built in step 31.)
 
 **Checked:** `tools/check_battle.sh`, 13 new `items_` starts, all identical at every pass: giving with long waits; eating and wearing;
 turning the page; giving to himself, to a fallen member, to one with no room, and Esc in its picker; Esc in the first picker; member
@@ -3392,3 +3393,43 @@ turning the page; giving to himself, to a fallen member, to one with no room, an
 items`). The battle's item starts are unchanged, and a new one presses key 3 and the third icon in a battle's list (nothing happens).
 `tools/mutate_battle.py`: 19 new mutations, all caught; one left out with a note (the battle's first count in the world: both above
 0x28). Four older patterns that these changes had made stale were repointed and re-run (caught). ASan/UBSan clean on three starts.
+
+## WALK.SL step 31: F6, the equipment screen, 2026-10-24
+
+Built in C and compared pass by pass. READ from the code (`0x221d2` .. `0x22c41`, its number routine `0x24302`, and F5's handler
+`0x15620`), SEEN in the oracle (`work/b8/probe_equip.py`: the picture, the digits, the first counters and the frames), then CONFIRMED by
+the comparison (a new loop top for `tools/battle_check.py`, `0x2256a`, kind 11 "equipment").
+
+**F6 is F5's handler with key 0x40:** the same two buttons and picker, then the equipment screen; it returns 0x3f to go to the item
+list (F5 or its button), which returns 0xff to come back (F6 or its button); anything else ends both.
+
+**The screen:**
+- a box of colour 0x5c at (64, 92), 96 x 90, with six rows 15 high; a 96 x 90 picture at (160, 93), colour 0 clear: a body with lines
+  to six black boxes. It is RPG.LCP **0x168f9** (0x1d98 bytes, the usual run-length picture): the seek's long offset is pushed as
+  (0x68f9, 1), so its high word is 1 and not a whence (SEEN: equal byte for byte to what the original decodes);
+- for each of the six things worn (party table 0x12c + 6 x his number, slot k at k - 1) its OBJECT.LCC name in colour 0xa0, or 0x27
+  when the record's byte 0x16 is not his number, over a shadow of that colour + 5 one pixel down and down right; and its byte 0xe
+  (attack), or byte 0xf (defence) when that is 0, in three 7 x 5 digits (RPG.LCP 0x9b8, the world's) in the picture's box for that
+  slot, leading zeros left out (`0x24302` with its flag set; without it the same routine draws five);
+- the lit row has its colour 0x5c turned 0xd; Up and Down move (no wrap); the pointer over the box lights the row under it;
+- Enter, Space or a left press on a row takes the lit thing off into his first empty item place: the row wiped to 0x5c and his attack
+  (0x13) and defence (0x12) summed again over the six (byte 0xe, byte 0xf / 5, each halved when not his, as item_use does). With no
+  empty place the thing stays, but its number is wiped all the same (FOUND by reading; seen in the comparison);
+- Esc or the right button leaves; F5 or a press on F5's button (x 5 .. 49, y 83 .. 100) goes to the item list. Keys count only after a
+  release, presses only after the buttons were all up.
+
+**Leftovers from the stack** (the item list and this screen get the same 13 words from the handler, so they share a frame; the picker
+gets 10):
+- the screen's palette count `[bp-0x1c]` is never set at its start; its setup leaves the last drawn name's colour there. With nothing
+  worn it is the item list's `[bp-0x1c]` (its last key's item place, m + page + row) after the list, and 0xeb after the picker (INFERRED,
+  every F6 tried);
+- the item list's palette count `[bp-0x1e]` is the screen's `[bp-0x1e]`: the last worn thing's number, the pointer's y, or the place of
+  what Enter took off, whichever came last (CONFIRMED by starts that go back and forth);
+- after taking a thing off, the two "released" flags hold the new attack and defence sums (any non-zero sum counts as released).
+
+**Checked:** `tools/check_battle.sh`, 14 `equip_` starts, all identical at every pass: two things taken off and F5 and F6 between the
+screens; Esc in the picker; a 360-pass wait with Down to the last row; the pointer kept at (0, 0); a press held into the screen; F6
+from the list's second page; member 1 (his own things and another's); nothing worn; no room; the mouse (rows lit by the pointer, a
+press, F5's button, the right button); a dark scene; three 2,500-pass walks with F5 and F6 (`tools/walk_keys.py equip`). The full
+`check_battle.sh` (254 starts) and `check_walk.sh` are identical. `tools/mutate_battle.py`: 41 new mutations, all caught; five F5
+patterns repointed and re-run (caught). ASan/UBSan clean on three starts.
