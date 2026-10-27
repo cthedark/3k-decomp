@@ -3494,3 +3494,49 @@ coins paid, the wrong sum, 0, too few coins, 356 for 100, coins on an item's pla
 (`tools/walk_keys.py use`). `tools/mutate_battle.py`: 62 new mutations, all caught (the first run missed 8: 6 starts added); two
 dropped as unshowable (see its note); eight older patterns the change made stale repointed and re-run, all caught. ASan/UBSan clean on
 five starts; a real-time run under SDL's dummy drivers used an item and paid coins.
+
+## WALK.SL step 33: F8, the map, 2026-10-26
+
+Built in C and compared pass by pass. READ from the code (F8's handler `0x15ab0` .. `0x15bbd`, the map `0x1c6e4` .. `0x1cbb5`), SEEN
+in the oracle (`work/b8/probe_map.py`: the frame's locals, the screen), then CONFIRMED by the comparison (a new loop top for
+`tools/battle_check.py`, `0x1ca82`, kind 13 "map").
+
+**F8:** the pointer's corner put back, F8's button (0xb184) pressed; the five party records' 20 item places (0x14 .. 0x27 of each,
+all five whoever is in the party) looked at for item 0x13, the map, writing `[bp-0x96]` = the record's place + 0x28 as it goes (0xc8
+when none has it). Found: `[bp-0xc4]` = the hero's x & 0xfe and the map; then the button let go and `0x1729e`, as every F-key. No
+map: only the button, pressed and let go. The map is a world item: any member carrying it will do.
+
+**The map** (`0x1c6e4`, its arguments the hero's x & 0xfe and y / 2, from `[bp-0x8e]` and `[bp-0xb6]`, which follow `tab_b[0]`, `[1]`):
+- the screen's rows 49 .. 150 kept in the world buffer at 0x32c8 (`0x2723c`);
+- one pixel per map cell, byte 0x20 of its tile (row 4, column 0; the tile number shifted in 16 bits, as the view does), 128 x 100 in
+  the world buffer from byte 4; then (`0x2741b`, in this order) 0xbf turned 0x2f, 1 to 0x57, 2 to 0x59, 3 to 0x5a; then the hero's
+  cell set to 0xbf;
+- a line of 0xb7 at (97, 49), 128 wide (`0x270e0`);
+- each of the 100 rows: a header written over the 4 pixels before it (`0x80, 1`), stretched into the map buffer `[bp-0xba]` to the
+  row's width (`0x26de8`: step 0xffff * 128 / w, from 1; so a 128-wide row draws its second cell twice and not its last), 0xb0 at
+  each edge; in the hero's row the first 0xbf from byte 5 gives his place; then shaded (`0x25dca`, the edges too) 7 times for rows
+  0 .. 11, then one time less every 13 rows (none from row 90), and put at (96, 50) on, 130 wide, every second row a pixel further left
+  and two wider (228 + 2 at the last row, which starts at (46, 149));
+- a line of 0xb0 under the last row, as wide;
+- the mark: the 4 x 4 from a pixel up and left of the hero kept in the map buffer (and a copy at 0x14), its rows 1 and 2 coloured
+  0x10, the two middle pixels of rows 0 and 3 0x12.
+
+**Its loop** (`0x1ca82`): the count `[bp-0xe]` (starting at the last row's width, so 0 in the first round) goes 0 .. 0x50: the mark is
+drawn for 45 rounds and the kept 4 x 4 for 36; a palette step (`0x1c284`, on the palette itself) every round; Esc, Space or Enter (the
+key byte as read, no release needed) or the right button alone (`0x260c9` mode 0: buttons = 2) ends it, the screen's rows put back. The
+song's end is also handled there, as in the main loop (step 9); the port restarts songs in real time.
+
+**A stack byte:** whether the first row already widens is `[bp-0xc]`, which the frame never sets before the drawing; it was 0x2cc6 (the
+low byte 0xc6, not 0: it widens) at every F8 probed, at the first pass, after a walk and after F1 (INFERRED: it looks like a segment
+number left by an earlier call). The mark's place `[bp-4]` is set only when the hero's row is drawn; every place the hero can stand
+is on the map's 100 rows.
+
+**Map pixels:** no scene's map has a pixel 0xbf (`work/b8/mappix.py`), so the first recolouring changes nothing in the shipped data
+and the hero's 0xbf is the only one; 1, 2 and 3 appear in 18 scenes.
+
+**Checked:** `tools/check_battle.sh`, 20 `map_` starts, all identical at every pass: scenes 0, 1, 2 (the right edge), 4 and 7 (the
+bottom rows), 6, 13 (dark), 23 and row 5 of scene 1; a 400-pass start (the blink's cycles), Space, Enter and a second F8, the mouse
+(F8's button clicked, the left button and both do nothing, the right one closes), the map in the last item place and in the second
+member's, no map, F7 after F8 with and without the map (`[bp-0x96]`), and three 2,500-pass walks (`tools/walk_keys.py map`).
+`tools/mutate_battle.py`: 49 new mutations, all caught; two dropped as unshowable (see its note); three F3 patterns that also matched
+the map's close test repointed and re-run, all caught. `tests/test_walk.c` `test_map`: the item search and the row's stretch.

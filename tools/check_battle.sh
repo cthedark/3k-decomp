@@ -541,6 +541,36 @@ run use_coins_dark23 23 70 17 300 $U --key 20:0x1c --key 21:0x9c --key 40:0x4b -
     --key 102:0x9c
 DOPTS="--byte 0:0x14:1 --byte 0:0x15:2 --byte 0:0x16:3 --word 0:0x122:500"
 for seed in 1 2 3; do run "use_walk$seed" 0 82 30 2500 $($PY tools/walk_keys.py use $seed 2500); done
+# F8, the map (step 33): F8 (pass 3) with the map (item 0x13) in the hero's first item place; the mark blinks (45 rounds shown, 36
+# not); Esc, Space, Enter or the right button alone close it. In scenes 0 to 23 (the right edge, the bottom rows, a dark scene, row 5)
+M="--key 1:0x81 --key 3:0x42 --key 5:0xc2"
+DOPTS="--byte 0:0x14:0x13"
+run map_s1 1 106 30 400 $M --key 300:0x01 --key 302:0x81
+run map_space 1 106 30 120 $M --key 60:0x39 --key 62:0xb9
+run map_enter 1 106 30 120 $M --key 60:0x1c --key 62:0x9c --key 80:0x42 --key 82:0xc2 --key 110:0x01 --key 112:0x81
+run map_s0 0 82 34 150 $M --key 100:0x01 --key 102:0x81; run map_s2 2 230 17 150 $M --key 100:0x01 --key 102:0x81
+run map_s4 4 22 94 150 $M --key 100:0x01 --key 102:0x81; run map_s7 7 138 94 150 $M --key 100:0x01 --key 102:0x81
+run map_dark13 13 100 50 150 $M --key 100:0x01 --key 102:0x81; run map_s6 6 36 12 150 $M --key 100:0x01 --key 102:0x81
+run map_top 1 116 5 150 $M --key 100:0x01 --key 102:0x81; run map_s23 23 70 17 150 $M --key 100:0x01 --key 102:0x81
+# the mouse: F8's button clicked; the left button and both do nothing, the right one alone closes it
+run map_mouse 1 106 30 200 --key 1:0x81 --mouse 0:160:100:0 --mouse 3:20:150:1 --mouse 5:20:150:0 --mouse 40:160:100:1 \
+    --mouse 42:160:100:0 --mouse 60:160:100:3 --mouse 62:160:100:0 --mouse 100:160:100:2 --mouse 102:160:100:0
+# the map in the last item place, in the second member's, or nowhere (the button only); [bp-0x96] after it, for F7's name blink
+DOPTS="--byte 0:0x27:0x13"
+run map_last 1 106 30 100 $M --key 60:0x01 --key 62:0x81
+DOPTS="--join 1 --byte 1:0x1b:0x13"
+run map_member2 1 106 30 100 $M --key 60:0x01 --key 62:0x81
+DOPTS=""
+run map_none 1 106 30 60 $M
+DOPTS="--byte 0:0x14:1 --byte 0:0x15:0x13"
+run map_use 0 82 34 250 $M --key 40:0x01 --key 41:0x81 --key 45:0x41 --key 47:0xc1 --key 65:0x4d --key 67:0xcd --key 75:0x1c \
+    --key 77:0x9c --key 95:0x1c --key 97:0x9c --key 115:0x02 --key 117:0x82
+DOPTS="--byte 0:0x14:1"
+run map_none_use 0 82 34 250 $M --key 45:0x41 --key 47:0xc1 --key 65:0x4d --key 67:0xcd --key 75:0x1c --key 77:0x9c --key 95:0x1c \
+    --key 97:0x9c --key 115:0x02 --key 117:0x82
+DOPTS="--byte 0:0x14:0x13"
+for seed in 1 2 3; do run "map_walk$seed" 1 106 30 2500 $($PY tools/walk_keys.py map $seed 2500); done
+DOPTS=""
 DOPTS=""
 # the world's start zoom (step 23; tools/zoom_check.py): its 13 steps in scenes 0, 1, 34 and four dark scenes (6, 9, 23, 47), from the
 # data directories of the starts above

@@ -1235,11 +1235,11 @@ static void test_walking(void)
     uint32_t rand_after = (uint32_t)st2[1000] | (uint32_t)st2[1001] << 8 | (uint32_t)st2[1002] << 16 | (uint32_t)st2[1003] << 24;
     CHECK(rand_after != rand_before);                /* the shake drew from rand() */
 
-    /* a key the port does not build is reported, once per pass it is seen (F8, 0x42; F1 to F7 are built) */
-    const keyev f1[] = {{0, 0x42}};
+    /* a key the port does not build is reported, once per pass it is seen (F9, 0x43; F1 to F8 are built) */
+    const keyev f1[] = {{0, 0x43}};
     CHECK(BEGIN());
     int rc = run_walk(w, &scr, f1, 1, 3, NULL, NULL, NULL);
-    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x42"));
+    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x43"));
 
     /* the keys 1, 2 and A are released while they repeat: reported on the first pass only */
     const keyev akey[] = {{3, 0x1E}};
@@ -1508,6 +1508,33 @@ static void test_use(void)
     CHECK(walk_use_blink(399) == 396);      /* 400, 0, then 1198 */
 }
 
+static void test_map(void)
+{
+    printf("F8: the map item looked for, and a map row stretched\n");
+    static uint8_t party[WS_TAB_B];
+    unsigned v96 = 0;
+    CHECK(!walk_map_has(party, &v96) && v96 == 0xC8);   /* none: the last record's place 0xb4 + 0x14 */
+    party[0x13] = 0x13;                                  /* byte 0x13 is before the item places */
+    CHECK(!walk_map_has(party, &v96));
+    party[0x3C] = 0x13;                                  /* the second member's first item place */
+    CHECK(walk_map_has(party, &v96) && v96 == 0x50);
+    party[0x27] = 0x13;                                  /* the hero's last: found first */
+    CHECK(walk_map_has(party, &v96) && v96 == 0x28);
+    memset(party, 0, sizeof party);
+    party[0xC7] = 0x13;                                  /* the fifth record's last */
+    CHECK(walk_map_has(party, &v96) && v96 == 0xC8);
+
+    uint8_t src[128], out[232];
+    for (int i = 0; i < 128; i++)
+        src[i] = (uint8_t)i;
+    /* 128 wide: step 0xffff from 1, so the first pixel moves on at once and the second is drawn twice; the last cell is not drawn */
+    walk_map_row(src, 128, out);
+    CHECK(out[0] == 0xB0 && out[1] == 0 && out[2] == 1 && out[3] == 1 && out[4] == 2 && out[128] == 126 && out[129] == 0xB0);
+    /* 228 wide (the last row): step 0xffff * 128 / 228 = 36791; pixel j is cell (1 + 36791 j) / 65536 */
+    walk_map_row(src, 228, out);
+    CHECK(out[0] == 0xB0 && out[2] == 0 && out[3] == 1 && out[101] == 56 && out[228] == 127 && out[229] == 0xB0);
+}
+
 static void test_look(void)
 {
     printf("F2: the record looked at and its message\n");
@@ -1604,6 +1631,7 @@ int main(int argc, char **argv)
     test_zoom_scale();
     test_look();
     test_use();
+    test_map();
     test_mouse_key();
     test_foot();
     test_trail_and_records();

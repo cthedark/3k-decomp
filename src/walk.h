@@ -228,6 +228,12 @@ unsigned walk_look_entry(const uint8_t *party, const uint8_t *r);
  * returned; cell[] gets the first cell's x and y and the second's x as they were left. */
 unsigned walk_use_find(const uint8_t *tab_a, const uint8_t *party, int coins, int *scene, uint8_t cell[3]);
 /* (0x16ce0) The blink's count after its 1200 rounds from `c` (each +1, 0 after 0x190): the name is shown when it ends at 0xc8 or more. */
+/* (0x15aeb .. 0x15b42) Whether one of the five party records' 20 item places (0x14 .. 0x27 of each) holds the map, item 0x13; *v96
+ * ([bp-0x96]) is the record's place + 0x28 where the search stopped (0xc8 when none has it). */
+int walk_map_has(const uint8_t *party, unsigned *v96);
+/* (0x1c843 .. 0x1c8f8) A row of F8's map: the 128 cells' pixels `map` stretched to `w` (0x26de8: step 0xffff * 128 / w, from 1)
+ * between two 0xb0 edges, w + 2 bytes in `out`; not shaded. */
+void walk_map_row(const uint8_t *map, unsigned w, uint8_t *out);
 unsigned walk_use_blink(unsigned c);
 /* (0x1252c) How far into the buffer the window is read for a bump of strength `v48` (2, then 1) given the random value `r` (0 .. 0x7fff):
  * t = 4 * v48, d = 0x7fff / t + 1, a = r / d; when a is above v48 the offset is (a - v48) * 224 (1 to 5 rows), else a (0 to 2 pixels). */

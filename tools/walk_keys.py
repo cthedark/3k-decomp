@@ -19,6 +19,7 @@ Usage: tools/walk_keys.py fuzz SEED NPASSES    random presses and releases of th
        tools/walk_keys.py items SEED NPASSES   the same with F5 (items): use, turn the page, give
        tools/walk_keys.py equip SEED NPASSES   the same with F6 or F5, and the equipment screen
        tools/walk_keys.py use SEED NPASSES     the same with F7: coins or an item, and what follows
+       tools/walk_keys.py map SEED NPASSES     the talk walks with F8 (the map) three times in four and F3 the fourth
 Codes: 0x48 up, 0x50 down, 0x4b left, 0x4d right; the break code is the make code + 0x80.
 """
 import random
@@ -135,6 +136,10 @@ def take(seed, n):
     return talk(seed, n, (0x3D, 0x3D, 0x3D, 0x3C))
 
 
+def map_(seed, n):
+    return talk(seed, n, (0x42, 0x42, 0x42, 0x3D))
+
+
 def cast(seed, n, fkey=0x3E, inner=(0x48, 0x50, 0x4B, 0x4D, 0x02, 0x02, 0x4D, 0x1C), guard=False):
     """Short walks, each followed now and then by F4: the picker gets an arrow or two and Enter or Esc, the list arrows, key 1 (cast)
     and Enter for a helped member's picker, and at last Esc. With `guard` no list keys follow an Esc in the picker (they would be
@@ -194,7 +199,8 @@ def route(seed, n):
 
 if __name__ == "__main__":
     if len(sys.argv) != 4 or sys.argv[1] not in ("fuzz", "shoot", "volley", "yoyo", "door", "route", "talk", "look", "take", "cast",
-                                                 "items", "equip", "use"):
+                                                 "items", "equip", "use", "map"):
         raise SystemExit(__doc__)
     print(" ".join({"fuzz": fuzz, "shoot": shoot, "volley": volley, "yoyo": yoyo, "door": door, "route": route, "talk": talk,
-                    "look": look, "take": take, "cast": cast, "items": items, "equip": equip, "use": use}[sys.argv[1]](int(sys.argv[2]), int(sys.argv[3]))))
+                    "look": look, "take": take, "cast": cast, "items": items, "equip": equip, "use": use,
+                    "map": map_}[sys.argv[1]](int(sys.argv[2]), int(sys.argv[3]))))

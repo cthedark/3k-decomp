@@ -1288,3 +1288,16 @@ record it may be thrown away (yes / no) or not. Coins: the number box; the right
 - **Guesses:** three counts start from the stack and are set from the starts probed: the picker's (0x1e), the prompt's (0 after the
   record loop) and the number box's (0x16). The blink's start (`[bp-0x96]`) is followed through the world pass, not through F1 to F4.
 - **Not built:** F7 on a scene change record (kind 0x14, `0x172f0`; the port says so and ends F7); F8 to F10, keys 1 to 4 and A.
+
+## Milestone 9k: F8, the map (C), built 2026-10-26
+F8 (or its button) shows the scene's whole map when any member carries the map (item 0x13): one pixel per cell, in a trapezoid
+shaded towards the top, with the hero's place blinking; Esc, Space, Enter or the right button closes it (`docs/findings.md`
+"WALK.SL step 33").
+
+- **Code:** `src/walk.c` (`map_key`, `map_show`, `map_round`, `map_done`, `walk_map_has`, `walk_map_row`; `talking` 9);
+  `tools/battle_check.py` loop kind 13 (`0x1ca82`); `tools/walk_keys.py map`; `tests/test_walk.c` `test_map` (the unbuilt-key example
+  is now F9).
+- **Checked:** `tools/check_battle.sh`, 20 `map_` starts, all identical at every pass; `tools/mutate_battle.py` (597): 49 new
+  mutations, all caught, two dropped with a note; three repointed F3 ones caught.
+- **Guesses:** whether the first row widens is a stack byte (0xc6 at every F8 probed: it does).
+- **Not built:** F7 on a scene change record; F9, F10, keys 1 to 4 and A.

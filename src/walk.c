@@ -25,7 +25,8 @@ struct walk {
     uint8_t font8[128 * 15], table[256], dimpal[48];
     msgbox_t box;
     int talking;                        /* 1 the message box waits (0x1b506), 2 the yes / no buttons (0x18c36), 3 the number (0x18fdc),
-                                         * 4 a look's message box (F2) */
+                                         * 4 a look's message box (F2), 5 F3's wait, 6 F3's message box, 7 F4 to F7's lists, 8 F7's
+                                         * prompt, 9 F8's map */
     uint8_t *talk_rec;
     unsigned talk_msg, talk_k;          /* the message shown, the entry used (its offset in the record) */
     uint8_t talk_under[SCREEN_W * 46];  /* [bp+6] + 0x9c40: the screen's rows 134 .. 179 under boxes that do not wait */
@@ -40,6 +41,10 @@ struct walk {
     /* [bp-0x96], a scratch word: written by the world pass (a kill, a spark, the rain, the shake, the pointer in the window) and by F7;
      * the other F-keys' writes are not followed. F7's name blink starts from it. */
     unsigned v96;
+    /* F8 (talking 9): the screen's rows 49 .. 150 under the map (the world buffer + 0x32c8), where the mark goes ([bp-4]) and the
+     * blink's count ([bp-0xe]) */
+    uint8_t map_under[SCREEN_W * 102];
+    unsigned map_at, map_count;
     void (*show)(void *ctx, screen_t *scr);   /* walk_set_show, handed to F4's picker */
     void *show_ctx;
     uint8_t talk_mbg[60];               /* the 6 x 10 under their pointer (the pointer's own + 0x40) */
@@ -86,6 +91,9 @@ enum { WALK_BUF_LEN = WALK_W * WALK_H + 0x400, WALK_ALT_LEN = 1 + 256 * 256 };
 /* F7's leftover from the stack: the number box's palette count when F7 opens it (INFERRED from the starts probed, docs/findings.md
  * step 32) */
 enum { WALK_USE_ASK_COUNT = 0x16 };
+/* F8's map: the rows it keeps; the byte of its frame that says whether the first row widens ([bp-0xc], never set there: 0xc6, the low
+ * byte of a segment number, in every start probed, docs/findings.md step 33) */
+enum { WALK_MAP_UNDER_H = 102, WALK_MAP_TOGGLE = 0xC6 };
 
 static unsigned w16(const uint8_t *b, size_t o)
 {
@@ -1134,6 +1142,7 @@ static void use_answer(walk_t *w, screen_t *scr, int yes);
 static void use_coins_given(walk_t *w, screen_t *scr, unsigned value);
 static void use_round(walk_t *w, screen_t *scr, unsigned port60);
 static void use_done(walk_t *w, screen_t *scr);
+static void map_round(walk_t *w, screen_t *scr, unsigned port60);
 
 /* The palette the yes / no buttons and the number step on: the dimmed copy in a talk, the palette itself in F7. */
 static void ask_step(walk_t *w, screen_t *scr)
@@ -1482,6 +1491,10 @@ static void talk_round(walk_t *w, screen_t *scr, unsigned port60)
         use_round(w, scr, port60);
         return;
     }
+    if (w->talking == 9) {
+        map_round(w, scr, port60);
+        return;
+    }
     int mx, my;
     unsigned mb = 0;
     int on = walk_mouse(w, &mx, &my, &mb);
@@ -1698,6 +1711,151 @@ unsigned walk_record_of_kind(const uint8_t *tab_a, unsigned x, unsigned y, unsig
     return 0x2EE;
 }
 
+/* ---- F8: the map (0x15ab0 .. 0x15bbd, 0x1c6e4) ---- */
+
+/* The end of F8: the map's screen put back (0x27328(0x3d40, the world buffer + 0x32c8)) when it was shown, the button let go, then
+ * 0x1729e. */
+static void map_done(walk_t *w, screen_t *scr, int shown)
+{
+    if (shown)
+        put(scr, 0x3D40, w->map_under, SCREEN_W, WALK_MAP_UNDER_H);
+    walk_button_toggle(scr, 0xB184, 0x2F, 0x14);
+    w->talking = 0;
+    records_again(w, 0x384 / WS_RECORD_SIZE);
+}
+
+int walk_map_has(const uint8_t *party, unsigned *v96)
+{
+    for (unsigned si = 0x14; si < 0xC8; si += 0x28) {
+        *v96 = si + 0x14;
+        for (unsigned di = si; di < si + 0x14; di++)
+            if (party[di] == 0x13)
+                return 1;
+    }
+    return 0;
+}
+
+void walk_map_row(const uint8_t *map, unsigned w, uint8_t *out)
+{
+    out[0] = 0xB0;
+    battle_stretch_row(map, 0x80, out + 1, w);
+    out[w + 1] = 0xB0;
+}
+
+/* 0x1c6e4: the screen's rows 49 .. 150 kept; one pixel per map cell (the middle-left pixel, byte 0x20, of its tile), 128 x 100 in the
+ * world buffer from byte 4, colours 0xbf, 1, 2, 3 turned 0x2f, 0x57, 0x59, 0x5a, then the hero's cell 0xbf. A line of 0xb7 over it
+ * at (97, 49), 128 wide; then each map row in the map buffer [bp-0xba], stretched to the row's width (0x26de8) between two 0xb0 edges
+ * and shaded 7 times for the first 12 rows, one time less every 13 rows after, from (96, 50), 130 wide, every second row one wider
+ * each side: whether the first row already widens is a byte the frame never sets ([bp-0xc]; 0xc6 in every start probed: it does,
+ * INFERRED). The hero's 0xbf found in his row is where the mark goes; under the last row a line of 0xb0 as wide. The mark: the 4 x 4
+ * from a pixel up and left of him kept (in the map buffer, and 0x14 on), its middle rows 0x10 and the two middle pixels of the
+ * first and last 0x12. */
+static void map_show(walk_t *w, screen_t *scr)
+{
+    walk_scene_t *s = w->scene;
+    uint8_t *party = s->tab_b, *b = w->buf, *c = w->zoom_grab;
+    grab(scr, 0x3D40, SCREEN_W, WALK_MAP_UNDER_H, w->map_under);
+    for (unsigned i = 0, j = 4; i < 0x6400; i += 2, j++) {
+        unsigned t = (w16(s->gmap, i) << 6) & 0xFFFF;
+        b[j] = (uint8_t)art_byte(s, 0x7F96 + t + 0x20);
+    }
+    static const uint8_t from[4] = {0xBF, 1, 2, 3}, to[4] = {0x2F, 0x57, 0x59, 0x5A};
+    for (int k = 0; k < 4; k++)   /* 0x2741b */
+        for (unsigned j = 4; j < 4 + 0x3200; j++)
+            if (b[j] == from[k])
+                b[j] = to[k];
+    unsigned hy = (party[1] >> 1) & 0xFF;
+    b[4 + (((party[0] & 0xFE) >> 1) + (hy << 7))] = 0xBF;
+    unsigned left = (hy + 1) & 0xFF;
+    fill(scr, 0x3DA1, 0x80, 1, 0xB7);
+    unsigned width = 0x80, at = 0x3EE0, rows = 0, shades = 7, mark = 0;
+    int toggle = WALK_MAP_TOGGLE != 0, found = 0;
+    for (unsigned a = 0; a < 0x3200; a += 0x80) {
+        b[a] = 0x80;   /* the row's header over the last 4 pixels of the one before */
+        b[a + 1] = 0;
+        b[a + 2] = 1;
+        b[a + 3] = 0;
+        if (++rows > 12) {
+            shades--;
+            rows = 0;
+        }
+        c[0] = (uint8_t)(width + 2);
+        c[1] = (uint8_t)((width + 2) >> 8);
+        c[2] = 1;
+        c[3] = 0;
+        walk_map_row(b + a + 4, width, c + 4);
+        if (left != 0 && --left == 0) {
+            mark = at + 0x13C;
+            for (unsigned k = 5; k < 0x140; k++)
+                if (c[k] == 0xBF) {
+                    mark = at + k - 4;
+                    found = 1;
+                    break;
+                }
+        }
+        for (unsigned t = 0; t < (shades & 0xFF); t++)   /* 0x25dca over the w + 2 bytes, the edges too */
+            for (unsigned i = 0; i < width + 2; i++)
+                c[4 + i] = w->table[c[4 + i]];
+        put(scr, at, c + 4, width + 2, 1);
+        at += SCREEN_W;
+        if (toggle) {
+            toggle = 0;
+            at -= 1;
+            width += 2;
+        } else {
+            toggle = 1;
+        }
+    }
+    fill(scr, at, width + 2, 1, 0xB0);
+    if (!found)
+        note_unbuilt(w, "the map with the hero off its rows (a mark from the stack)", 0);
+    mark -= 0x141;
+    w->map_at = mark;
+    c[0] = 4;
+    c[1] = 0;
+    c[2] = 4;
+    c[3] = 0;
+    grab(scr, mark, 4, 4, c + 4);
+    memcpy(c + 0x14, c, 0x14);   /* 0x27503 */
+    c[5] = c[6] = 0x12;
+    memset(c + 8, 0x10, 8);
+    c[0x11] = c[0x12] = 0x12;
+    w->map_count = width;   /* [bp-0xe] is the last row's width when the loop starts */
+    w->talking = 9;
+}
+
+/* F8: the button pressed (the pointer's corner put back first); the five party records' 20 item places looked at for the map
+ * (item 0x13), [bp-0x96] the record's place + 0x28 as it goes (0xc8 when none has it). Found, the hero's x (even) in [bp-0xc4] and
+ * the map. */
+static void map_key(walk_t *w, screen_t *scr)
+{
+    uint8_t *party = w->scene->tab_b;
+    if (w->mouse_on)
+        walk_mouse_put(scr, w->mprev, w->mbg, 0);
+    walk_button_toggle(scr, 0xB184, 0x2F, 0x14);   /* 0x1c3ba: F8's button pressed */
+    if (!walk_map_has(party, &w->v96)) {
+        map_done(w, scr, 0);
+        return;
+    }
+    w->use_count = party[0] & 0xFE;
+    map_show(w, scr);
+}
+
+/* A round of the map's loop (0x1ca82): the mark shown for 45 rounds and the kept 4 x 4 for 36; the palette step every round; Esc,
+ * Space or Enter (no release needed) or the right button alone ends it. (The song's loop it also tests is the main loop's.) */
+static void map_round(walk_t *w, screen_t *scr, unsigned port60)
+{
+    if (++w->map_count > 0x50)
+        w->map_count = 0;
+    put(scr, w->map_at, w->zoom_grab + (w->map_count < 0x2D ? 4 : 0x18), 4, 4);
+    palette_cycle(w, scr);
+    unsigned k = port60 & 0xFF;
+    int mx, my;
+    unsigned mb = 0;
+    if (k == 1 || k == 0x39 || k == 0x1C || (walk_mouse(w, &mx, &my, &mb) && (mb & 0xFF) == 2))
+        map_done(w, scr, 1);
+}
+
 /* ---- F3: taking (0x15bbd .. 0x165df) ---- */
 
 /* The end of a take: F3's button let go (the pointer's corner not kept again), then 0x1729e. */
@@ -1907,7 +2065,7 @@ unsigned walk_look_entry(const uint8_t *party, const uint8_t *r)
 
 int walk_kind(const walk_t *w)
 {
-    static const int kind[9] = {0, 4, 8, 9, 4, 10, 4, 0, 12};
+    static const int kind[10] = {0, 4, 8, 9, 4, 10, 4, 0, 12, 13};
     if (w->boss_box)
         return 4;
     if (w->talking == 7)
@@ -2457,6 +2615,11 @@ static int walk_keys(walk_t *w, unsigned port60)
     if (k == 0x41 && w->scr) {   /* F7: use */
         fkey_begin(w, w->scr);
         use_key(w, w->scr);
+        return 1;
+    }
+    if (k == 0x42 && w->scr) {   /* F8: the map */
+        fkey_begin(w, w->scr);
+        map_key(w, w->scr);
         return 1;
     }
     if (!arrow && k != 0) {
