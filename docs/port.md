@@ -1271,3 +1271,20 @@ off into his items, F5 goes to the item list and back (`docs/findings.md` "WALK.
 - **Checked:** `tools/check_battle.sh`, 14 `equip_` starts, all identical at every pass; `tools/mutate_battle.py` (486): 41 new
   mutations, all caught. ASan/UBSan clean on three starts.
 - **Not built:** F7 to F10, keys 1 to 4 and A.
+
+## Milestone 9j: F7, using (C), built 2026-10-26
+F7 (or its button) asks 金錢 或 物品 (coins or an item). An item: the picker, then his item list, where key 1 gives the lit item to F7;
+used on its scene record (a kind 6 record ahead of the hero) it sets the record's flag and is used up, with its name shown; on no
+record it may be thrown away (yes / no) or not. Coins: the number box; the right sum on a price record pays it (`docs/findings.md`
+"WALK.SL step 32"). The record loop's kind 0x10 records (a flag becoming set: the world drawn again with a flash) are built with it.
+
+- **Code:** `src/walk.c` (`use_key`, `use_round`, `use_chosen`, `use_item_chosen`, `use_coins_given`, `use_answer`, `use_done`,
+  `walk_use_find`, `walk_use_blink`; the yes / no buttons, the number box and the waiting box route to F7 while `using`; `[bp-0x96]`
+  followed as `v96`; `records_again` draws a kind 0x10 record's end), `src/battle.c` (`battle_world_use`, `battle_use_item`: the item
+  list's mode 2); `tools/battle_check.py` loop kind 12 (`0x166a8`); `tools/walk_keys.py use`; `tests/test_walk.c` `test_use` (the
+  unbuilt-key example is now F8).
+- **Checked:** `tools/check_battle.sh`, 29 `use_` starts, all identical at every pass; `tools/mutate_battle.py` (548): 62 new
+  mutations, all caught, two dropped with a note; eight repointed older ones caught. ASan/UBSan clean on five starts.
+- **Guesses:** three counts start from the stack and are set from the starts probed: the picker's (0x1e), the prompt's (0 after the
+  record loop) and the number box's (0x16). The blink's start (`[bp-0x96]`) is followed through the world pass, not through F1 to F4.
+- **Not built:** F7 on a scene change record (kind 0x14, `0x172f0`; the port says so and ends F7); F8 to F10, keys 1 to 4 and A.

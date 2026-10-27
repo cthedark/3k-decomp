@@ -3433,3 +3433,64 @@ from the list's second page; member 1 (his own things and another's); nothing wo
 press, F5's button, the right button); a dark scene; three 2,500-pass walks with F5 and F6 (`tools/walk_keys.py equip`). The full
 `check_battle.sh` (254 starts) and `check_walk.sh` are identical. `tools/mutate_battle.py`: 41 new mutations, all caught; five F5
 patterns repointed and re-run (caught). ASan/UBSan clean on three starts.
+
+## WALK.SL step 32: F7, using an item or coins, 2026-10-26
+
+Built in C and compared pass by pass. READ from the code (F7's handler `0x165df` .. `0x1729e`, the item list's mode 2 in `0x20412`,
+the record loop's kind 0x10 at `0x11aab` .. `0x11c08`), SEEN in the oracle (`work/b8/probe_use.py`: the stack leftovers, the calls
+after a match), then CONFIRMED by the comparison (a new loop top for `tools/battle_check.py`, `0x166a8`, kind 12 "use prompt").
+
+**The prompt:** F7's button (0x9884) pressed, message 0x2e9 (金錢 或 物品, "money or item", colour 0x10, not waiting) and two 33 x 17
+frames (`0x27123`) at (103, 149) and (183, 149), colour 0x18; coins lit. Its loop: a palette step (on the palette itself) every 61st
+round; the lit frame colour 0xf, the other 0x1a; Left lights coins, Right the item, Enter or Space takes the lit one, Esc none, with no
+release needed; the pointer lights the word under it (y 0x95 .. 0xa5, x 0x67 .. 0x87 or 0xb7 .. 0xd6) and a left press there takes it;
+the right button is none. None: the end (`0x17239`: the button let go).
+
+**An item:** the same picker as F4 (faces; a fallen member is refused), then his item list with its buffer's byte 0 = 2. That mode
+draws two icons and has no key 3 (as in a battle); key 1 on an item ends the list and returns the item, its OBJECT.LCC record (15
+words, `0x27503`) copied to the map buffer `[bp-0xba]`; Esc or the right button returns 0; F6 returns 0xff (the map buffer is left as
+it was). Then the hero's cell (x & 0xfe, y / 2) and the one beside it (right facing up or down, below facing left or right) are looked
+at, both moving a step the way he faces, four times: a kind 6 record whose byte 3 is 0 ends the search, and so does a kind 0x14 record
+(a scene change: `0x172f0` with that record, its button left pressed; NOT BUILT). The last record looked at stays, even one that did
+not end it. The world is drawn again (`0x19680`, the party standing) and shown, not darkened. Then:
+- the record's byte 4 is the item: its flag (bytes 5, 6) set, the item gone from the member's first place holding it, the item's name
+  (12 bytes of the map buffer, colour 0x10) over (112, 93) or not (see the blink), SND_EF.1's 0x1bf5, a shake of 4 (`[bp-0x48]`);
+- otherwise, when the item's byte 0x11 is 0 (food and the like): message 0x251 (colour 0x88, not waiting) and the yes / no buttons
+  (`0x18c36`, on the palette itself); yes throws the item away. Byte 0x11 not 0: message 0x2b5 (colour 0x88, waiting).
+
+**Coins:** the number box (`0x18fdc`, on the palette itself). 0, or more than the coins (word 0x122): the end. Otherwise the same two
+cells for a kind 6 record whose byte 3 is not 0 (no kind 0x14), the world drawn again; when byte 4 is the number's low byte (so 356
+pays a price of 100) the flag is set, the number taken from the coins, the coins drawn again, SND_EF.1's 0x1bf5; otherwise message 0x173
+(waiting). The shipped prices: scene 21 record 23 (100), scene 23 records 17 and 18 (50), scenes 27, 33, 41 (20 to 200).
+
+**The search's locals:** the first cell's x and y are left in the hero's walk counter and frame (`[bp-0x3c]`, `[bp-0x5e]`), the second
+cell's x in `[bp-0xc4]`, the prompt's palette count. After a match `[bp-0x5e]` counts the item down to 1 (`0x16c75`: a file offset
+worked out and never read), so the hero's frame is then 1 (CONFIRMED: item 35 in scene 1 showed it).
+
+**The blink** (`0x16ce0`): the name's 96 x 15 place is grabbed, then 1200 rounds count `[bp-0x96]` up (0 after 0x190) and put back the
+grab (count below 0xc8) or draw the name over it (from 0xc8). The rounds do not wait (22 clock ticks in the oracle), so only the end is
+seen: the name shows when the count ends at 0xc8 or more. `[bp-0x96]` is a scratch word: the world pass writes it at a kill (the coins
++ 1, `0x12249`), a spark (frame x 64, `0x123c3`), the rain (the clock, shifted down 10 below 0x5000, `0x1248d`), the shake
+(0x7fff / (4 v48) + 1, `0x1255a`) and the pointer in the window (x - 0x30, `0x126ba`); F7 itself writes the coins into it. The port
+follows these; the other F-keys also write it (F1 `0x14f21`, F2, F3, F4, keys 1 and 2) and are not followed: a difference could show
+only when F7 comes after one of them with no kill, spark, rain, shake or pointer in the window between (not in any start).
+
+**Kind 0x10 records** (the record loop, run again at the end of F7 as after every F-key): a record whose byte 5 is set and whose flag
+(bytes 3, 4) has become set clears byte 5, draws the world again (`0x19680`), grabs its window into the map buffer (`0x2728d`), then 50
+times fills the window with colour 0x10 and puts the grab back (`0x270e0`, `0x27328`), with no wait: a flash, of which only the world
+is seen at the loop top. Before this step the port reported "a cut scene starts"; it now draws the end. Scene 1's record 15 (item 35)
+fires one. What else such a record starts (if anything) is not known: in the starts tried nothing followed.
+
+**Leftovers:** the picker's palette count starts at 0x1e after F7's prompt (0x2d after F4; any value from 0x29 steps at once) and the
+item list's at 0x70 as in F5 (SEEN in three starts); the prompt's `[bp-0xc4]` was 0 at every F7 probed, also after a walk and a first F7:
+the record loop that ends each F-key writes it (`0x11409`, `0x11b07`), and the port sets it to 0 there (INFERRED). The number box's
+count starts at 0x16, as in a talk (the comparison's palette steps agree).
+
+**Checked:** `tools/check_battle.sh`, 29 `use_` starts, all identical at every pass: an item used (facing down, and left one and two
+cells away), from the list's second page, on a record that fires a cut scene (at two clock readings), the wrong item, thrown away and
+kept, an item that may not be thrown away, Esc in the prompt and in the list, F6 in the list, Space, a 600-pass start with long waits in
+each loop, the mouse (the item word and its left end, the right button), the pointer in the window before F7 (the name not shown),
+coins paid, the wrong sum, 0, too few coins, 356 for 100, coins on an item's place, a dark scene, and three 2,500-pass walks with F7
+(`tools/walk_keys.py use`). `tools/mutate_battle.py`: 62 new mutations, all caught (the first run missed 8: 6 starts added); two
+dropped as unshowable (see its note); eight older patterns the change made stale repointed and re-run, all caught. ASan/UBSan clean on
+five starts; a real-time run under SDL's dummy drivers used an item and paid coins.

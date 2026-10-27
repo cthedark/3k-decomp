@@ -222,6 +222,13 @@ unsigned walk_take_slot(const uint8_t *party);
 /* (0x15959 .. 0x15a09) The offset in kind 9 record `r` just past the message F2 shows, which is the word 2 bytes before it: entries of
  * 4 bytes from byte 3 (a flag, its bit, the message) are passed while their flag is set and the next one has a message, at most 3. */
 unsigned walk_look_entry(const uint8_t *party, const uint8_t *r);
+/* (0x1695b .. 0x16afc, 0x16f6a .. 0x170b6) F7: the scene record (offset from 1000, 0x2ee none) its item (`coins` 0) or coins (1) are
+ * used on: the hero's cell and the one beside it (right facing up or down, below facing left or right), then each a step the way he
+ * faces, four times, for kind 6 with byte 3 = `coins`'s truth, and for an item kind 0x14 (*scene set). The last looked at is
+ * returned; cell[] gets the first cell's x and y and the second's x as they were left. */
+unsigned walk_use_find(const uint8_t *tab_a, const uint8_t *party, int coins, int *scene, uint8_t cell[3]);
+/* (0x16ce0) The blink's count after its 1200 rounds from `c` (each +1, 0 after 0x190): the name is shown when it ends at 0xc8 or more. */
+unsigned walk_use_blink(unsigned c);
 /* (0x1252c) How far into the buffer the window is read for a bump of strength `v48` (2, then 1) given the random value `r` (0 .. 0x7fff):
  * t = 4 * v48, d = 0x7fff / t + 1, a = r / d; when a is above v48 the offset is (a - v48) * 224 (1 to 5 rows), else a (0 to 2 pixels). */
 unsigned walk_shake_offset(unsigned v48, unsigned r);

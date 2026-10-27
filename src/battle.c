@@ -104,6 +104,9 @@ struct battle {
      * picked, 1 from his list on */
     int world, world_stage;
     int world_items;                   /* F5 (battle_world_items, 1) or F6 (battle_world_equip, 2): after the picker, not the magic list */
+    int use;                           /* F7 (battle_world_use): the list's buffer byte 0 is 2 ([bp-0x10] of 0x20412) */
+    unsigned use_item;                 /* what the list returns there ([bp-8]) */
+    uint8_t use_rec[30];               /* the chosen item's record, copied to the map buffer (0x20eef) */
     /* the equipment screen (0x221d2), F5's and F6's; its frame is the item list's (both get 13 words from F5's handler), so each starts
      * from what the other left: its [bp-0x1c] (eq_count) is the list's [bp-0x1c] (frame_1c), its [bp-0x1e] the list's it_count */
     unsigned eq_cur, eq_prev, eq_count, eq_latch, eq_mlatch, eq_ptr, frame_1c;
@@ -621,6 +624,25 @@ battle_t *battle_world_equip(walk_t *w, screen_t *scr)
     if (b)
         b->world_items = 2;
     return b;
+}
+
+battle_t *battle_world_use(walk_t *w, screen_t *scr)
+{
+    battle_t *b = battle_world_cast(w, scr);
+    if (b) {
+        b->world_items = 1;
+        b->use = 1;
+        b->pk_count = 0x1E;   /* [bp-0x16] is never set: 0x1e after F7's prompt in every start probed (INFERRED) */
+    }
+    return b;
+}
+
+unsigned battle_use_item(const battle_t *b, uint8_t rec[30], unsigned *member)
+{
+    *member = b->v44;
+    if (b->use_item && b->use_item != 0xFF)
+        memcpy(rec, b->use_rec, 30);
+    return b->use_item;
 }
 
 /* ---- one pass ---- */
@@ -1744,7 +1766,7 @@ static void items_begin(battle_t *b, screen_t *scr)
                 break;
             }
     }
-    unsigned iw = b->world ? 48 : 32;   /* 0x2054f: all three icons in the world (key 3 gives an item away), two in a battle */
+    unsigned iw = b->world && !b->use ? 48 : 32;   /* 0x2054f: all three icons in F5 (key 3 gives an item away), two in a battle and in F7 */
     uint8_t icon[48 * 16];
     for (unsigned r = 0; r < 16; r++)
         memcpy(icon + iw * r, b->mg_bar + 0x5A8 + 0x30 * r, iw);
@@ -1969,18 +1991,27 @@ static void items_round(battle_t *b, screen_t *scr, unsigned port60)
     }
     unsigned slot = m + b->it_page + b->it_idx;
     b->frame_1c = slot & 0xFF;   /* 0x20e63, [bp-0x1c]: the equipment screen's palette count if it opens now */
-    if (k == 2 && party[slot]) {
+    if (k == 2 && party[slot] && b->use) {   /* 0x20eda: F7's list ends with the lit item, its record copied to the map buffer */
+        b->use_item = party[slot];
+        memcpy(b->use_rec, b->it_tab + (b->it_page == 0x1E ? 300 : 0) + 30 * b->it_idx, 30);
+        items_end(b, scr);
+    } else if (k == 2 && party[slot]) {
         item_use(b, slot);
     } else if (k == 3) {
         b->it_redraw = 1;
         b->it_page += 10;
         if (b->it_page > 0x1E)
             b->it_page = 0x14;
-    } else if (k == 4 && party[slot] && b->world) {   /* 0x212b5: key 3, in the world only: to whom (a picker without faces) */
+    } else if (k == 4 && party[slot] && b->world && !b->use) {   /* 0x212b5: key 3, in F5 only: to whom (a picker without faces) */
         ptr_hide(b, scr, b->it_ptr);
         pick_begin(b, scr, 0, 0);
         b->world_stage = 3;
-    } else if (k == 0x40) {   /* 0x21427: F6 (or its button); in the world the list returns 0xff, the equipment screen */
+    } else if (k == 0x40) {   /* 0x21427: F6 (or its button); in the world the list returns 0xff, the equipment screen (F7: an item 0xff) */
+        if (b->use) {
+            b->use_item = 0xFF;
+            items_end(b, scr);
+            return;
+        }
         if (b->world) {
             ptr_hide(b, scr, b->it_ptr);
             b->eq_count = b->frame_1c;

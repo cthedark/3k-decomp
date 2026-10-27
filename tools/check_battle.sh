@@ -475,6 +475,72 @@ run equip_mouse 1 106 30 360 --key 1:0x81 --mouse 0:160:100:0 --mouse 3:20:105:1
 run equip_dark13 13 100 50 200 --key 1:0x81 --key 3:0x40 --key 5:0xc0 --key 40:0x1c --key 42:0x9c --key 100:0x50 --key 102:0xd0 \
     --key 120:0x1c --key 122:0x9c --key 160:0x01 --key 162:0x81
 for seed in 1 2 3; do run "equip_walk$seed" 1 106 30 2500 $($PY tools/walk_keys.py equip $seed 2500); done
+# F7, use (step 32): F7 (pass 3); the prompt's Right (20) and Enter (30) for an item, the picker's Enter (50), the list's key 1 (70).
+# Scene 0's record 11 at (82, 35) takes item 1 (food, byte 0x11 = 0: may be thrown away), item 2 may not; scene 1's record 15 at
+# (130, 14) takes item 35 and its flag fires a cut-scene record (the window drawn again); scene 21's record 23 at (64, 27) and dark
+# scene 23's records 17 and 18 take coins (100, 50)
+U="--key 1:0x81 --key 3:0x41 --key 5:0xc1"
+UI="$U --key 20:0x4d --key 22:0xcd --key 30:0x1c --key 32:0x9c --key 50:0x1c --key 52:0x9c --key 70:0x02 --key 72:0x82"
+DOPTS="--byte 0:0x14:1 --byte 0:0x15:2 --byte 0:0x16:3"
+run use_item 0 82 34 200 $UI
+run use_item_left 0 84 35 200 --key 1:0x4b --key 4:0xcb --key 10:0x41 --key 12:0xc1 --key 25:0x4d --key 27:0xcd --key 35:0x1c \
+    --key 37:0x9c --key 55:0x1c --key 57:0x9c --key 75:0x02 --key 77:0x82
+run use_throw 0 82 30 300 $UI --key 120:0x1c --key 122:0x9c
+run use_throw_no 0 82 30 300 $UI --key 100:0x4d --key 102:0xcd --key 120:0x1c --key 122:0x9c
+run use_wrong 0 82 34 300 $U --key 20:0x4d --key 22:0xcd --key 30:0x1c --key 32:0x9c --key 50:0x1c --key 52:0x9c --key 60:0x50 \
+    --key 62:0xd0 --key 64:0x50 --key 66:0xd0 --key 70:0x02 --key 72:0x82 --key 120:0x1c --key 122:0x9c
+run use_keep 0 82 30 300 $U --key 20:0x4d --key 22:0xcd --key 30:0x1c --key 32:0x9c --key 50:0x1c --key 52:0x9c --key 60:0x50 \
+    --key 62:0xd0 --key 70:0x02 --key 72:0x82 --key 150:0x39 --key 152:0xb9
+run use_esc 0 82 34 100 $U --key 20:0x4d --key 22:0xcd --key 40:0x01 --key 42:0x81
+run use_esc_list 0 82 34 150 $U --key 20:0x4d --key 22:0xcd --key 30:0x1c --key 32:0x9c --key 50:0x1c --key 52:0x9c --key 70:0x01 \
+    --key 72:0x81
+run use_f6 0 82 34 200 $U --key 20:0x4d --key 22:0xcd --key 30:0x1c --key 32:0x9c --key 50:0x1c --key 52:0x9c --key 70:0x40 \
+    --key 72:0xc0 --key 150:0x1c --key 152:0x9c
+run use_wait 0 82 30 600 $U --key 100:0x4d --key 102:0xcd --key 200:0x1c --key 202:0x9c --key 300:0x1c --key 302:0x9c --key 400:0x02 \
+    --key 402:0x82 --key 500:0x1c --key 502:0x9c
+run use_mouse 0 82 34 300 --key 1:0x81 --mouse 0:160:100:0 --mouse 3:20:130:1 --mouse 5:20:130:0 --mouse 20:120:157:0 \
+    --mouse 25:200:157:0 --mouse 30:200:157:1 --mouse 32:200:157:0 --key 50:0x1c --key 52:0x9c --key 70:0x02 --key 72:0x82
+run use_mouse_esc 0 82 34 200 --key 1:0x81 --mouse 0:160:100:0 --mouse 3:20:130:1 --mouse 5:20:130:0 --mouse 20:110:157:0 \
+    --mouse 40:110:157:2 --mouse 42:110:157:0
+# the item word's left end; Space takes the lit word; the pointer in the window before F7 ([bp-0x96] = x - 0x30: the name not shown)
+run use_mouse_edge 0 82 34 200 --key 1:0x81 --mouse 0:160:100:0 --mouse 3:20:130:1 --mouse 5:20:130:0 --mouse 20:184:157:0 \
+    --mouse 30:184:157:1 --mouse 32:184:157:0 --key 50:0x1c --key 52:0x9c --key 70:0x02 --key 72:0x82
+run use_space 0 82 34 200 $U --key 20:0x4d --key 22:0xcd --key 30:0x39 --key 32:0xb9 --key 50:0x1c --key 52:0x9c --key 70:0x02 --key 72:0x82
+run use_pointer 0 82 34 200 --mouse 0:160:100:0 --mouse 4:150:100:0 --key 1:0x81 --key 10:0x41 --key 12:0xc1 --key 20:0x4d \
+    --key 22:0xcd --key 30:0x1c --key 32:0x9c --key 50:0x1c --key 52:0x9c --key 70:0x02 --key 72:0x82
+# facing left two cells from the record; coins on an item's place (passed over: message 0x173), with the pointer about
+run use_item_left2 0 86 35 200 --key 1:0x4b --key 4:0xcb --key 10:0x41 --key 12:0xc1 --key 25:0x4d --key 27:0xcd --key 35:0x1c \
+    --key 37:0x9c --key 55:0x1c --key 57:0x9c --key 75:0x02 --key 77:0x82
+DOPTS="--byte 0:0x14:3 --byte 0:0x15:3 --byte 0:0x16:3 --byte 0:0x17:3 --byte 0:0x18:3 --byte 0:0x19:3 --byte 0:0x1a:3 --byte 0:0x1b:3 \
+    --byte 0:0x1c:3 --byte 0:0x1d:3 --byte 0:0x1e:1"
+run use_page2 0 82 34 200 $U --key 20:0x4d --key 22:0xcd --key 30:0x1c --key 32:0x9c --key 50:0x1c --key 52:0x9c --key 60:0x03 \
+    --key 62:0x83 --key 70:0x02 --key 72:0x82
+DOPTS="--word 0:0x122:500"
+run use_coins_place 0 82 34 300 --key 1:0x81 --mouse 0:160:100:0 --key 3:0x41 --key 5:0xc1 --key 20:0x1c --key 21:0x9c \
+    --key 40:0x48 --key 42:0xc8 --key 60:0x1c --key 62:0x9c --mouse 100:150:120:0 --key 140:0x1c --key 142:0x9c --mouse 200:170:60:0
+DOPTS="--byte 0:0x14:1 --byte 0:0x15:2 --byte 0:0x16:3"
+DOPTS="--byte 0:0x14:35"
+run use_cut 1 130 13 200 $UI --tick-base 16000
+run use_cut_20 1 130 13 200 $UI
+# coins: Enter (20) takes the lit coins; the number box: Left twice (tens, hundreds), Up, Enter
+UC="$U --key 20:0x1c --key 21:0x9c --key 40:0x4b --key 42:0xcb --key 50:0x4b --key 52:0xcb --key 60:0x48 --key 62:0xc8"
+DOPTS="--word 0:0x122:500"
+run use_coins 21 64 26 200 $UC --key 80:0x1c --key 82:0x9c
+run use_coins_wrong 21 64 26 300 $UC --key 70:0x48 --key 72:0xc8 --key 80:0x1c --key 82:0x9c --key 150:0x1c --key 152:0x9c
+run use_coins_low 21 64 26 200 $UC --key 70:0x48 --key 72:0xc8 --key 74:0x48 --key 76:0xc8 --key 77:0x4d --key 79:0xcd \
+    --key 90:0x48 --key 92:0xc8 --key 94:0x48 --key 96:0xc8 --key 98:0x48 --key 100:0xc8 --key 102:0x48 --key 104:0xc8 \
+    --key 106:0x48 --key 108:0xc8 --key 110:0x4d --key 112:0xcd --key 120:0x48 --key 122:0xc8 --key 124:0x48 --key 126:0xc8 \
+    --key 128:0x48 --key 130:0xc8 --key 132:0x48 --key 134:0xc8 --key 136:0x48 --key 138:0xc8 --key 140:0x48 --key 142:0xc8 \
+    --key 160:0x1c --key 162:0x9c
+run use_coins_zero 21 64 26 150 $U --key 20:0x1c --key 21:0x9c --key 80:0x1c --key 82:0x9c
+DOPTS="--word 0:0x122:60"
+run use_coins_poor 21 64 26 200 $UC --key 80:0x1c --key 82:0x9c
+DOPTS="--word 0:0x122:500"
+run use_coins_dark23 23 70 17 300 $U --key 20:0x1c --key 21:0x9c --key 40:0x4b --key 42:0xcb --key 60:0x48 --key 62:0xc8 \
+    --key 64:0x48 --key 66:0xc8 --key 68:0x48 --key 70:0xc8 --key 72:0x48 --key 74:0xc8 --key 76:0x48 --key 78:0xc8 --key 100:0x1c \
+    --key 102:0x9c
+DOPTS="--byte 0:0x14:1 --byte 0:0x15:2 --byte 0:0x16:3 --word 0:0x122:500"
+for seed in 1 2 3; do run "use_walk$seed" 0 82 30 2500 $($PY tools/walk_keys.py use $seed 2500); done
 DOPTS=""
 # the world's start zoom (step 23; tools/zoom_check.py): its 13 steps in scenes 0, 1, 34 and four dark scenes (6, 9, 23, 47), from the
 # data directories of the starts above

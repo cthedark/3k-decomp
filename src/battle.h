@@ -68,6 +68,12 @@ battle_t *battle_world_items(walk_t *w, screen_t *scr);
 /* F6 (0x15748 .. 0x1577b): the same picker, then his equipment screen (0x221d2: Enter takes the lit thing off; F5 or its button opens
  * the item list). F5 and F6 go back and forth until Esc. */
 battle_t *battle_world_equip(walk_t *w, screen_t *scr);
+/* F7's item (0x16898 .. 0x16919): the same picker, then his item list with its buffer's byte 0 = 2 (two icons, no giving): key 1 on an
+ * item ends it with that item. Run as battle_world_cast; then battle_use_item says what was chosen. */
+battle_t *battle_world_use(walk_t *w, screen_t *scr);
+/* What F7's list returned: the item (its OBJECT.LCC record, 30 bytes, in `rec`), 0xff for F6 (rec untouched), 0 for none; the member
+ * picked (his party offset) in *member. */
+unsigned battle_use_item(const battle_t *b, uint8_t rec[30], unsigned *member);
 void battle_free(battle_t *b);
 /* With `show` set, it is called after each of the 48 steps of a helped member's face flash in the picker (three times 16 colours
  * down); the original draws each step 100 times and does not wait, so how long it showed depended on the machine. Without it only the

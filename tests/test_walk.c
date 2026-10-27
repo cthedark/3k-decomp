@@ -1235,11 +1235,11 @@ static void test_walking(void)
     uint32_t rand_after = (uint32_t)st2[1000] | (uint32_t)st2[1001] << 8 | (uint32_t)st2[1002] << 16 | (uint32_t)st2[1003] << 24;
     CHECK(rand_after != rand_before);                /* the shake drew from rand() */
 
-    /* a key the port does not build is reported, once per pass it is seen (F7, 0x41; F1 to F6 are built) */
-    const keyev f1[] = {{0, 0x41}};
+    /* a key the port does not build is reported, once per pass it is seen (F8, 0x42; F1 to F7 are built) */
+    const keyev f1[] = {{0, 0x42}};
     CHECK(BEGIN());
     int rc = run_walk(w, &scr, f1, 1, 3, NULL, NULL, NULL);
-    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x41"));
+    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x42"));
 
     /* the keys 1, 2 and A are released while they repeat: reported on the first pass only */
     const keyev akey[] = {{3, 0x1E}};
@@ -1479,6 +1479,35 @@ static void test_zoom_scale(void)
 }
 
 /* F2's record search (0x2c28f) and which message a kind 9 record gives (0x15959 .. 0x15a09). */
+static void test_use(void)
+{
+    printf("F7: the record an item or coins are used on, and the name's blink\n");
+    static uint8_t tab_a[1750], party[WS_TAB_B];
+    uint8_t *rec = tab_a + 1000, cell[3];
+    int scene;
+    party[0] = 83, party[1] = 69, party[2] = 1;   /* facing down from (82, 34): the second cell is (84, 34) */
+    rec[15 * 5 + 0] = 84, rec[15 * 5 + 1] = 36, rec[15 * 5 + 2] = 6;   /* byte 3 = 0: an item's place, two steps on */
+    CHECK(walk_use_find(tab_a, party, 0, &scene, cell) == 75 && !scene && cell[0] == 82 && cell[1] == 36 && cell[2] == 84);
+    /* coins: an item's place is passed over; after four steps the last looked at is the second cell's kind 6 (84, 37): none */
+    CHECK(walk_use_find(tab_a, party, 1, &scene, cell) == 0x2EE && cell[0] == 82 && cell[1] == 38 && cell[2] == 84);
+    rec[15 * 7 + 0] = 84, rec[15 * 7 + 1] = 37, rec[15 * 7 + 2] = 6;
+    /* ... unless an item's place stands there: it is returned though not taken (its byte 4 then decides) */
+    CHECK(walk_use_find(tab_a, party, 1, &scene, cell) == 105);
+    rec[15 * 9 + 0] = 82, rec[15 * 9 + 1] = 35, rec[15 * 9 + 2] = 0x14;   /* a scene change one step on: before the place */
+    CHECK(walk_use_find(tab_a, party, 0, &scene, cell) == 135 && scene && cell[1] == 35);
+    CHECK(walk_use_find(tab_a, party, 1, &scene, cell) == 105 && !scene);   /* coins look for no scene change */
+    party[2] = 2;   /* facing left: the second cell is below the first, both move two to the left */
+    rec[15 * 11 + 0] = 80, rec[15 * 11 + 1] = 35, rec[15 * 11 + 2] = 6, rec[15 * 11 + 3] = 1;   /* a price */
+    CHECK(walk_use_find(tab_a, party, 1, &scene, cell) == 165 && cell[0] == 80 && cell[1] == 34 && cell[2] == 80);
+    party[0] = 1, party[1] = 0, party[2] = 0;   /* facing up from (0, 0): the bytes wrap */
+    CHECK(walk_use_find(tab_a, party, 0, &scene, cell) == 0x2EE && cell[0] == 0 && cell[1] == 252 && cell[2] == 2);
+
+    CHECK(walk_use_blink(0) == 398);        /* 1200 = 2 x 401 + 398: the name shown */
+    CHECK(walk_use_blink(0xF) == 12);       /* 1215 - 3 x 401: what was there */
+    CHECK(walk_use_blink(0xEA60) == 397);   /* above 0x190: 0 at once, then 1199 */
+    CHECK(walk_use_blink(399) == 396);      /* 400, 0, then 1198 */
+}
+
 static void test_look(void)
 {
     printf("F2: the record looked at and its message\n");
@@ -1574,6 +1603,7 @@ int main(int argc, char **argv)
     test_doubling();
     test_zoom_scale();
     test_look();
+    test_use();
     test_mouse_key();
     test_foot();
     test_trail_and_records();
