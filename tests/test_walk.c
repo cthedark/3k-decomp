@@ -1493,9 +1493,9 @@ static void test_use(void)
     rec[15 * 7 + 0] = 84, rec[15 * 7 + 1] = 37, rec[15 * 7 + 2] = 6;
     /* ... unless an item's place stands there: it is returned though not taken (its byte 4 then decides) */
     CHECK(walk_use_find(tab_a, party, 1, &scene, cell) == 105);
-    rec[15 * 9 + 0] = 82, rec[15 * 9 + 1] = 35, rec[15 * 9 + 2] = 0x14;   /* a scene change one step on: before the place */
+    rec[15 * 9 + 0] = 82, rec[15 * 9 + 1] = 35, rec[15 * 9 + 2] = 0x14;   /* a sell counter one step on: before the place */
     CHECK(walk_use_find(tab_a, party, 0, &scene, cell) == 135 && scene && cell[1] == 35);
-    CHECK(walk_use_find(tab_a, party, 1, &scene, cell) == 105 && !scene);   /* coins look for no scene change */
+    CHECK(walk_use_find(tab_a, party, 1, &scene, cell) == 105 && !scene);   /* coins look for no sell counter */
     party[2] = 2;   /* facing left: the second cell is below the first, both move two to the left */
     rec[15 * 11 + 0] = 80, rec[15 * 11 + 1] = 35, rec[15 * 11 + 2] = 6, rec[15 * 11 + 3] = 1;   /* a price */
     CHECK(walk_use_find(tab_a, party, 1, &scene, cell) == 165 && cell[0] == 80 && cell[1] == 34 && cell[2] == 80);
@@ -1506,6 +1506,14 @@ static void test_use(void)
     CHECK(walk_use_blink(0xF) == 12);       /* 1215 - 3 x 401: what was there */
     CHECK(walk_use_blink(0xEA60) == 397);   /* above 0x190: 0 at once, then 1199 */
     CHECK(walk_use_blink(399) == 396);      /* 400, 0, then 1198 */
+
+    /* the sell counter's text (0x18723 .. 0x18877): 20 -> "   20" and 10 -> "   10"; 6300 -> " 6300", 3150 -> " 3150"; 1 -> 0 */
+    uint8_t m[22];
+    CHECK(walk_sell_text(m, 20) == 0x13 && !memcmp(m, "\xAD\xEC\xBB\xF9:   20 \xA5\x62\xBB\xF9:   10", 21) && m[0x15] == 0);
+    CHECK(walk_sell_text(m, 6300) == 0x11 && !memcmp(m + 5, " 6300 ", 6) && !memcmp(m + 0x10, " 3150", 5));
+    CHECK(walk_sell_text(m, 1) == 0x14 && !memcmp(m + 5, "    1", 5) && !memcmp(m + 0x10, "    0", 5));
+    CHECK(walk_sell_text(m, 0) == 0x14 && !memcmp(m + 5, "    0", 5));   /* the last digit stays, even a 0 */
+    CHECK(walk_sell_text(m, 65535) == 0x10 && !memcmp(m + 5, "65535", 5) && !memcmp(m + 0x10, "32767", 5));
 }
 
 static void test_map(void)

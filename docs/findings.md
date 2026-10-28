@@ -3451,7 +3451,8 @@ draws two icons and has no key 3 (as in a battle); key 1 on an item ends the lis
 words, `0x27503`) copied to the map buffer `[bp-0xba]`; Esc or the right button returns 0; F6 returns 0xff (the map buffer is left as
 it was). Then the hero's cell (x & 0xfe, y / 2) and the one beside it (right facing up or down, below facing left or right) are looked
 at, both moving a step the way he faces, four times: a kind 6 record whose byte 3 is 0 ends the search, and so does a kind 0x14 record
-(a scene change: `0x172f0` with that record, its button left pressed; NOT BUILT). The last record looked at stays, even one that did
+(a scene change: `0x172f0` with that record, its button left pressed; NOT BUILT). **Correction (2026-10-28, step 36):** kind 0x14 is a
+sell counter, not a scene change; built. The last record looked at stays, even one that did
 not end it. The world is drawn again (`0x19680`, the party standing) and shown, not darkened. Then:
 - the record's byte 4 is the item: its flag (bytes 5, 6) set, the item gone from the member's first place holding it, the item's name
   (12 bytes of the map buffer, colour 0x10) over (112, 93) or not (see the blink), SND_EF.1's 0x1bf5, a shake of 4 (`[bp-0x48]`);
@@ -3634,3 +3635,48 @@ second place (names and faces go by the number, byte 3), and three 2,500-pass wa
 `test_data_number`. `tools/mutate_battle.py`: 49 new mutations, all caught (the two that take the name and face by place only by
 `data_order`); one dropped: the records run again after F10 change nothing. ASan and UBSan clean on five starts; a real-time run under
 SDL's dummy drivers opened and closed F10 and F9 (key 4 then reached the world).
+
+## WALK.SL step 36: F7 at a sell counter (kind 0x14), 2026-10-28
+
+Built in C and compared pass by pass. READ from the code (the kind 0x14 case of the record block, `0x1863c` .. `0x18b7d`, reached from
+F7's item path at `0x16b9c`), SEEN in the oracle (`work/b8/probe_use.py` on a sale: the yes / no loop's frame), then CONFIRMED by the
+comparison.
+
+**Correction:** steps 7 and 32 and `docs/README.md` called `0x172f0` .. `0x18b82` the scene-change block and kind 0x14 a scene change.
+`0x172f0` is the dispatch on a scene record's kind (byte 2, `[bp-0xbe]`); kind 0x14 is a **sell counter**: F7 sells the chosen item there
+for half its price. The shipped counters: scene 0 record 17 at (106, 11), scene 2 record 31 at (88, 75), scene 21 record 47 at (108, 36),
+scene 33 record 43 at (134, 59), scene 41 record 38 at (114, 36). Their bytes 3 to 14 are 0; the price comes from the item. The other kinds
+the block names (1, 4, 5, 7, 8, 0xe, 0x11, 0x13) were not read in this step.
+
+**The sale** (F7's item path found a kind 0x14 record and drew the world again):
+- the item's name (the map buffer `[bp-0xba]`, the item's OBJECT.LCC record, 12 bytes; `0x243ec`, colour 0x10, into the world buffer);
+- the screen's 192 x 60 at (64, 50) kept in F7's buffer (`0x2723c`), shaded four times through the shading table (`0x25dca`) and put back
+  (`0x27328`); the name's shadow of colour 0x16 at (116, 53) and (117, 53) (`0x25b54`), the name at (116, 52) (`0x27371`); a frame of
+  colour 0x2a round the 192 x 60 (`0x27123`);
+- **an item whose byte 0x11 is 0** (the one F7 lets you throw away): the map buffer's first bytes become `原價:` (5 bytes), the price
+  (word 0x12, `0x25fe0`) as five digits (`0x26450`, which ends them with a 0), a space over that 0, `半價:`, half the price (shifted
+  right, so rounded down) as five digits. Each number's leading zeros up to its fourth digit become spaces (a byte at most '0' is a
+  zero). 21 bytes are drawn in colour 0x80 at (67, 70) over a shadow of 0x84 at (67, 71) and (68, 71); then the map buffer's first 7
+  bytes become `願意嗎?`, drawn in colour 0x98 at (172, 87) over 0x9b at (172, 88) and (173, 88). The pointer's corner is put back and
+  the yes / no buttons (`0x18c36`) ask. **Yes:** the half price is added to the coins (word 0x122) one at a time in a 16-bit word, so
+  there is no cap and the sum wraps past 65,535; the coins are drawn (`0x1bd6e`); the item goes from the member's first item place
+  holding it; SND_EF.1's 0x1bf5, waited for and cut when the sounds are on. **No:** nothing.
+- **otherwise** (keys and the like): message 0xd4 (colour 0x20, waiting).
+- Then the pointer's corner put back, F7's button let go, the corner kept again, `[bp-0xbe]` = 1, and the record loop runs again
+  (`0x10bf9`).
+
+**Stack leftovers:** the yes / no loop's palette count (`[bp-8]` at `0x18d23`) is 0x3fdc here, left by the text drawing (`0x243ec`'s
+offset): SEEN, and in a sale no message box comes first to set it. So the count starts at 0xdc and the first round steps the palette.
+`[bp-0x96]` ends where the second number's spaces stop (0x10 .. 0x14).
+
+**Not built:** the hero stepping onto a kind 0x14 record (the step-on path of step 7 reaches the same code with whatever the map buffer
+holds); whether the hero can stand on any counter's cell was not checked.
+
+**Checked:** `tools/check_battle.sh`, 23 `pawn_` starts, all identical at every pass: selling food (price 20) with yes, no, no then yes,
+and Space; an item that may not be sold (message 0xd4) by key and by mouse; a four-digit price (6300), an odd price (15), the coins
+wrapping past 65,535; facing left, a counter three cells away; with a Sound Blaster; the mouse (yes, no, and the pointer resting inside
+the box); a second sale after the first; member 1's item; the counters of scenes 2, 21, 33 and 41; three 2,500-pass walks. The names
+`sell_` were already the villagers' sales. `tests/test_walk.c` `test_use` pins the text (`walk_sell_text`). `tools/mutate_battle.py`:
+40 new mutations, all caught (two only after `pawn_odd` and `pawn_mouse_in` were added); three dropped with notes (the records run
+again, `[bp-0x96]`, which no start can read after a sale, and the pointer's corner put back before the yes / no, which is the corner
+just kept). Three older patterns the new code duplicated were repointed and re-run on their own starts.

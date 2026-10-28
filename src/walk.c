@@ -38,6 +38,9 @@ struct walk {
      * (0xbaa7 coins, 0xbaf7 an item; [si]), the prompt's palette count ([bp-0xc4]), the item the list gave ([bp-0x9a]) */
     int using;
     unsigned use_sel, use_count, use_item, use_member;
+    /* F7 at a sell counter (kind 0x14, 0x1864b): set while its yes / no or message box runs; half the item's price ([bp-0xbc]) */
+    int use_selling;
+    unsigned use_half;
     /* [bp-0x96], a scratch word: written by the world pass (a kill, a spark, the rain, the shake, the pointer in the window) and by F7;
      * the other F-keys' writes are not followed. F7's name blink starts from it. */
     unsigned v96;
@@ -2500,6 +2503,10 @@ static void use_done(walk_t *w, screen_t *scr)
         walk_mouse_grab(scr, w->mprev, w->mbg);
     w->using = 0;
     w->talking = 0;
+    if (w->use_selling) {   /* 0x18b18 .. 0x18b7d: the same, then [bp-0xbe] = 1 */
+        w->use_selling = 0;
+        w->vbe = 1;
+    }
     records_again(w, 0x384 / WS_RECORD_SIZE);
 }
 
@@ -2514,10 +2521,11 @@ static void use_outline(screen_t *scr, unsigned at, unsigned bw, unsigned bh, ui
     fill(scr, at + (bh - 1) * SCREEN_W, bw, 1, c);
 }
 
-/* A message box of F7's (0x1afb0, colour 0x88, the palette itself): waiting (talking 6, then use_done) or not. 0 when drawn. */
-static int use_box(walk_t *w, screen_t *scr, unsigned msg, int wait)
+/* A message box of F7's (0x1afb0, colour 0x88 or 0x20 at a sell counter, the palette itself): waiting (talking 6, then use_done) or not.
+ * 0 when drawn. */
+static int use_box_in(walk_t *w, screen_t *scr, unsigned msg, uint8_t colour, int wait)
 {
-    int r = msgbox_open(&w->box, scr, w->font8, w->table, w->buf + 0x7305, msg, 0x88, wait);
+    int r = msgbox_open(&w->box, scr, w->font8, w->table, w->buf + 0x7305, msg, colour, wait);
     if (r < 0) {
         note_unbuilt(w, "a message that MES_TXT.LCC does not have", msg);
         return -1;
@@ -2527,6 +2535,11 @@ static int use_box(walk_t *w, screen_t *scr, unsigned msg, int wait)
     if (wait)
         w->talking = 6;
     return 0;
+}
+
+static int use_box(walk_t *w, screen_t *scr, unsigned msg, int wait)
+{
+    return use_box_in(w, scr, msg, 0x88, wait);
 }
 
 /* F7: the button pressed (the pointer's corner put back first, then kept); message 0x2e9 (金錢 或 物品, colour 0x10, not waiting) and the
@@ -2707,6 +2720,106 @@ static void use_drop(uint8_t *party, unsigned member, unsigned item)
         }
 }
 
+unsigned walk_sell_text(uint8_t m[22], unsigned price)
+{
+    static const uint8_t head[5] = {0xAD, 0xEC, 0xBB, 0xF9, ':'}, mid[5] = {0xA5, 0x62, 0xBB, 0xF9, ':'};
+    char d[8];
+    memcpy(m, head, 5);
+    snprintf(d, sizeof d, "%05u", price % 100000u);   /* 0x26450 */
+    memcpy(m + 5, d, 6);
+    m[0xA] = ' ';
+    memcpy(m + 0xB, mid, 5);
+    snprintf(d, sizeof d, "%05u", (price >> 1) % 100000u);
+    memcpy(m + 0x10, d, 6);
+    unsigned i = 5;
+    for (; i < 9 && m[i] <= '0'; i++)
+        m[i] = ' ';
+    for (i = 0x10; i < 0x14 && m[i] <= '0'; i++)
+        m[i] = ' ';
+    return i;
+}
+
+/* 0x1864b .. 0x18b7d: F7's item at a sell counter (a scene record of kind 0x14). The item's name (12 bytes of the map buffer, colour
+ * 0x10) as a picture; the 192 x 60 at (64, 50) shaded four times (0x2723c, 0x25dca, 0x27328), the name with a shadow of colour 0x16 a row
+ * down and a pixel to the right at (116, 52), a frame of colour 0x2a round the part. An item that may be sold (byte 0x11 = 0): the map
+ * buffer's first 21 bytes become 原價:NNNNN 半價:NNNNN (its price, the word at 0x12, and half of it, leading zeros as spaces up to the last
+ * digit), drawn in colour 0x80 at (67, 70) over a shadow of 0x84 a row down and a pixel to the right; then 願意嗎? (colour 0x98, shadow
+ * 0x9b) at (172, 87); then yes / no. [bp-0x96] ends at the second number's first digit shown. Otherwise message 0xd4 (colour 0x20,
+ * waiting). */
+static void use_sell(walk_t *w, screen_t *scr)
+{
+    uint8_t *m = w->zoom_grab, px[168 * 14];
+    unsigned gw = 0;
+    if (battle_text_pic(w->font8, m, 12, 0x10, px, &gw))
+        note_unbuilt(w, "a character the font does not have", 0);
+    static uint8_t part[192 * 60];
+    grab(scr, 0x3EC0, 192, 60, part);
+    for (int t = 0; t < 4; t++)
+        for (unsigned i = 0; i < sizeof part; i++)
+            part[i] = w->table[part[i]];
+    put(scr, 0x3EC0, part, 192, 60);
+    for (unsigned i = 0; i < 96 * 14; i++)
+        if (px[i]) {
+            unsigned o = (i / 96) * SCREEN_W + i % 96;
+            scr->pix[0x42B4 + o] = 0x16;
+            scr->pix[0x42B5 + o] = 0x16;
+        }
+    for (unsigned i = 0; i < 96 * 14; i++)
+        if (px[i])
+            scr->pix[0x4174 + (i / 96) * SCREEN_W + i % 96] = px[i];
+    use_outline(scr, 0x3EC0, 192, 60, 0x2A);
+    if (m[0x11] != 0) {
+        w->use_selling = 1;
+        if (use_box_in(w, scr, 0xD4, 0x20, 1) != 0)
+            use_done(w, scr);
+        return;
+    }
+    unsigned price = w16(m, 0x12);
+    w->v96 = walk_sell_text(m, price);
+    static const struct { unsigned n, at, sh; uint8_t c, s; } line[2] = {{21, 0x57C3, 0x5903, 0x80, 0x84}, {7, 0x6D6C, 0x6EAC, 0x98, 0x9B}};
+    static const uint8_t ask[7] = {0xC4, 0x40, 0xB7, 0x4E, 0xB6, 0xDC, '?'};
+    for (int l = 0; l < 2; l++) {
+        if (l == 1)
+            memcpy(m, ask, sizeof ask);
+        unsigned pw = line[l].n * 8;
+        if (battle_text_pic(w->font8, m, line[l].n, line[l].c, px, &gw))
+            note_unbuilt(w, "a character the font does not have", 0);
+        for (unsigned k = 0; k < pw * 14; k++)
+            if (px[k]) {
+                unsigned o = (k / pw) * SCREEN_W + k % pw;
+                scr->pix[line[l].sh + 1 + o] = line[l].s;
+                scr->pix[line[l].sh + o] = line[l].s;
+            }
+        for (unsigned k = 0; k < pw * 14; k++)
+            if (px[k])
+                scr->pix[line[l].at + (k / pw) * SCREEN_W + k % pw] = px[k];
+    }
+    w->use_half = price >> 1;
+    w->use_selling = 1;
+    if (w->mouse_on)
+        walk_mouse_put(scr, w->mprev, w->mbg, 0);
+    yesno_open(w, scr);
+    w->talk_count = 0xDC;   /* [bp-8] at 0x18d23: 0x3fdc, left by the text drawing (0x243ec), SEEN */
+}
+
+/* 0x189f2 .. 0x18ae5: yes at a sell counter: the half price added to the coins one at a time (so past 65,535 it wraps), the coins drawn,
+ * the item gone from the member's first place holding it, SND_EF.1's 0x1bf5, waited for when the sounds are on. */
+static void use_sold(walk_t *w, screen_t *scr)
+{
+    uint8_t *party = w->scene->tab_b;
+    unsigned gold = (w16(party, WALK_GOLD_AT) + w->use_half) & 0xFFFF;
+    w->use_half = 0;
+    party[WALK_GOLD_AT] = (uint8_t)gold;
+    party[WALK_GOLD_AT + 1] = (uint8_t)(gold >> 8);
+    walk_show_gold(w, scr);
+    use_drop(party, w->use_member, w->use_item);
+    walk_sfx_play(w, SFX_EF, 0x1BF5);
+    if (w->sb == 0x81) {
+        walk_sfx_wait(w);
+        walk_sfx_stop(w);
+    }
+}
+
 unsigned walk_use_blink(unsigned c)
 {
     for (int i = 0; i < 0x4B0; i++) {   /* 0x16ce0: 1200 rounds, the name drawn while the count is 0xc8 .. 0x190 */
@@ -2739,8 +2852,7 @@ static void use_item_chosen(walk_t *w, screen_t *scr, unsigned item, const uint8
     fkey_frame(w);
     walk_copy_window(scr, w->buf);   /* 0x2b9ec */
     if (scene) {
-        note_unbuilt(w, "F7 on a scene record of kind 0x14 (0x172f0)", si / WS_RECORD_SIZE);
-        use_done(w, scr);
+        use_sell(w, scr);
         return;
     }
     if (si < 0x2EE && s->tab_a[1000 + si + 4] == item) {
@@ -2783,6 +2895,12 @@ static void use_answer(walk_t *w, screen_t *scr, int yes)
     if (w->mouse_on) {
         w->mprev = 0;
         walk_mouse_grab(scr, 0, w->mbg);
+    }
+    if (w->use_selling) {
+        if (yes)
+            use_sold(w, scr);
+        use_done(w, scr);
+        return;
     }
     if (yes)
         use_drop(w->scene->tab_b, w->use_member, w->use_item);

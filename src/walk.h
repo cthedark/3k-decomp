@@ -242,6 +242,10 @@ void walk_order_swap(uint8_t *party, unsigned at);
  * left out, the units always drawn. */
 void walk_data_number(uint8_t *pix, unsigned at, unsigned v, const uint8_t *digits);
 unsigned walk_use_blink(unsigned c);
+/* (0x18723 .. 0x18877) A sell counter's text: m's first 21 bytes become 原價:NNNNN 半價:NNNNN (price, then half of it, each number's
+ * leading zeros spaces up to its last digit; a 0 after each number, the first then a space). Returns where the second number's spaces
+ * stop ([bp-0x96]). */
+unsigned walk_sell_text(uint8_t m[22], unsigned price);
 /* (0x1252c) How far into the buffer the window is read for a bump of strength `v48` (2, then 1) given the random value `r` (0 .. 0x7fff):
  * t = 4 * v48, d = 0x7fff / t + 1, a = r / d; when a is above v48 the offset is (a - v48) * 224 (1 to 5 rows), else a (0 to 2 pixels). */
 unsigned walk_shake_offset(unsigned v48, unsigned r);

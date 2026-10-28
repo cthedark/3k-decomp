@@ -210,6 +210,17 @@ static unsigned scancode_set1(SDL_Scancode sc)
     case SDL_SCANCODE_SPACE: return 0x39;
     case SDL_SCANCODE_ESCAPE: return 0x01;
     case SDL_SCANCODE_A: return 0x1e;
+    /* the US top row Q..P stands in for F1..F10, for keyboards without F-keys; nothing reads these letters' own codes (0x10 .. 0x19) */
+    case SDL_SCANCODE_Q: return 0x3b;
+    case SDL_SCANCODE_W: return 0x3c;
+    case SDL_SCANCODE_E: return 0x3d;
+    case SDL_SCANCODE_R: return 0x3e;
+    case SDL_SCANCODE_T: return 0x3f;
+    case SDL_SCANCODE_Y: return 0x40;
+    case SDL_SCANCODE_U: return 0x41;
+    case SDL_SCANCODE_I: return 0x42;
+    case SDL_SCANCODE_O: return 0x43;
+    case SDL_SCANCODE_P: return 0x44;
     default:
         /* 1..9, 0 are set-1 codes 0x02..0x0b; F1..F10 are 0x3b..0x44 (WALK.SL's keys 1-4 and F-keys) */
         if (sc >= SDL_SCANCODE_1 && sc <= SDL_SCANCODE_0)

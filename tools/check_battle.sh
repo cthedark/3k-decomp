@@ -541,6 +541,49 @@ run use_coins_dark23 23 70 17 300 $U --key 20:0x1c --key 21:0x9c --key 40:0x4b -
     --key 102:0x9c
 DOPTS="--byte 0:0x14:1 --byte 0:0x15:2 --byte 0:0x16:3 --word 0:0x122:500"
 for seed in 1 2 3; do run "use_walk$seed" 0 82 30 2500 $($PY tools/walk_keys.py use $seed 2500); done
+# F7 at a sell counter (kind 0x14, step 36): scene 0's record 17 at (106, 11), scene 2's 31 at (88, 75), 21's 47 at (108, 36), 33's 43
+# at (134, 59), 41's 38 at (114, 36). Items 1 (price 20), 2 (may not be sold: message 0xd4) and 5 (6300); yes / no at 150 (Enter: yes)
+UI="$U --key 20:0x4d --key 22:0xcd --key 30:0x1c --key 32:0x9c --key 50:0x1c --key 52:0x9c --key 70:0x02 --key 72:0x82"
+DOPTS="--byte 0:0x14:1 --byte 0:0x15:2 --byte 0:0x16:5"
+run pawn_item 0 106 10 300 $UI --key 150:0x1c --key 152:0x9c
+run pawn_no 0 106 10 300 $UI --key 120:0x4d --key 122:0xcd --key 150:0x1c --key 152:0x9c
+run pawn_no_yes 0 106 10 300 $UI --key 100:0x4d --key 102:0xcd --key 120:0x4b --key 122:0xcb --key 150:0x39 --key 152:0xb9
+run pawn_keep 0 106 10 300 $U --key 20:0x4d --key 22:0xcd --key 30:0x1c --key 32:0x9c --key 50:0x1c --key 52:0x9c --key 60:0x50 \
+    --key 62:0xd0 --key 70:0x02 --key 72:0x82 --key 150:0x1c --key 152:0x9c
+run pawn_big 0 106 10 300 $U --key 20:0x4d --key 22:0xcd --key 30:0x1c --key 32:0x9c --key 50:0x1c --key 52:0x9c --key 60:0x50 \
+    --key 62:0xd0 --key 64:0x50 --key 66:0xd0 --key 70:0x02 --key 72:0x82 --key 150:0x1c --key 152:0x9c
+run pawn_left 0 108 11 300 --key 1:0x4b --key 4:0xcb --key 10:0x41 --key 12:0xc1 --key 25:0x4d --key 27:0xcd --key 35:0x1c \
+    --key 37:0x9c --key 55:0x1c --key 57:0x9c --key 75:0x02 --key 77:0x82 --key 150:0x1c --key 152:0x9c
+run pawn_far 0 106 14 300 --key 1:0x48 --key 4:0xc8 --key 10:0x41 --key 12:0xc1 --key 25:0x4d --key 27:0xcd --key 35:0x1c \
+    --key 37:0x9c --key 55:0x1c --key 57:0x9c --key 75:0x02 --key 77:0x82 --key 150:0x1c --key 152:0x9c
+run pawn_sb 0 106 10 300 --sb $UI --key 150:0x1c --key 152:0x9c
+run pawn_mouse 0 106 10 300 --key 1:0x81 --mouse 0:160:100:0 --mouse 3:20:130:1 --mouse 5:20:130:0 --mouse 20:200:157:0 \
+    --mouse 30:200:157:1 --mouse 32:200:157:0 --key 50:0x1c --key 52:0x9c --key 70:0x02 --key 72:0x82 --mouse 120:280:45:0 \
+    --mouse 150:280:45:1 --mouse 152:280:45:0
+run pawn_mouse_no 0 106 10 300 --key 1:0x81 --mouse 0:160:100:0 --mouse 3:20:130:1 --mouse 5:20:130:0 --mouse 20:200:157:0 \
+    --mouse 30:200:157:1 --mouse 32:200:157:0 --key 50:0x1c --key 52:0x9c --key 70:0x02 --key 72:0x82 --mouse 120:300:45:0 \
+    --mouse 150:300:45:1 --mouse 152:300:45:0
+run pawn_keep_mouse 0 106 10 300 --key 1:0x81 --mouse 0:160:100:0 --mouse 3:20:130:1 --mouse 5:20:130:0 --mouse 20:200:157:0 \
+    --mouse 30:200:157:1 --mouse 32:200:157:0 --key 50:0x1c --key 52:0x9c --key 60:0x50 --key 62:0xd0 --key 70:0x02 --key 72:0x82 \
+    --mouse 150:200:100:2 --mouse 152:200:100:0
+run pawn_twice 0 106 10 400 $UI --key 150:0x1c --key 152:0x9c --key 180:0x41 --key 182:0xc1 --key 200:0x4d --key 202:0xcd \
+    --key 210:0x1c --key 212:0x9c --key 230:0x1c --key 232:0x9c --key 250:0x02 --key 252:0x82 --key 330:0x1c --key 332:0x9c
+DOPTS="--byte 0:0x14:5 --word 0:0x122:65000"
+run pawn_wrap 0 106 10 300 $UI --key 150:0x1c --key 152:0x9c
+# an odd price (item 16, 15: half 7); the pointer resting inside the sale's box while the keys work
+DOPTS="--byte 0:0x14:16"
+run pawn_odd 0 106 10 300 $UI --key 150:0x1c --key 152:0x9c
+run pawn_mouse_in 0 106 10 300 --mouse 0:150:80:0 $UI --key 150:0x1c --key 152:0x9c
+DOPTS="--join 1 --byte 1:0x14:1"
+run pawn_member1 0 106 10 300 $U --key 20:0x4d --key 22:0xcd --key 30:0x1c --key 32:0x9c --key 40:0x4d --key 42:0xcd --key 50:0x1c \
+    --key 52:0x9c --key 70:0x02 --key 72:0x82 --key 150:0x1c --key 152:0x9c
+DOPTS="--byte 0:0x14:1 --byte 0:0x15:2 --byte 0:0x16:5"
+run pawn_s2 2 88 74 300 $UI --key 150:0x1c --key 152:0x9c
+run pawn_s21 21 108 35 300 $UI --key 150:0x1c --key 152:0x9c
+run pawn_s33 33 134 58 300 $UI --key 150:0x1c --key 152:0x9c
+run pawn_s41 41 114 35 300 $UI --key 150:0x1c --key 152:0x9c
+for seed in 4 5 6; do run "pawn_walk$seed" 0 106 10 2500 $($PY tools/walk_keys.py use $seed 2500); done
+DOPTS=""
 # F8, the map (step 33): F8 (pass 3) with the map (item 0x13) in the hero's first item place; the mark blinks (45 rounds shown, 36
 # not); Esc, Space, Enter or the right button alone close it. In scenes 0 to 23 (the right edge, the bottom rows, a dark scene, row 5)
 M="--key 1:0x81 --key 3:0x42 --key 5:0xc2"

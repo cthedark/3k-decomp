@@ -1328,3 +1328,15 @@ puts back both button columns and the strip above (`docs/findings.md` "WALK.SL s
   mutations, all caught, one dropped with a note.
 - **Guesses:** the palette count's start is a stack leftover (0x28 x the members in every start probed).
 - **Not built:** F7 on a scene change record; keys 1 to 4 and A in the world.
+
+## Milestone 9n: F7 at a sell counter (C), built 2026-10-28
+What the docs called F7 on a scene change record is a sale: F7's item, used in front of a kind 0x14 record (five counters, in scenes
+0, 2, 21, 33 and 41), shows the item's name, its price and half of it over a darkened band, and asks 願意嗎?. Yes adds half the price to
+the coins (wrapping past 65,535, as the original) and takes the item; an item that may not be thrown away gets message 0xd4 instead
+(`docs/findings.md` "WALK.SL step 36").
+
+- **Code:** `src/walk.c` (`use_sell`, `use_sold`, `walk_sell_text`; `use_box_in` takes the colour); `tests/test_walk.c` `test_use`.
+- **Checked:** `tools/check_battle.sh`, 23 `pawn_` starts, all identical at every pass; `tools/mutate_battle.py` (735): 40 new
+  mutations, all caught, three dropped with notes.
+- **Guesses:** none new; the yes / no count's start (0xdc) is a stack leftover, SEEN in the oracle.
+- **Not built:** the hero stepping onto a kind 0x14 record; the record block's other kinds; keys 1 to 4 and A in the world.
