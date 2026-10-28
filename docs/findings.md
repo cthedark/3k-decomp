@@ -3540,3 +3540,46 @@ bottom rows), 6, 13 (dark), 23 and row 5 of scene 1; a 400-pass start (the blink
 member's, no map, F7 after F8 with and without the map (`[bp-0x96]`), and three 2,500-pass walks (`tools/walk_keys.py map`).
 `tools/mutate_battle.py`: 49 new mutations, all caught; two dropped as unshowable (see its note); three F3 patterns that also matched
 the map's close test repointed and re-run, all caught. `tests/test_walk.c` `test_map`: the item search and the row's stretch.
+
+## WALK.SL step 34: F9, the party's order, 2026-10-27
+
+Built in C and compared pass by pass. READ from the code (F9's handler `0x1546a` .. `0x154e0`, the screen `0x1b748` .. `0x1bd6d`),
+SEEN in the oracle (`work/b8/probe_f9.py`: the frame's locals at the loop's first rounds, the screen), then CONFIRMED by the comparison
+(a new loop top for `tools/battle_check.py`, `0x1b834`, kind 14 "order", which also compares the party table, its first argument).
+
+**F9 (位置, position):** the pointer's corner put back, F9's button (0x498d) pressed, `0x1b748` (the party table, the party's sprites
+`[bp-0x38]`, the world buffer, the dimmed palette copy `[bp-0xb0]`), the button let go, then `0x1729e` as every F-key. The screen puts
+nothing back: the world drawn after it covers it.
+
+**The screen** (`0x1b748`): RPG.LCP 0x7b5a, 0x271 bytes, run-length decoded (`0x25eeb`) into the world buffer: a 20 x 100 picture
+(header 0x14, 0x64), five 20 x 20 rows. The members are the party records before the first whose number (byte 3) is above 4, at most
+five; the picture's height becomes 20 for each, the last row's offset `[bp-0x10]` = 0x28 (n - 1). The lit row `[bp-0x1c]` (0x28 a
+member, its picture offset `[bp-0x1e]` = 0xbbc + 400 a row) starts at 0, nothing picked up (`[bp-0x22]`), the walk frame
+`[bp-0x20]` 1.
+
+**Its loop** (`0x1b834`), each round: the song's end (as the main loop's); the count `[bp-0x18]` 0 .. 0x3c, past it the next frame
+(0 .. 3, frame 3 drawn as 1); the palette step (`0x1c284` on the dimmed copy) at counts 0, 15, 30 and 45; the clean picture copied to
+the world buffer + 0xbb8 (`0x27503`); the blink count `[bp-0xe]` 0 .. 0x50 and, above 0x28 (40 rounds of 81), the lit row filled
+(`0x273f8`, 400 bytes) with 0x25, or 0x10 when picked up; each member's walking-down sprite (`bank2` + number x 0xc00 + 0x300 + frame x
+0x100, colour 0 transparent, `0x26c04`) at (4, 1) in his row; shown at (150, 50) (`0x27328`). Then the key read raw (`0x274b8`) and the
+BIOS buffer emptied; with a mouse (`0x260c9` function 3): the pointer's y below its last moves the row up, above it down (not past the
+first or last row), carrying the member when picked up; no button sets a "let go" flag, the left button after it picks up or puts
+down, the right button alone ends it. A key counts after a break code (the latch `[bp-0x24]`): Esc ends, Space picks up or puts down,
+Up and Down move as the pointer does. Moving a picked-up member swaps bytes 3 .. 0x27 of his record and the next (`0x25c8e`, 0x25
+bytes): every record keeps its place and facing (bytes 0 .. 2), so the member moved to the top walks where the hero stood. Enter does
+nothing.
+
+**Stack leftovers (INFERRED):** the frame's count, the blink count and the latch are never set before the loop: 0xc6 (the same 0x2cc6
+F8's `[bp-0xc]` holds), 0x45 and 0x32 at every F9 probed (at the first pass, after a walk, after F8, after F1). So the first round
+starts the next frame and steps the palette, the row is lit at once, and a key's make code counts without a break first. The pointer's
+last y `[bp-0xa]` is the slot where F9's handler pushed 0x498d for its button: the pointer's first reading always moves the row up
+(nothing at the top).
+
+**Checked:** `tools/check_battle.sh`, 12 `order_` starts, all identical at every pass: a party of three with long waits, both ends
+picked up and pushed past, Esc while picked up and F9 again, a held key and Enter, Down with no break code after F9, all five members,
+the hero alone, member 2 without member 1 (the list stops), a dark scene, the mouse (F9's button, the pointer's y, the left button with
+and without a release, both buttons, the right one), and three 2,500-pass walks (`tools/walk_keys.py order`). `tests/test_walk.c`
+`test_party_order`: the members counted and two records swapped. `tools/mutate_battle.py`: 49 new mutations, all caught (the latch's
+leftover only by `order_nobreak`, Down in the loop's first round); one dropped: the records run again after F9 change nothing. ASan and
+UBSan clean on five starts; a real-time run under SDL's dummy drivers opened F9, moved a member and closed it (F10 pressed after it
+reached the world).

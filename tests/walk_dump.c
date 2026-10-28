@@ -274,8 +274,12 @@ int main(int argc, char **argv)
                         uint32_t r = *walk_rng(w);
                         for (int j = 0; j < 4; j++)
                             st[1 + j] = (uint8_t)(r >> (8 * j));
-                        memcpy(st + 5, walk_scene(w)->tab_a, 1000);
-                        memcpy(st + 1005, walk_scene(w)->tab_b, 0x124);
+                        if (st[0] == 14)   /* F9's order: the party table where the lists have it */
+                            memcpy(st + 1 + 4 + BATTLE_MON_BYTES + 16, walk_scene(w)->tab_b, 200);
+                        else {
+                            memcpy(st + 5, walk_scene(w)->tab_a, 1000);
+                            memcpy(st + 1005, walk_scene(w)->tab_b, 0x124);
+                        }
                     }
                     if (fwrite(scr.pix, 1, sizeof scr.pix, f) != sizeof scr.pix || fwrite(scr.pal, 1, sizeof scr.pal, f) != sizeof scr.pal ||
                         fwrite(st, 1, sizeof st, f) != sizeof st)

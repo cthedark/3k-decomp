@@ -234,6 +234,10 @@ int walk_map_has(const uint8_t *party, unsigned *v96);
 /* (0x1c843 .. 0x1c8f8) A row of F8's map: the 128 cells' pixels `map` stretched to `w` (0x26de8: step 0xffff * 128 / w, from 1)
  * between two 0xb0 edges, w + 2 bytes in `out`; not shaded. */
 void walk_map_row(const uint8_t *map, unsigned w, uint8_t *out);
+/* (0x1b7d4 .. 0x1b80e) F9: how many party records come before the first whose number (byte 3) is above 4, at most 5. */
+unsigned walk_order_members(const uint8_t *party);
+/* (0x25c8e) F9: the party records at `at` and `at` + 0x28 swap their bytes 3 .. 0x27 (place and facing stay). */
+void walk_order_swap(uint8_t *party, unsigned at);
 unsigned walk_use_blink(unsigned c);
 /* (0x1252c) How far into the buffer the window is read for a bump of strength `v48` (2, then 1) given the random value `r` (0 .. 0x7fff):
  * t = 4 * v48, d = 0x7fff / t + 1, a = r / d; when a is above v48 the offset is (a - v48) * 224 (1 to 5 rows), else a (0 to 2 pixels). */

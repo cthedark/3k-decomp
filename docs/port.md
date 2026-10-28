@@ -1301,3 +1301,18 @@ shaded towards the top, with the hero's place blinking; Esc, Space, Enter or the
   mutations, all caught, two dropped with a note; three repointed F3 ones caught.
 - **Guesses:** whether the first row widens is a stack byte (0xc6 at every F8 probed: it does).
 - **Not built:** F7 on a scene change record; F9, F10, keys 1 to 4 and A.
+
+## Milestone 9l: F9, the party's order (C), built 2026-10-27
+F9 (位置, or its button) shows a column of 20 x 20 rows at (150, 50), one per party member with his walking-down sprite; Up and Down
+(or the pointer's y) move the blinking lit row, Space (or the left button) picks the member up or puts him down, and moving a picked-up
+member swaps him with the next one, so the party's order (and who leads in the world) changes; Esc or the right button alone ends it
+(`docs/findings.md` "WALK.SL step 34").
+
+- **Code:** `src/walk.c` (`order_key`, `order_round`, `order_move`, `order_done`, `walk_order_members`, `walk_order_swap`; `talking`
+  10); `tools/battle_check.py` loop kind 14 (`0x1b834`, the party table compared in it); `tests/walk_dump.c` dumps the party there;
+  `tools/walk_keys.py order`; `tests/test_walk.c` `test_party_order` (the unbuilt-key example is now F10).
+- **Checked:** `tools/check_battle.sh`, 12 `order_` starts, all identical at every pass; `tools/mutate_battle.py` (646): 49 new
+  mutations, all caught, one dropped with a note.
+- **Guesses:** four of the loop's locals are never set (the frame's count 0xc6, the blink's 0x45, the key latch 0x32, the pointer's
+  last y 0x498d): seen the same in every start probed.
+- **Not built:** F7 on a scene change record; F10, keys 1 to 4 and A.

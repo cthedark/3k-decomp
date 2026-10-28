@@ -1235,11 +1235,11 @@ static void test_walking(void)
     uint32_t rand_after = (uint32_t)st2[1000] | (uint32_t)st2[1001] << 8 | (uint32_t)st2[1002] << 16 | (uint32_t)st2[1003] << 24;
     CHECK(rand_after != rand_before);                /* the shake drew from rand() */
 
-    /* a key the port does not build is reported, once per pass it is seen (F9, 0x43; F1 to F8 are built) */
-    const keyev f1[] = {{0, 0x43}};
+    /* a key the port does not build is reported, once per pass it is seen (F10, 0x44; F1 to F9 are built) */
+    const keyev f1[] = {{0, 0x44}};
     CHECK(BEGIN());
     int rc = run_walk(w, &scr, f1, 1, 3, NULL, NULL, NULL);
-    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x43"));
+    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x44"));
 
     /* the keys 1, 2 and A are released while they repeat: reported on the first pass only */
     const keyev akey[] = {{3, 0x1E}};
@@ -1535,6 +1535,28 @@ static void test_map(void)
     CHECK(out[0] == 0xB0 && out[2] == 0 && out[3] == 1 && out[101] == 56 && out[228] == 127 && out[229] == 0xB0);
 }
 
+static void test_party_order(void)
+{
+    printf("F9: the members listed, and two records swapped\n");
+    static uint8_t party[WS_TAB_B];
+    for (int i = 0; i < 5; i++)
+        party[i * 0x28 + 3] = (uint8_t)(0xC8 + i);
+    party[3] = 0;
+    CHECK(walk_order_members(party) == 1);
+    party[0x28 + 3] = 4;                     /* 4 is the highest number that counts */
+    party[0x50 + 3] = 5;
+    party[0x78 + 3] = 2;                     /* after one that does not count: not listed */
+    CHECK(walk_order_members(party) == 2);
+    for (int i = 0; i < 5; i++)
+        party[i * 0x28 + 3] = (uint8_t)i;
+    CHECK(walk_order_members(party) == 5);   /* at most five */
+    for (int i = 0; i < 0x50; i++)
+        party[i] = (uint8_t)i;
+    walk_order_swap(party, 0);
+    CHECK(party[0] == 0 && party[2] == 2 && party[0x28] == 0x28 && party[0x2A] == 0x2A);   /* place and facing stay */
+    CHECK(party[3] == 0x2B && party[0x27] == 0x4F && party[0x2B] == 3 && party[0x4F] == 0x27);
+}
+
 static void test_look(void)
 {
     printf("F2: the record looked at and its message\n");
@@ -1632,6 +1654,7 @@ int main(int argc, char **argv)
     test_look();
     test_use();
     test_map();
+    test_party_order();
     test_mouse_key();
     test_foot();
     test_trail_and_records();

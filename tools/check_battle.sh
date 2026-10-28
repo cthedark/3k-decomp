@@ -571,6 +571,42 @@ run map_none_use 0 82 34 250 $M --key 45:0x41 --key 47:0xc1 --key 65:0x4d --key 
 DOPTS="--byte 0:0x14:0x13"
 for seed in 1 2 3; do run "map_walk$seed" 1 106 30 2500 $($PY tools/walk_keys.py map $seed 2500); done
 DOPTS=""
+# F9, the party's order (step 34): F9 (pass 3) shows a 20 x 20 row per member before the first record not in the party; Up and Down
+# move the lit row (it blinks: 40 rounds of 81), Space picks the member up or puts him down, moving a picked-up member swaps his record
+# (bytes 3 .. 0x27) with the next; Esc or the right button alone ends it. Long waits (the frame's count, the palette steps)
+O="--key 1:0x81 --key 3:0x43 --key 5:0xc3"
+DOPTS="--join 1 --join 2"
+run order_s1 1 106 30 400 $O --key 20:0x50 --key 22:0xd0 --key 40:0x39 --key 42:0xb9 --key 60:0x50 --key 62:0xd0 --key 80:0x39 \
+    --key 82:0xb9 --key 100:0x48 --key 102:0xc8 --key 300:0x01 --key 302:0x81 --key 320:0x4d --key 340:0xcd
+# picked up, moved to the bottom and past it, back to the top and past it; Esc while picked up; F9 again (its leftovers)
+run order_ends 1 106 30 300 $O --key 20:0x39 --key 22:0xb9 --key 30:0x50 --key 32:0xd0 --key 40:0x50 --key 42:0xd0 --key 50:0x50 \
+    --key 52:0xd0 --key 60:0x48 --key 62:0xc8 --key 70:0x48 --key 72:0xc8 --key 80:0x48 --key 82:0xc8 --key 90:0x50 --key 92:0xd0 \
+    --key 100:0x01 --key 102:0x81 --key 150:0x43 --key 152:0xc3 --key 170:0x50 --key 172:0xd0 --key 200:0x01 --key 202:0x81
+# a held key (no release: one move), Enter (nothing), Space twice
+run order_held 1 106 30 200 $O --key 20:0x50 --key 60:0xd0 --key 70:0x1c --key 72:0x9c --key 80:0x39 --key 82:0xb9 \
+    --key 90:0x39 --key 92:0xb9 --key 120:0x01 --key 122:0x81
+# Down in the pass after F9's make code (the loop's first round), with no break code between: the latch is a leftover not 0, so it moves
+run order_nobreak 1 106 30 120 --key 1:0x81 --key 3:0x43 --key 4:0x50 --key 7:0xd0 --key 60:0x01 --key 62:0x81
+DOPTS="--join 1 --join 2 --join 3 --join 4"
+run order_five 1 106 30 300 $O --key 20:0x39 --key 22:0xb9 --key 30:0x50 --key 32:0xd0 --key 40:0x50 --key 42:0xd0 --key 50:0x50 \
+    --key 52:0xd0 --key 60:0x50 --key 62:0xd0 --key 70:0x50 --key 72:0xd0 --key 80:0x39 --key 82:0xb9 --key 90:0x48 --key 92:0xc8 \
+    --key 200:0x01 --key 202:0x81 --key 220:0x48 --key 230:0xc8
+DOPTS=""
+run order_one 1 106 30 150 $O --key 20:0x50 --key 22:0xd0 --key 40:0x39 --key 42:0xb9 --key 60:0x50 --key 62:0xd0 --key 100:0x01 \
+    --key 102:0x81
+# member 2 joined but not member 1: the list stops at record 1
+DOPTS="--join 2"
+run order_gap 1 106 30 150 $O --key 20:0x50 --key 22:0xd0 --key 40:0x39 --key 42:0xb9 --key 60:0x50 --key 62:0xd0 --key 100:0x01 \
+    --key 102:0x81
+DOPTS="--join 1 --join 2"
+run order_dark13 13 100 50 200 $O --key 20:0x39 --key 22:0xb9 --key 40:0x50 --key 42:0xd0 --key 100:0x01 --key 102:0x81
+# the mouse: F9's button clicked; the pointer's y moves the row (its first round compares with 0x498d), the left button after a
+# release picks up or puts down, both buttons do nothing, the right one alone ends it
+run order_mouse 1 106 30 250 --key 1:0x81 --mouse 0:160:100:0 --mouse 3:290:65:1 --mouse 5:290:65:0 --mouse 30:290:80:0 \
+    --mouse 50:290:95:0 --mouse 60:290:95:1 --mouse 62:290:95:0 --mouse 80:290:85:0 --mouse 100:290:85:1 --mouse 102:290:85:0 \
+    --mouse 120:290:86:3 --mouse 122:290:86:0 --mouse 140:290:50:0 --mouse 180:290:50:2 --mouse 182:290:50:0
+for seed in 1 2 3; do run "order_walk$seed" 1 106 30 2500 $($PY tools/walk_keys.py order $seed 2500); done
+DOPTS=""
 DOPTS=""
 # the world's start zoom (step 23; tools/zoom_check.py): its 13 steps in scenes 0, 1, 34 and four dark scenes (6, 9, 23, 47), from the
 # data directories of the starts above
