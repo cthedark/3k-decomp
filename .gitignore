@@ -1,5 +1,6 @@
 # Original game files: copyrighted, never commit or redistribute
 original_bin/
+DIR/
 
 # Kiro agent/tooling files, not part of the project
 .kiro/
