@@ -607,6 +607,34 @@ run order_mouse 1 106 30 250 --key 1:0x81 --mouse 0:160:100:0 --mouse 3:290:65:1
     --mouse 120:290:86:3 --mouse 122:290:86:0 --mouse 140:290:50:0 --mouse 180:290:50:2 --mouse 182:290:50:0
 for seed in 1 2 3; do run "order_walk$seed" 1 106 30 2500 $($PY tools/walk_keys.py order $seed 2500); done
 DOPTS=""
+# F10, the party's data (step 35): F10 (pass 3) shows a 64-wide panel per member (name, face, numbers) over both button columns; the
+# palette steps every 41st round and the three pictures at (5, 90) turn every 201st; Esc or the right button alone ends it
+TEN="--key 1:0x81 --key 3:0x44 --key 5:0xc4"
+DOPTS="--join 1 --join 2"
+run data_s1 1 106 30 900 $TEN --key 100:0x39 --key 102:0xb9 --key 120:0x1c --key 122:0x9c --key 140:0x50 --key 142:0xd0 \
+    --key 850:0x01 --key 852:0x81 --key 870:0x4d --key 890:0xcd
+DOPTS="--join 1 --join 2 --join 3 --join 4 --byte 4:0x13:0xc5"
+run data_five 1 106 30 300 $TEN --key 250:0x01 --key 252:0x81
+DOPTS="--join 1 --join 2 --join 3 --join 4"
+run data_five0 1 106 30 300 $TEN --key 250:0x01 --key 252:0x81
+DOPTS=""
+run data_one 1 106 30 300 $TEN --key 250:0x01 --key 252:0x81
+DOPTS="--join 2"
+run data_gap 1 106 30 150 $TEN --key 100:0x01 --key 102:0x81
+# a fallen member's face shaded; numbers with zeros inside, five digits and 0
+DOPTS="--join 1 --join 2 --hp 1:0 --word 0:4:10005 --word 0:6:60000 --byte 0:0xc:7 --word 0:0xd:100 --word 2:0x10:909"
+run data_nums 1 106 30 150 $TEN --key 100:0x01 --key 102:0x81
+DOPTS="--join 1 --join 2"
+run data_dark13 13 100 50 150 $TEN --key 100:0x01 --key 102:0x81
+# after F9 has moved the hero to the second place: names and faces follow the numbers, not the places
+run data_order 1 106 30 250 --key 1:0x81 --key 3:0x43 --key 5:0xc3 --key 20:0x39 --key 22:0xb9 --key 30:0x50 --key 32:0xd0 \
+    --key 40:0x01 --key 42:0x81 --key 60:0x44 --key 62:0xc4 --key 200:0x01 --key 202:0x81
+# the mouse: F10's button clicked; the left button and both do nothing, the right one alone ends it; then F10 again by key
+run data_mouse 1 106 30 300 --key 1:0x81 --mouse 0:160:100:0 --mouse 3:290:85:1 --mouse 5:290:85:0 --mouse 40:200:100:1 \
+    --mouse 42:200:100:0 --mouse 60:200:100:3 --mouse 62:200:100:0 --mouse 100:200:100:2 --mouse 102:200:100:0 --key 150:0x44 \
+    --key 152:0xc4 --key 250:0x01 --key 252:0x81
+for seed in 1 2 3; do run "data_walk$seed" 1 106 30 2500 $($PY tools/walk_keys.py data $seed 2500); done
+DOPTS=""
 DOPTS=""
 # the world's start zoom (step 23; tools/zoom_check.py): its 13 steps in scenes 0, 1, 34 and four dark scenes (6, 9, 23, 47), from the
 # data directories of the starts above

@@ -238,6 +238,9 @@ void walk_map_row(const uint8_t *map, unsigned w, uint8_t *out);
 unsigned walk_order_members(const uint8_t *party);
 /* (0x25c8e) F9: the party records at `at` and `at` + 0x28 swap their bytes 3 .. 0x27 (place and facing stay). */
 void walk_order_swap(uint8_t *party, unsigned at);
+/* (0x1a7c8) F10: `v` in 4 x 7 digits (`digits`, 28 bytes each) 4 apart at `at` of a 320-wide screen, colour 0 clear; leading zeros
+ * left out, the units always drawn. */
+void walk_data_number(uint8_t *pix, unsigned at, unsigned v, const uint8_t *digits);
 unsigned walk_use_blink(unsigned c);
 /* (0x1252c) How far into the buffer the window is read for a bump of strength `v48` (2, then 1) given the random value `r` (0 .. 0x7fff):
  * t = 4 * v48, d = 0x7fff / t + 1, a = r / d; when a is above v48 the offset is (a - v48) * 224 (1 to 5 rows), else a (0 to 2 pixels). */

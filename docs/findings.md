@@ -3583,3 +3583,54 @@ and without a release, both buttons, the right one), and three 2,500-pass walks 
 leftover only by `order_nobreak`, Down in the loop's first round); one dropped: the records run again after F9 change nothing. ASan and
 UBSan clean on five starts; a real-time run under SDL's dummy drivers opened F9, moved a member and closed it (F10 pressed after it
 reached the world).
+
+## WALK.SL step 35: F10, the party's data, 2026-10-27
+
+Built in C and compared pass by pass. READ from the code (F10's handler `0x153d8` .. `0x1545c`, the screen `0x1a122` .. `0x1a7c6`, its
+number routine `0x1a7c8`), SEEN in the oracle (`work/b9/probe_f10.py`: the frame's locals at the loop's first rounds, the screen),
+then CONFIRMED by the comparison (a new loop top for `tools/battle_check.py`, `0x1a641`, kind 15 "data").
+
+**F10 (資料, data):** the pointer's corner put back, F10's button (0x628d) pressed, `0x1a122` (the party table, the world buffer, the
+map buffer `[bp-0xba]`, `[bp-0x20]`, the dimmed palette copy `[bp-0xb0]`, the 8-pixel font `[bp-0x40]`), the button let go, then
+`0x1729e`.
+
+**The screen** (`0x1a122`):
+- MANDATA1.LCC's first 0x23e6 bytes read into the map buffer and run-length decoded (`0x25eeb`) into the world buffer: a 64-wide panel
+  at 0 (its header), three pictures of 0x3c4 bytes with headers at 0x274d, 0x2b11 and 0x2ed5, and ten 4 x 7 digits (28 bytes each)
+  at 0x3299.
+- Kept (`0x2723c`): the screen's 64 x 160 at (0, 26) in the map buffer, its 64 x 149 at (256, 26) at the map buffer + 0x280a, its
+  320 x 15 at (0, 11) in `[bp-0x20]`; MES_TXT.LCC 0x6a06, 50 bytes, read to `[bp-0x20]` + 0x1388: the names, 6 bytes a member
+  number.
+- The members are the records before the first whose number (byte 3) is above 4, at most five (as F9's). For each, from x 0 every 64:
+  the panel at y 26 (all panels first); then, member by member: his name (`0x243ec`, 6 bytes, colour 0x98, into the world buffer)
+  over a 52 x 8 box of 0x56 at (6, 17), its shadow of 0x9c a row down a pixel left and right (`0x25b54`), the name over it at (8, 12)
+  (`0x27371`); his face, MAN_PIC.LCC at 0xce8 x his number (0xce8 bytes, not packed), shaded 8 times (`0x25dca`) when his HP (word 8)
+  is 0, at (2, 28); his numbers (`0x1a7c8`) from (17, 90): words 4 and 6 (experience, next level; the second 21 right and 6 down),
+  13 rows down words 8 and 0xa (HP, most HP), 13 more byte 0xc (right) and word 0xd (left), 19 more word 0x10, then bytes 0x12 and
+  0x13 13 rows apart.
+- **Numbers** (`0x1a7c8`): from the ten thousands, each digit drawn 4 to the right of the last (colour 0 clear, `0x25bda`), leading
+  zeros left out, zeros after a digit drawn, the units always.
+
+**Its loop** (`0x1a641`): the song's end; the count `[bp-0x14]` to 0x28, past it the palette step (`0x1c284` on the dimmed copy);
+the count `[bp-0x16]` to 0xc8, past it the next of the three pictures (0x274d, 0x2b11, 0x2ed5, then 0x274d) at each member's (5, 90).
+The picture shown first is the second: before the first turn none is drawn. Esc (the key byte as read) or the right button alone
+(`0x260c9`, which writes the pointer's x and then y into the world buffer's first word) ends it: the three kept parts put back.
+Nothing else is read.
+
+**Stack leftovers:** `[bp-0x16]` is the last word or byte read: the fifth member's byte 0x13, or the number of the first record not
+listed (0xc8 + k for a member who has not joined: the first round turns the picture). `[bp-0x14]` is never set: it was 0x28 x the
+members in every start probed (one, two, three and five members, after a walk and after F8; INFERRED), so the first round steps the
+palette.
+
+**Not reproduced:** F10's writes into the world buffer's start (the name picture, the faces, the pointer) only change what the world's
+next drawing replaces. The map buffer's start also gets them (the packed file, the kept columns), as the port writes them; only the
+unreachable rows above a map read it (step 27).
+
+**Checked:** `tools/check_battle.sh`, 12 `data_` starts, all identical at every pass: a party of three for 850 rounds (four picture
+turns, the third back to the first) with Space, Enter and Down (nothing), five members with the fifth's byte 0x13 0xc5 and 0, one
+member, member 2 without member 1, a fallen face and numbers with zeros inside, five digits and 0, a dark scene, the mouse (F10's
+button, the left button and both do nothing, the right one ends it; F10 again by key), F10 after F9 has moved the hero to the
+second place (names and faces go by the number, byte 3), and three 2,500-pass walks (`tools/walk_keys.py data`). `tests/test_walk.c`
+`test_data_number`. `tools/mutate_battle.py`: 49 new mutations, all caught (the two that take the name and face by place only by
+`data_order`); one dropped: the records run again after F10 change nothing. ASan and UBSan clean on five starts; a real-time run under
+SDL's dummy drivers opened and closed F10 and F9 (key 4 then reached the world).

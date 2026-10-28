@@ -1235,11 +1235,11 @@ static void test_walking(void)
     uint32_t rand_after = (uint32_t)st2[1000] | (uint32_t)st2[1001] << 8 | (uint32_t)st2[1002] << 16 | (uint32_t)st2[1003] << 24;
     CHECK(rand_after != rand_before);                /* the shake drew from rand() */
 
-    /* a key the port does not build is reported, once per pass it is seen (F10, 0x44; F1 to F9 are built) */
-    const keyev f1[] = {{0, 0x44}};
+    /* a key the port does not build is reported, once per pass it is seen (key 4, 0x05; F1 to F10 are built) */
+    const keyev f1[] = {{0, 0x05}};
     CHECK(BEGIN());
     int rc = run_walk(w, &scr, f1, 1, 3, NULL, NULL, NULL);
-    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x44"));
+    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x5"));
 
     /* the keys 1, 2 and A are released while they repeat: reported on the first pass only */
     const keyev akey[] = {{3, 0x1E}};
@@ -1557,6 +1557,28 @@ static void test_party_order(void)
     CHECK(party[3] == 0x2B && party[0x27] == 0x4F && party[0x2B] == 3 && party[0x4F] == 0x27);
 }
 
+static void test_data_number(void)
+{
+    printf("F10: numbers in 4 x 7 digits\n");
+    static uint8_t digits[10 * 28], pix[320 * 8];
+    for (int d = 0; d < 10; d++)
+        for (int k = 0; k < 28; k++)
+            digits[d * 28 + k] = k == 0 ? (uint8_t)(0x40 + d) : 0;   /* each digit: its top-left pixel only */
+    memset(pix, 0xEE, sizeof pix);
+    walk_data_number(pix, 0, 10005, digits);   /* five digits, zeros inside drawn */
+    CHECK(pix[0] == 0x41 && pix[4] == 0x40 && pix[8] == 0x40 && pix[12] == 0x40 && pix[16] == 0x45 && pix[20] == 0xEE);
+    CHECK(pix[1] == 0xEE);                     /* colour 0 is clear */
+    memset(pix, 0xEE, sizeof pix);
+    walk_data_number(pix, 0, 907, digits);     /* leading zeros left out: starts at once */
+    CHECK(pix[0] == 0x49 && pix[4] == 0x40 && pix[8] == 0x47 && pix[12] == 0xEE);
+    memset(pix, 0xEE, sizeof pix);
+    walk_data_number(pix, 0, 0, digits);       /* the units always */
+    CHECK(pix[0] == 0x40 && pix[4] == 0xEE);
+    memset(pix, 0xEE, sizeof pix);
+    walk_data_number(pix, 0, 60000, digits);
+    CHECK(pix[0] == 0x46 && pix[16] == 0x40 && pix[20] == 0xEE);
+}
+
 static void test_look(void)
 {
     printf("F2: the record looked at and its message\n");
@@ -1655,6 +1677,7 @@ int main(int argc, char **argv)
     test_use();
     test_map();
     test_party_order();
+    test_data_number();
     test_mouse_key();
     test_foot();
     test_trail_and_records();

@@ -26,7 +26,7 @@ struct walk {
     msgbox_t box;
     int talking;                        /* 1 the message box waits (0x1b506), 2 the yes / no buttons (0x18c36), 3 the number (0x18fdc),
                                          * 4 a look's message box (F2), 5 F3's wait, 6 F3's message box, 7 F4 to F7's lists, 8 F7's
-                                         * prompt, 9 F8's map, 10 F9's order */
+                                         * prompt, 9 F8's map, 10 F9's order, 11 F10's data */
     uint8_t *talk_rec;
     unsigned talk_msg, talk_k;          /* the message shown, the entry used (its offset in the record) */
     uint8_t talk_under[SCREEN_W * 46];  /* [bp+6] + 0x9c40: the screen's rows 134 .. 179 under boxes that do not wait */
@@ -49,6 +49,8 @@ struct walk {
      * ([bp-0x22]), the button let go ([bp-0x16]), the walk frame ([bp-0x20]), the frame's count ([bp-0x18]), the blink's
      * ([bp-0xe]), the key latch ([bp-0x24]), the pointer's last y ([bp-0xa]); the picture (RPG.LCP 0x7b5a) is in the world buffer */
     unsigned pos_at, pos_last, pos_sel, pos_rel, pos_frame, pos_ctr, pos_blink, pos_latch, pos_my;
+    /* F10 (talking 11): the palette count ([bp-0x14]), the pictures' count ([bp-0x16]) and the picture shown ([bp-0x18]) */
+    unsigned data_ctr, data_anim, data_frame;
     void (*show)(void *ctx, screen_t *scr);   /* walk_set_show, handed to F4's picker */
     void *show_ctx;
     uint8_t talk_mbg[60];               /* the 6 x 10 under their pointer (the pointer's own + 0x40) */
@@ -1148,6 +1150,7 @@ static void use_round(walk_t *w, screen_t *scr, unsigned port60);
 static void use_done(walk_t *w, screen_t *scr);
 static void map_round(walk_t *w, screen_t *scr, unsigned port60);
 static void order_round(walk_t *w, screen_t *scr, unsigned port60);
+static void data_round(walk_t *w, screen_t *scr, unsigned port60);
 
 /* The palette the yes / no buttons and the number step on: the dimmed copy in a talk, the palette itself in F7. */
 static void ask_step(walk_t *w, screen_t *scr)
@@ -1502,6 +1505,10 @@ static void talk_round(walk_t *w, screen_t *scr, unsigned port60)
     }
     if (w->talking == 10) {
         order_round(w, scr, port60);
+        return;
+    }
+    if (w->talking == 11) {
+        data_round(w, scr, port60);
         return;
     }
     int mx, my;
@@ -2017,6 +2024,176 @@ static void order_round(walk_t *w, screen_t *scr, unsigned port60)
     }
 }
 
+/* ---- F10: the party's data (0x153d8 .. 0x1545c, 0x1a122) ---- */
+
+void walk_data_number(uint8_t *pix, unsigned at, unsigned v, const uint8_t *digits)
+{
+    unsigned div = 10000;
+    int seen = 0;
+    while (div != 0) {   /* 0x1a7c8: 4 x 7 digits 4 apart, colour 0 clear (0x25bda); leading zeros left out, the units always */
+        unsigned q = (v / div) & 0xFF, src = q * 0x1C;
+        v = (v - q * div) & 0xFFFF;
+        div /= 10;
+        int draw = div == 0 || q != 0 || seen, zero = div != 0 && q == 0;
+        if (draw) {
+            const uint8_t *d = digits + (zero ? 0 : src);
+            for (unsigned r = 0; r < 7; r++)
+                for (unsigned c = 0; c < 4; c++)
+                    if (d[r * 4 + c] && at + r * SCREEN_W + c < SCREEN_W * SCREEN_H)
+                        pix[at + r * SCREEN_W + c] = d[r * 4 + c];
+            if (div == 0)
+                break;
+            at += 4;
+        }
+        if (q != 0)
+            seen = 1;
+    }
+}
+
+/* 0x27328 of a picture with its 4-byte header (width, height) */
+static void put_pic(screen_t *scr, unsigned at, const uint8_t *p)
+{
+    put(scr, at, p + 4, w16(p, 0), w16(p, 2));
+}
+
+/* The end of F10 (0x1a789): the three parts kept put back, the button let go, then 0x1729e. */
+static void data_done(walk_t *w, screen_t *scr)
+{
+    put_pic(scr, 0x2080, w->zoom_grab);
+    put_pic(scr, 0x2180, w->zoom_grab + 0x280A);
+    put_pic(scr, 0xDC0, w->dbuf);
+    walk_button_toggle(scr, 0x628D, 0x2F, 0x14);
+    w->talking = 0;
+    records_again(w, 0x384 / WS_RECORD_SIZE);
+}
+
+/* 0x2723c: the screen's w x h at `at` kept with its header */
+static void grab_pic(const screen_t *scr, unsigned at, unsigned bw, unsigned bh, uint8_t *out)
+{
+    out[0] = (uint8_t)bw, out[1] = (uint8_t)(bw >> 8), out[2] = (uint8_t)bh, out[3] = (uint8_t)(bh >> 8);
+    grab(scr, at, bw, bh, out + 4);
+}
+
+/* F10: the button pressed (the pointer's corner put back first); 0x1a122: MANDATA1.LCC (0x23e6 bytes into the map buffer [bp-0xba])
+ * run-length decoded into the world buffer: a 64-wide panel, three 3-frame pictures at 0x274d, 0x2b11 and 0x2ed5 and the 4 x 7
+ * digits at 0x3299. The screen's 64 x 160 at (0, 26) and 64 x 149 at (256, 26) kept in the map buffer, its 320 x 15 at (0, 11) in
+ * [bp-0x20], whose 0x1388 on gets MES_TXT.LCC 0x6a06 (50 bytes: the members' names, 6 bytes each). For each member before the first
+ * record whose number (byte 3) is above 4 (at most five), from x 0 every 64: the panel at y 26; then his name (colour 0x98, over a
+ * 52 x 8 box of 0x56, a shadow of 0x9c a row down each side) at (8, 12); his face, MAN_PIC.LCC 0xce8 x number (shaded 8 times when
+ * his HP is 0), at (2, 28); his numbers from (17, 90). The blink counts start from what the frame holds: 0x28 x the members
+ * ([bp-0x14], INFERRED from five starts) and the last word or byte read ([bp-0x16]: the fifth member's attack, or the number of the
+ * first record not listed). */
+static void data_key(walk_t *w, screen_t *scr)
+{
+    uint8_t *party = w->scene->tab_b, *b = w->buf;
+    if (w->mouse_on)
+        walk_mouse_put(scr, w->mprev, w->mbg, 0);
+    walk_button_toggle(scr, 0x628D, 0x2F, 0x14);   /* 0x1c3ba: F10's button pressed */
+    size_t len = 0;
+    uint8_t *pic = battle_read_unpack("mandata1.lcc", 0, 0x23E6, &len);
+    uint8_t names[50];
+    if (!pic || len < 0x33C1 || assets_read_at("mes_txt.lcc", 0x6A06, names, sizeof names) != 0) {
+        free(pic);
+        note_unbuilt(w, "F10's pictures or names that the data files do not have", 0);
+        walk_button_toggle(scr, 0x628D, 0x2F, 0x14);
+        w->talking = 0;
+        records_again(w, 0x384 / WS_RECORD_SIZE);
+        return;
+    }
+    if (assets_read_at("mandata1.lcc", 0, w->zoom_grab, 0x23E6) != 0)
+        memset(w->zoom_grab, 0, 0x23E6);
+    memcpy(b, pic, len);
+    free(pic);
+    grab_pic(scr, 0x2080, 0x40, 0xA0, w->zoom_grab);
+    grab_pic(scr, 0x2180, 0x40, 0x95, w->zoom_grab + 0x280A);
+    grab_pic(scr, 0xDC0, 0x140, 0xF, w->dbuf);
+    memcpy(w->dbuf + 0x1388, names, sizeof names);
+    unsigned n = walk_order_members(party);
+    for (unsigned i = 0; i < n; i++)
+        put_pic(scr, 0x2080 + 0x40 * i, b);
+    unsigned last = n < 5 ? party[n * 0x28 + 3] : party[4 * 0x28 + 0x13];
+    for (unsigned i = 0; i < n; i++) {
+        const uint8_t *r = party + i * 0x28;
+        unsigned num = r[3], face = 0x2302 + 0x40 * i, at = (face + 0xEC06) & 0xFFFF, gw = 0;
+        uint8_t px[48 * 14];
+        if (battle_text_pic(w->font8, w->dbuf + 0x1388 + 6 * num, 6, 0x98, px, &gw))
+            note_unbuilt(w, "a character the font does not have", 0);
+        b[0] = 48, b[1] = 0, b[2] = 14, b[3] = 0;   /* 0x243ec writes the picture into the world buffer */
+        memcpy(b + 4, px, sizeof px);
+        fill(scr, at + 0x63E, 0x34, 8, 0x56);
+        for (unsigned s = 0; s < 2; s++) {   /* 0x25b54 a row down, a pixel left and right; then 0x27371 */
+            unsigned o = at + (s ? 0x141 : 0x13F);
+            for (unsigned k = 0; k < sizeof px; k++)
+                if (px[k] && o + (k / 48) * SCREEN_W + k % 48 < SCREEN_W * SCREEN_H)
+                    scr->pix[o + (k / 48) * SCREEN_W + k % 48] = 0x9C;
+        }
+        for (unsigned k = 0; k < sizeof px; k++)
+            if (px[k] && at + (k / 48) * SCREEN_W + k % 48 < SCREEN_W * SCREEN_H)
+                scr->pix[at + (k / 48) * SCREEN_W + k % 48] = px[k];
+        if (assets_read_at("man_pic.lcc", (size_t)0xCE8 * num, b, 0xCE8) != 0)
+            note_unbuilt(w, "a face that MAN_PIC.LCC does not have", num);
+        if (w16(r, 8) == 0)
+            for (int t = 0; t < 8; t++)   /* 0x25dca */
+                for (unsigned k = 4; k < 4 + 0xCE4; k++)
+                    b[k] = w->table[b[k]];
+        put_pic(scr, face, b);
+        const uint8_t *dg = b + 0x3299;
+        unsigned p = 0x7091 + 0x40 * i;
+        walk_data_number(scr->pix, p, w16(r, 4), dg);
+        walk_data_number(scr->pix, p + 0x795, w16(r, 6), dg);
+        p += 0x1040;
+        walk_data_number(scr->pix, p, w16(r, 8), dg);
+        walk_data_number(scr->pix, p + 0x795, w16(r, 0xA), dg);
+        p += 0x1040;
+        walk_data_number(scr->pix, p + 0x795, r[0xC], dg);
+        walk_data_number(scr->pix, p, w16(r, 0xD), dg);
+        p += 0x17CC;
+        walk_data_number(scr->pix, p, w16(r, 0x10), dg);
+        p += 0x1040;
+        walk_data_number(scr->pix, p, r[0x12], dg);
+        p += 0x1040;
+        walk_data_number(scr->pix, p, r[0x13], dg);
+    }
+    w->data_ctr = (0x28 * n) & 0xFF;
+    w->data_anim = last;
+    w->data_frame = 0x274D;
+    w->talking = 11;
+}
+
+/* A round of 0x1a641: the palette step on the dimmed copy every 41st round; every 201st the next of the three pictures at each
+ * member's (5, 90); Esc (no release needed) or the right button alone ends it. The pointer's place is read into the world buffer's
+ * first word. */
+static void data_round(walk_t *w, screen_t *scr, unsigned port60)
+{
+    uint8_t *party = w->scene->tab_b;
+    w->data_ctr = (w->data_ctr + 1) & 0xFF;
+    if (w->data_ctr > 0x28) {
+        w->data_ctr = 0;
+        palette_cycle_on(w, scr, w->dimpal);
+    }
+    w->data_anim = (w->data_anim + 1) & 0xFFFF;
+    if (w->data_anim > 0xC8) {
+        w->data_anim = 0;
+        w->data_frame += 0x3C4;
+        if (w->data_frame > 0x2ED5)
+            w->data_frame = 0x274D;
+        for (unsigned i = 0; i < 5 && party[i * 0x28 + 3] <= 4; i++)
+            put_pic(scr, 0x7085 + 0x40 * i, w->buf + w->data_frame);
+    }
+    if ((port60 & 0xFF) == 1) {
+        data_done(w, scr);
+        return;
+    }
+    int mx, my;
+    unsigned mb = 0;
+    if (walk_mouse(w, &mx, &my, &mb)) {
+        w->buf[0] = (uint8_t)my;
+        w->buf[1] = (uint8_t)(my >> 8);
+        if ((mb & 0xFF) == 2)
+            data_done(w, scr);
+    }
+}
+
 /* ---- F3: taking (0x15bbd .. 0x165df) ---- */
 
 /* The end of a take: F3's button let go (the pointer's corner not kept again), then 0x1729e. */
@@ -2226,7 +2403,7 @@ unsigned walk_look_entry(const uint8_t *party, const uint8_t *r)
 
 int walk_kind(const walk_t *w)
 {
-    static const int kind[11] = {0, 4, 8, 9, 4, 10, 4, 0, 12, 13, 14};
+    static const int kind[12] = {0, 4, 8, 9, 4, 10, 4, 0, 12, 13, 14, 15};
     if (w->boss_box)
         return 4;
     if (w->talking == 7)
@@ -2786,6 +2963,11 @@ static int walk_keys(walk_t *w, unsigned port60)
     if (k == 0x43 && w->scr) {   /* F9: the party's order */
         fkey_begin(w, w->scr);
         order_key(w, w->scr);
+        return 1;
+    }
+    if (k == 0x44 && w->scr) {   /* F10: the party's data */
+        fkey_begin(w, w->scr);
+        data_key(w, w->scr);
         return 1;
     }
     if (!arrow && k != 0) {

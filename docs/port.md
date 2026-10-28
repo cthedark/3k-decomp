@@ -1316,3 +1316,15 @@ member swaps him with the next one, so the party's order (and who leads in the w
 - **Guesses:** four of the loop's locals are never set (the frame's count 0xc6, the blink's 0x45, the key latch 0x32, the pointer's
   last y 0x498d): seen the same in every start probed.
 - **Not built:** F7 on a scene change record; F10, keys 1 to 4 and A.
+
+## Milestone 9m: F10, the party's data (C), built 2026-10-27
+F10 (資料, or its button) shows a 64-wide panel per party member across the screen: name, face (shaded when he has fallen),
+experience, HP and his other numbers, defence and attack last; three small pictures turn every 201 rounds; Esc or the right button alone ends it and
+puts back both button columns and the strip above (`docs/findings.md` "WALK.SL step 35"). With it every F-key is built.
+
+- **Code:** `src/walk.c` (`data_key`, `data_round`, `data_done`, `walk_data_number`; `talking` 11); `tools/battle_check.py` loop kind
+  15 (`0x1a641`); `tools/walk_keys.py data`; `tests/test_walk.c` `test_data_number` (the unbuilt-key example is now key 4).
+- **Checked:** `tools/check_battle.sh`, 12 `data_` starts, all identical at every pass; `tools/mutate_battle.py` (695): 49 new
+  mutations, all caught, one dropped with a note.
+- **Guesses:** the palette count's start is a stack leftover (0x28 x the members in every start probed).
+- **Not built:** F7 on a scene change record; keys 1 to 4 and A in the world.

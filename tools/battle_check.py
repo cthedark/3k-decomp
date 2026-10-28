@@ -8,7 +8,7 @@ DATA is a data directory that starts the game on an enemy (tools/walk_scene_data
 nine loop tops counted as one sequence of passes: the world (0x11d36), the battle (0x1d418), the rewards bar after a win (0x1fb7d),
 a message box's wait (0x1b506), the magic list (0x217a6), the member picker (0x1aa30) and the item list (0x207b2; in these three only
 the screen, palette and rand state are compared), a talk's yes / no buttons (0x18d23) and its number (0x19166; the same); then the
-F-keys' own loops (F3's waits, F6's equipment screen, F7's prompt, F8's map 0x1ca82, F9's order 0x1b834; the same). At each arrival it records which loop, the screen, the palette, the rand state and, in the battle
+F-keys' own loops (F3's waits, F6's equipment screen, F7's prompt, F8's map 0x1ca82, F9's order 0x1b834, F10's data 0x1a641; the same). At each arrival it records which loop, the screen, the palette, the rand state and, in the battle
 and the rewards bar, the monster table ([bp-0x7c], 0x3c bytes), the sway count and direction ([bp-0x52], [bp-0x70]), the party table
 and the floating numbers; in the battle also who acts ([bp-0x44]), the turn counter ([bp-0x5e]), the chosen command ([bp-0x82]), the
 choosing flag ([bp-0x72]), the key latch ([bp-0x38]) and more locals; in the world the villager table and the party table up to the
@@ -46,10 +46,12 @@ USE_TOP = 0x166A8
 MAP_TOP = 0x1CA82
 # F9's party order (0x1b748): screen, palette, rand and the party
 ORDER_TOP = 0x1B834
+# F10's party data (0x1a122): screen, palette and rand
+DATA_TOP = 0x1A641
 KIND = {WORLD_TOP: 0, BATTLE_TOP: 1, REWARDS_TOP: 3, DIALOG_TOP: 4, MAGIC_TOP: 5, PICK_TOP: 6, ITEMS_TOP: 7, YESNO_TOP: 8,
-        NUMBER_TOP: 9, TAKE_TOPS[0]: 10, TAKE_TOPS[1]: 10, EQUIP_TOP: 11, USE_TOP: 12, MAP_TOP: 13, ORDER_TOP: 14}
+        NUMBER_TOP: 9, TAKE_TOPS[0]: 10, TAKE_TOPS[1]: 10, EQUIP_TOP: 11, USE_TOP: 12, MAP_TOP: 13, ORDER_TOP: 14, DATA_TOP: 15}
 KIND_NAME = {0: 'world', 1: 'battle', 2: 'lost', 3: 'rewards', 4: 'message box', 5: 'magic list', 6: 'member picker',
-             7: 'item list', 8: 'yes / no', 9: 'number', 10: 'take', 11: 'equipment', 12: 'use prompt', 13: 'map', 14: 'order',
+             7: 'item list', 8: 'yes / no', 9: 'number', 10: 'take', 11: 'equipment', 12: 'use prompt', 13: 'map', 14: 'order', 15: 'data',
              'flash': 'face flash steps', 'sounds': 'sounds'}
 MON = 0x3C
 LOCALS = (0x52, 0x70, 0x44, 0x5E, 0x82, 0x72, 0x38, 0x42, 0x8C, 0x0C, 0x58, 0x14, 0x84, 0x36, 0x10, 0x78)
