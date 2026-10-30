@@ -1340,3 +1340,18 @@ the coins (wrapping past 65,535, as the original) and takes the item; an item th
   mutations, all caught, three dropped with notes.
 - **Guesses:** none new; the yes / no count's start (0xdc) is a stack leftover, SEEN in the oracle.
 - **Not built:** the hero stepping onto a kind 0x14 record; the record block's other kinds; keys 1 to 4 and A in the world.
+
+## Milestone 9o: keys 1 to 4 and A in the world (C), built 2026-10-28
+Key 1 turns the music off and on, key 2 the sounds, A sliding round corners (a blocked step slides sideways when a cell beside it is
+open); key 3 saves the game into slot 0 to 10 (`SAVENN.000` .. `.002` and the scene's state in `__1.NOW`, written into the data
+directory as the original writes into its own); key 4 asks and, on yes, ends the world for MARK.EXE's title (`docs/findings.md`
+"WALK.SL step 37").
+
+- **Code:** `src/walk.c` (`sys_keys`, `slide_key`, `save_key`, `save_given`, `leave_key`, `leave_answer`, `hero_step`, `walk_slide_ok`,
+  `walk_rle_pack`, `walk_left`, `walk_palette_load`); `src/assets.c` (`assets_write`, `assets_write_at`, `assets_set_write_dir`);
+  `src/main.c` (the scene's song after key 1; key 4's yes goes back to the title); `tests/walk_dump.c` (`w:DIR`);
+  `tests/test_walk.c` `test_save_pack`; `tools/walk_scene_data.py --speed`; `tools/walk_keys.py sys`.
+- **Checked:** `tools/check_battle.sh`, 27 `sys_` starts, all identical at every pass, the files written included;
+  `tools/mutate_battle.py` (790): 55 new mutations, all caught, two dropped with notes.
+- **Guesses:** the save's number box count (0xe8) is a stack leftover, SEEN in the oracle.
+- **Not built:** loading a save; the record block's other kinds; the hero stepping onto a kind 0x14 record.

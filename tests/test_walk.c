@@ -833,7 +833,7 @@ static void test_motion_whole(void)
     CHECK(walk_begin(w, &a, 0, 20) == 0);
     for (int n = 1; n < 3; n++)
         CHECK(walk_pass(w, &a, 20 + (uint32_t)n / 3, 0) == 0);
-    CHECK(a.pal[15][0] == 15 && a.pal[15][1] == 15);        /* no cycle yet: the counters need 4 passes */
+    CHECK(a.pal[15][0] == 1 && a.pal[15][1] == 31 && a.pal[16][0] == 15);   /* loaded from RPG.LCP, no cycle yet: the counters need 4 passes */
     CHECK(walk_pass(w, &a, 21, 0) == 0);
     CHECK(a.pal[15][0] == 1 && a.pal[15][1] == 38 && a.pal[15][2] == 0);   /* entry 15 gained 7 (31 -> 38), as in the oracle */
     CHECK(a.pal[16][0] == 15 && a.pal[200][2] == 15);      /* only entries 0 .. 15 are written */
@@ -1235,17 +1235,32 @@ static void test_walking(void)
     uint32_t rand_after = (uint32_t)st2[1000] | (uint32_t)st2[1001] << 8 | (uint32_t)st2[1002] << 16 | (uint32_t)st2[1003] << 24;
     CHECK(rand_after != rand_before);                /* the shake drew from rand() */
 
-    /* a key the port does not build is reported, once per pass it is seen (key 4, 0x05; F1 to F10 are built) */
-    const keyev f1[] = {{0, 0x05}};
+    /* a key the original does nothing with is reported as not built, once per pass it is seen (key 5, 0x06; F1 to F10, 1 to 4 and A
+     * are built) */
+    const keyev f1[] = {{0, 0x06}};
     CHECK(BEGIN());
     int rc = run_walk(w, &scr, f1, 1, 3, NULL, NULL, NULL);
-    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x5"));
+    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "key 0x6"));
 
-    /* the keys 1, 2 and A are released while they repeat: reported on the first pass only */
+    /* the keys 1, 2 and A are released while they repeat: A held from pass 3 turns sliding on once (its mark, the 41 x 12 at (7, 182),
+     * has its colour 0x1f turned 9 then, and not back) */
     const keyev akey[] = {{3, 0x1E}};
     CHECK(BEGIN());
-    run_walk(w, &scr, akey, 1, 8, NULL, NULL, fl);
-    CHECK((fl[3] & WALK_PASS_UNBUILT) && !(fl[4] & WALK_PASS_UNBUILT) && !(fl[5] & WALK_PASS_UNBUILT));
+    for (int r = 0; r < 12; r++)   /* the mark's colours come from the start's screen (the menu's), not drawn here: stand-ins */
+        memset(scr.pix + (182 + r) * SCREEN_W + 7, r & 1 ? 0x1F : 0x20, 41);
+    int ones[3] = {0}, k9 = 0;
+    for (int n = 1; n <= 8; n++) {
+        walk_pass(w, &scr, 20 + (uint32_t)n / 3, n >= akey[0].pass ? akey[0].code : 0);
+        if (n == 2 || n == 3 || n == 8) {
+            int c = 0;
+            for (int r = 0; r < 12; r++)
+                for (int x = 0; x < 41; x++)
+                    c += scr.pix[(182 + r) * SCREEN_W + 7 + x] == 9;
+            ones[n == 2 ? 0 : n == 3 ? 1 : 2] = c;
+        }
+    }
+    k9 = ones[1] - ones[0];
+    CHECK(k9 > 0 && ones[2] == ones[1]);
 
     /* the break code of Up does not stop a held Down (Down, 0x50, is the top of the range of arrows): it still gets its two steps */
     const keyev dn_up[] = {{1, 0x50}, {2, 0xC8}};
@@ -1479,6 +1494,52 @@ static void test_zoom_scale(void)
 }
 
 /* F2's record search (0x2c28f) and which message a kind 9 record gives (0x15959 .. 0x15a09). */
+/* Keys 3 and A: the saves' packing (0x25e14) and the sliding test (0x2c318), with values worked by hand from the code. */
+static void test_save_pack(void)
+{
+    printf("key 3: the saves' packing; key A: the sliding test\n");
+    static uint8_t out[1024];
+    /* the marker is the byte used least, the lowest of a tie (0, never used); four 5s are a run, two 2s and the lone bytes literals */
+    const uint8_t a[] = {5, 5, 5, 5, 1, 2, 2, 3};
+    const uint8_t pa[] = {0, 10, 0, 0, 4, 5, 1, 2, 2, 3};
+    CHECK(walk_rle_pack(a, sizeof a, out) == sizeof pa && memcmp(out, pa, sizeof pa) == 0);
+    /* two bytes alike are literals; three at the end are a run that the end closes */
+    const uint8_t b[] = {4, 4}, pb[] = {0, 5, 0, 4, 4};
+    CHECK(walk_rle_pack(b, sizeof b, out) == sizeof pb && memcmp(out, pb, sizeof pb) == 0);
+    const uint8_t c[] = {9, 9, 9}, pc[] = {0, 6, 0, 0, 3, 9};
+    CHECK(walk_rle_pack(c, sizeof c, out) == sizeof pc && memcmp(out, pc, sizeof pc) == 0);
+    /* 300 alike: a run of 255, then one of the 45 left */
+    static uint8_t d[300];
+    memset(d, 7, sizeof d);
+    const uint8_t pd[] = {0, 9, 0, 0, 0xFF, 7, 0, 45, 7};
+    CHECK(walk_rle_pack(d, sizeof d, out) == sizeof pd && memcmp(out, pd, sizeof pd) == 0);
+    /* every value used, 0 twice: the marker is 1 (the lowest used once); the lone 1 goes as a run counted one short, (1, 0, 1) */
+    static uint8_t e[257];
+    e[0] = e[1] = 0;
+    for (int i = 1; i < 256; i++)
+        e[i + 1] = (uint8_t)i;
+    size_t ne = walk_rle_pack(e, sizeof e, out);
+    CHECK(ne == 262 && out[0] == 1 && out[1] == 6 && out[2] == 1);
+    CHECK(out[3] == 0 && out[4] == 0 && out[5] == 1 && out[6] == 0 && out[7] == 1 && out[8] == 2 && out[261] == 255);
+
+    /* the sliding test: both words at row y / 2, column x with its low bit cleared, on the list */
+    static uint8_t gmap[WS_GMAP_BYTES], list[WS_LIST_BYTES];
+    memset(gmap, 0x55, sizeof gmap);
+    memset(list, 0xFF, sizeof list);
+    list[20] = 7;
+    list[21] = 0;
+    unsigned at = (10u << 8) | 10u;
+    gmap[at] = 7;
+    gmap[at + 1] = 0;
+    CHECK(!walk_slide_ok(gmap, list, 10, 20));   /* the second word is not listed */
+    gmap[at + 2] = 7;
+    gmap[at + 3] = 0;
+    CHECK(walk_slide_ok(gmap, list, 10, 20) && walk_slide_ok(gmap, list, 11, 21));
+    CHECK(!walk_slide_ok(gmap, list, 10, 22) && !walk_slide_ok(gmap, list, 12, 20) && !walk_slide_ok(gmap, list, 9, 20));
+    /* the foot test looks a row lower (y / 2 + 1): the same cells are not under the foot of (10, 20) */
+    CHECK(!walk_foot_ok(gmap, list, 10, 20));
+}
+
 static void test_use(void)
 {
     printf("F7: the record an item or coins are used on, and the name's blink\n");
@@ -1683,6 +1744,7 @@ int main(int argc, char **argv)
     test_zoom_scale();
     test_look();
     test_use();
+    test_save_pack();
     test_map();
     test_party_order();
     test_data_number();

@@ -54,6 +54,9 @@ struct walk {
     unsigned pos_at, pos_last, pos_sel, pos_rel, pos_frame, pos_ctr, pos_blink, pos_latch, pos_my;
     /* F10 (talking 11): the palette count ([bp-0x14]), the pictures' count ([bp-0x16]) and the picture shown ([bp-0x18]) */
     unsigned data_ctr, data_anim, data_frame;
+    /* Keys 3 and 4 (0x14647 .. 0x14d46): 1 while the save's number box runs, 2 while the leave's yes / no buttons run (talking 3 or 2);
+     * left: yes was chosen to leave, the program would now exec MARK.EXE; slide: [bp-0x76], key A's sliding round corners */
+    int sys, left, slide;
     void (*show)(void *ctx, screen_t *scr);   /* walk_set_show, handed to F4's picker */
     void *show_ctx;
     uint8_t talk_mbg[60];               /* the 6 x 10 under their pointer (the pointer's own + 0x40) */
@@ -100,6 +103,9 @@ enum { WALK_BUF_LEN = WALK_W * WALK_H + 0x400, WALK_ALT_LEN = 1 + 256 * 256 };
 /* F7's leftover from the stack: the number box's palette count when F7 opens it (INFERRED from the starts probed, docs/findings.md
  * step 32) */
 enum { WALK_USE_ASK_COUNT = 0x16 };
+/* Key 3's number box: its palette count's leftover (0xe8 in the save probed, docs/findings.md step 37; any value from 0x16 up acts the
+ * same) */
+enum { WALK_SAVE_ASK_COUNT = 0xE8 };
 /* F8's map: the rows it keeps; the byte of its frame that says whether the first row widens ([bp-0xc], never set there: 0xc6, the low
  * byte of a segment number, in every start probed, docs/findings.md step 33) */
 enum { WALK_MAP_UNDER_H = 102, WALK_MAP_TOGGLE = 0xC6 };
@@ -144,6 +150,9 @@ int walk_reset(walk_t *w, uint32_t seed)
     w->v48 = w->scene->header[3];   /* 0x11233: the shake starts at the map header's byte 3 (0 in scenes 0 and 1) */
     w->c2 = 0;
     w->vbe = 1;
+    w->sys = w->left = w->slide = 0;   /* 0x10ba3: no sliding at the start */
+    w->talking = 0;
+    w->using = w->use_selling = 0;
     memset(w->alt, 0, WALK_ALT_LEN);
     w->unbuilt[0] = 0;
     w->unbuilt_new = 0;
@@ -642,6 +651,62 @@ int walk_foot_ok(const uint8_t *gmap, const uint8_t *list, unsigned x, unsigned 
     }
 #undef LISTED
     return 1;
+}
+
+int walk_slide_ok(const uint8_t *gmap, const uint8_t *list, unsigned x, unsigned y)
+{
+    unsigned idx = (((y & 0xFF) >> 1) << 8) | (x & 0xFE);
+    return tile_listed(gmap, idx, list) && tile_listed(gmap, idx + 2, list);
+}
+
+size_t walk_rle_pack(const uint8_t *in, size_t n, uint8_t *out)
+{
+    uint16_t count[256] = {0};
+    for (size_t i = 0; i < n; i++)
+        count[in[i]]++;
+    unsigned least = 0xFFFF, mark = 0;
+    for (unsigned b = 0; b < 256; b++)
+        if (count[b] < least) {
+            least = count[b];
+            mark = b;
+        }
+    out[0] = (uint8_t)mark;
+    size_t o = 3, si = 0;
+    while (si < n) {
+        uint8_t al = in[si];
+        unsigned dl;
+        if (al == mark)
+            dl = 0;   /* the marker byte itself: one fewer than the run is counted (the unpacker then drops one) */
+        else if (si + 2 < n && in[si + 1] == al && in[si + 2] == al)
+            dl = 1;
+        else {
+            out[o++] = al;
+            si++;
+            continue;
+        }
+        int ended = 0;
+        for (;;) {
+            si++;
+            if (si == n) {
+                ended = 1;
+                break;
+            }
+            if (in[si] != al) {
+                si--;
+                break;
+            }
+            if (++dl == 0xFF)
+                break;
+        }
+        out[o++] = (uint8_t)mark;
+        out[o++] = (uint8_t)dl;
+        out[o++] = al;
+        if (ended || ++si == n)
+            break;
+    }
+    out[1] = (uint8_t)o;
+    out[2] = (uint8_t)(o >> 8);
+    return o;
 }
 
 void walk_trail_step(uint8_t trail[WS_TRAIL_BYTES], uint8_t *party, unsigned x, unsigned y)
@@ -1154,11 +1219,13 @@ static void use_done(walk_t *w, screen_t *scr);
 static void map_round(walk_t *w, screen_t *scr, unsigned port60);
 static void order_round(walk_t *w, screen_t *scr, unsigned port60);
 static void data_round(walk_t *w, screen_t *scr, unsigned port60);
+static void save_given(walk_t *w, screen_t *scr, unsigned slot);
+static void leave_answer(walk_t *w, screen_t *scr, int yes);
 
 /* The palette the yes / no buttons and the number step on: the dimmed copy in a talk, the palette itself in F7. */
 static void ask_step(walk_t *w, screen_t *scr)
 {
-    if (w->using)
+    if (w->using || w->sys)
         palette_cycle(w, scr);
     else
         palette_cycle_on(w, scr, w->dimpal);
@@ -1348,6 +1415,10 @@ static void yesno_round(walk_t *w, screen_t *scr, unsigned port60)
     if (w->mouse_on)
         walk_mouse_put(scr, w->talk_mprev, w->talk_mbg, 0);
     put(scr, 0x308D, w->yn_pic[0], 47, 20);
+    if (w->sys) {
+        leave_answer(w, scr, w->yn_sel);
+        return;
+    }
     if (w->using) {
         use_answer(w, scr, w->yn_sel);
         return;
@@ -1369,7 +1440,9 @@ static void ask_open(walk_t *w, screen_t *scr)
     if (!art || len < sizeof w->ask_art) {
         free(art);
         note_unbuilt(w, "the number box's picture (RPG.LCP 0x1643b) missing or too short", 0);
-        if (w->using)
+        if (w->sys)
+            save_given(w, scr, 0xFFFF);
+        else if (w->using)
             use_done(w, scr);
         else
             talk_close(w, scr);
@@ -1384,7 +1457,7 @@ static void ask_open(walk_t *w, screen_t *scr)
     fill(scr, 0x46E, 8, 1, 9);
     fill(scr, 0xFAE, 8, 1, 9);
     talk_mouse_start(w, scr);
-    w->talk_count = w->using ? WALK_USE_ASK_COUNT : 0x16;
+    w->talk_count = w->sys ? WALK_SAVE_ASK_COUNT : w->using ? WALK_USE_ASK_COUNT : 0x16;
     w->ask_latch = 1;
     w->talking = 3;
 }
@@ -1457,6 +1530,10 @@ static void ask_round(walk_t *w, screen_t *scr, unsigned port60)
     if (w->mouse_on)
         walk_mouse_put(scr, w->talk_mprev, w->talk_mbg, 0);
     put(scr, 0x71, w->ask_under, 94, 16);
+    if (w->sys) {
+        save_given(w, scr, w->ask_value);
+        return;
+    }
     if (w->using) {
         use_coins_given(w, scr, w->ask_value);
         return;
@@ -2409,6 +2486,8 @@ int walk_kind(const walk_t *w)
     static const int kind[12] = {0, 4, 8, 9, 4, 10, 4, 0, 12, 13, 14, 15};
     if (w->boss_box)
         return 4;
+    if (w->left)
+        return WALK_KIND_LEFT;
     if (w->talking == 7)
         return battle_kind(w->cast);
     return kind[w->talking];
@@ -2988,12 +3067,255 @@ unsigned walk_mouse_key(unsigned x, unsigned y, unsigned last)
     return dir;
 }
 
+/* ---- keys 1 to 4 and A (0x143f7 .. 0x14d46) ---- */
+
+static void walk_counters(walk_t *w);
+
+/* A button of the right column pressed or let go, the pointer's corner put back first and kept again after. */
+static void sys_button(walk_t *w, screen_t *scr, unsigned at)
+{
+    if (w->mouse_on)
+        walk_mouse_put(scr, w->mprev, w->mbg, 0);
+    walk_button_toggle(scr, at, 0x2F, 0x14);
+    if (w->mouse_on)
+        walk_mouse_grab(scr, w->mprev, w->mbg);
+}
+
+enum { SYS_MUSIC = 0x7B8D, SYS_SOUND = 0x948D, SYS_SAVE = 0xAD8D, SYS_LEAVE = 0xC68D, SLIDE_AT = 0xE387 };
+
+/* Key A (0x143f7 .. 0x144d4): sliding round corners on or off, shown on the 41 x 12 at (7, 182): its colour 0x1f turned 9 (on) or 9 turned
+ * 0x1f (off) (0x2723c, 0x2741b over its 0x1ec bytes, 0x27328; the grab goes through the world buffer's start, which the next pass
+ * draws again). */
+static void slide_key(walk_t *w, screen_t *scr)
+{
+    if (w->mouse_on)
+        walk_mouse_put(scr, w->mprev, w->mbg, 0);
+    uint8_t from = w->slide ? 9 : 0x1F, to = w->slide ? 0x1F : 9;
+    w->slide = !w->slide;
+    for (unsigned r = 0; r < 0xC; r++)
+        for (unsigned c = 0; c < 0x29; c++) {
+            uint8_t *p = scr->pix + SLIDE_AT + r * SCREEN_W + c;
+            if (*p == from)
+                *p = to;
+        }
+    if (w->mouse_on)
+        walk_mouse_grab(scr, w->mprev, w->mbg);
+}
+
+/* Key 3 (0x14647 .. 0x14763): the button pressed; message 0x253 (請輸入欲存編號(0-10)?, colour 0x20, not waiting), the pointer off, then
+ * the number box (ask_round, then save_given). */
+static void save_key(walk_t *w, screen_t *scr)
+{
+    sys_button(w, scr, SYS_SAVE);
+    int r = msgbox_open(&w->box, scr, w->font8, w->table, w->buf + 0x7305, 0x253, 0x20, 0);
+    if (r < 0) {
+        note_unbuilt(w, "a message that MES_TXT.LCC does not have", 0x253);
+        sys_button(w, scr, SYS_SAVE);
+        return;
+    }
+    if (r > 0)
+        note_unbuilt(w, "a character the message font does not have", 0x253);
+    if (w->mouse_on)
+        walk_mouse_put(scr, w->mprev, w->mbg, 0);
+    w->sys = 1;
+    ask_open(w, scr);
+}
+
+/* One save file: `n` bytes of `src` packed (0x25e14) into "saveNN.00K". Returns the packed length (what [bp-0x96] gets), 0 on failure. */
+static unsigned save_file(walk_t *w, unsigned slot, unsigned k, const uint8_t *src, size_t n)
+{
+    uint8_t *packed = malloc(n + n / 2 + 8);
+    if (!packed)
+        return 0;
+    size_t len = walk_rle_pack(src, n, packed);
+    char name[16];
+    snprintf(name, sizeof name, "save%02u.%03u", slot, k);
+    if (assets_write(name, packed, len) != 0)
+        note_unbuilt(w, "a save file that cannot be written", slot);
+    free(packed);
+    return (unsigned)(len & 0xFFFF);
+}
+
+/* 0x14734 .. 0x14b4f: the number given (the pointer's place 0 and the corner kept). 0 to 10 saves into slot NN:
+ * - the party table's bytes 510 .. 513 (the scene, its start) copied to 500 .. 503; its first 504 bytes packed into saveNN.000;
+ * - each villager's byte 8 put back from its copy (the start lowered it on a slow machine), the scene's 1750 bytes of state written
+ *   into __1.NOW at 1750 x the scene;
+ * - __1.NOW read back: its first 0xfcee bytes packed into saveNN.001, the rest (at most 0x9470, into the map buffer [bp-0xba]) into
+ *   saveNN.002;
+ * - on a slow machine (speed class below 2) the villagers' byte 8 lowered again and byte 9 zeroed, as at the start.
+ * Then the button let go and the pass's walk counter (0x172a4). */
+static void save_given(walk_t *w, screen_t *scr, unsigned slot)
+{
+    walk_scene_t *s = w->scene;
+    uint8_t *tb = s->tab_b, *ta = s->tab_a;
+    if (w->mouse_on) {
+        w->mprev = 0;
+        walk_mouse_grab(scr, 0, w->mbg);
+    }
+    if (slot < 0xB) {
+        memcpy(tb + 500, tb + 510, 4);
+        tb[502] = tb[512];
+        tb[503] = tb[513];
+        w->v96 = save_file(w, slot, 0, tb, 0x1F8);
+        for (int i = 0; i < WS_VILLAGERS; i++)
+            ta[WS_VILLAGER_SIZE * i + 8] = ta[WS_STATE + i];
+        if (assets_write_at("__1.now", (size_t)WS_STATE * tb[510], ta, WS_STATE) != 0)
+            note_unbuilt(w, "__1.NOW that cannot be written", tb[510]);
+        size_t n = 0;
+        uint8_t *now = assets_read("__1.now", &n);
+        if (now) {
+            size_t a = n < 0xFCEE ? n : 0xFCEE, b = n - a < 0x9470 ? n - a : 0x9470;
+            w->v96 = save_file(w, slot, 1, now, a);
+            w->v96 = save_file(w, slot, 2, now + a, b);
+            memcpy(w->zoom_grab, now + a, b < sizeof w->zoom_grab ? b : sizeof w->zoom_grab);
+            free(now);
+        } else {
+            note_unbuilt(w, "__1.NOW that cannot be read back", 0);
+        }
+        if (s->speed_class < 2) {
+            unsigned k = 2u - (unsigned)s->speed_class;
+            for (int i = 0; i < WS_VILLAGERS; i++) {
+                uint8_t *v = ta + WS_VILLAGER_SIZE * i;
+                v[8] = v[8] > k ? (uint8_t)(v[8] - k) : 1;
+                v[9] = 0;
+            }
+        }
+    }
+    sys_button(w, scr, SYS_SAVE);
+    w->sys = 0;
+    w->talking = 0;
+    walk_counters(w);
+}
+
+/* Key 4 (0x14bb4 .. 0x14c8e): the button pressed; message 0x252 (colour 0x20, not waiting), the pointer off, then the yes / no buttons
+ * (yesno_round, then leave_answer). */
+static void leave_key(walk_t *w, screen_t *scr)
+{
+    sys_button(w, scr, SYS_LEAVE);
+    int r = msgbox_open(&w->box, scr, w->font8, w->table, w->buf + 0x7305, 0x252, 0x20, 0);
+    if (r < 0) {
+        note_unbuilt(w, "a message that MES_TXT.LCC does not have", 0x252);
+        sys_button(w, scr, SYS_LEAVE);
+        return;
+    }
+    if (r > 0)
+        note_unbuilt(w, "a character the message font does not have", 0x252);
+    if (w->mouse_on)
+        walk_mouse_put(scr, w->mprev, w->mbg, 0);
+    w->sys = 2;
+    yesno_open(w, scr);
+}
+
+/* 0x14c96 .. 0x14d46: the answer (the pointer's place 0 and the corner kept). Yes: [bp-0xbe] = 0 and 0x172f0 with no record, which ends
+ * WALK.SL at 0x18b91 (the sounds and the music stopped, the buffers freed) and starts MARK.EXE (walk_left). No: the button let go and
+ * the pass's walk counter. */
+static void leave_answer(walk_t *w, screen_t *scr, int yes)
+{
+    if (w->mouse_on) {
+        w->mprev = 0;
+        walk_mouse_grab(scr, 0, w->mbg);
+    }
+    w->sys = 0;
+    w->talking = 0;
+    if (yes) {
+        w->vbe = 0;
+        w->left = 1;
+        return;
+    }
+    sys_button(w, scr, SYS_LEAVE);
+    walk_counters(w);
+}
+
+int walk_left(const walk_t *w)
+{
+    return w->left;
+}
+
+/* Keys 1 to 4 and A. Returns 1 when the pass ends there (key 3's number box or key 4's buttons now run), else 0. */
+static int sys_keys(walk_t *w, screen_t *scr, unsigned k)
+{
+    if (k == 0x1E) {
+        slide_key(w, scr);
+        return 0;
+    }
+    if (k == 2) {   /* 0x144d4: the music stopped (0x165d:0x126) or the scene's song from its start (0x165d:0x3c); the caller plays it */
+        if (w->fm) {
+            w->fm = w->fm == 0x81 ? 0x80 : 0x81;
+            sys_button(w, scr, SYS_MUSIC);
+        }
+        return 0;
+    }
+    if (k == 3) {   /* 0x14597: the Sound Blaster's sounds off or on; one playing is not cut */
+        if (w->sb) {
+            w->sb = w->sb == 0x81 ? 0x80 : 0x81;
+            sys_button(w, scr, SYS_SOUND);
+        }
+        return 0;
+    }
+    if (k == 4) {
+        save_key(w, scr);
+        return w->talking != 0;
+    }
+    if (k == 5) {
+        leave_key(w, scr);
+        return w->talking != 0;
+    }
+    return 0;
+}
+
+/* One of the walking handlers (0x13aed .. 0x1423d): the hero faces `dir` and takes a half-tile step that way; blocked, the step is taken
+ * back (and [bp-0x2e] is 5). With `slide` (key A on, the first four handlers only) a blocked step looks at three places to the side,
+ * the last that is open giving the key of a sideways step for the handlers after this one; none open, or no slide: the bump.
+ * Returns the key the later handlers see: 1 after a step, 0 after a bump, else the sideways arrow. */
+static unsigned hero_step(walk_t *w, unsigned k, int slide)
+{
+    walk_scene_t *s = w->scene;
+    uint8_t *party = s->tab_b;
+    unsigned x = party[0], y = party[1], nx = x, ny = y;
+    party[2] = k == 0x48 ? 0 : k == 0x50 ? 1 : k == 0x4B ? 2 : 3;
+    w->v2e = 1;
+    if (k == 0x48)
+        ny = (y - 1) & 0xFF;
+    else if (k == 0x50)
+        ny = (y + 1) & 0xFF;
+    else if (k == 0x4B)
+        nx = (x - 1) & 0xFF;
+    else
+        nx = (x + 1) & 0xFF;
+    if (walk_foot_ok(s->gmap, s->list, nx, ny)) {
+        walk_trail_step(s->trail, party, nx, ny);
+        return 1;
+    }
+    w->v2e = 5;
+    unsigned side = 0;
+    if (slide) {
+        if (k == 0x48 || k == 0x50) {   /* up looks along its own row, down 4 rows lower; left, a little left, right */
+            unsigned sy = k == 0x48 ? y : (y + 4) & 0xFF;
+            if (walk_slide_ok(s->gmap, s->list, (x - 2) & 0xFF, sy))
+                side = 0x4B;
+            if (walk_slide_ok(s->gmap, s->list, (x - 1) & 0xFF, sy))
+                side = 0x4B;
+            if (walk_slide_ok(s->gmap, s->list, (x + 2) & 0xFF, sy))
+                side = 0x4D;
+        } else {                        /* left looks 2 to the left, right 2 to the right: at the row, 2 and 4 below */
+            unsigned sx = k == 0x4B ? (x - 2) & 0xFF : (x + 2) & 0xFF;
+            if (walk_slide_ok(s->gmap, s->list, sx, y))
+                side = 0x48;
+            if (walk_slide_ok(s->gmap, s->list, sx, (y + 2) & 0xFF))
+                side = 0x48;
+            if (walk_slide_ok(s->gmap, s->list, sx, (y + 4) & 0xFF))
+                side = 0x50;
+        }
+    }
+    if (side == 0)
+        w->v48 = 2;   /* the bump */
+    return side;
+}
+
 /* 0x135f0 .. 0x13ad9 and the four walking handlers. */
 /* Returns 1 when an F-key's action ran: the pass then ends there (0x1729e jumps to 0x172f0 past the walk counters). */
 static int walk_keys(walk_t *w, unsigned port60)
 {
-    walk_scene_t *s = w->scene;
-    uint8_t *party = s->tab_b;
     unsigned k = port60, c2 = w->c2;
     if (k > 0xC7 && k < 0xD1 && c2 > 0x47 && c2 < 0x51) {   /* the break code of another key does not release the held arrow */
         if (c2 == 0x48 && k != 0xC8)
@@ -3088,6 +3410,8 @@ static int walk_keys(walk_t *w, unsigned port60)
         data_key(w, w->scr);
         return 1;
     }
+    if ((k == 0x1E || (k >= 2 && k <= 5)) && w->scr)
+        return sys_keys(w, w->scr, k);
     if (!arrow && k != 0) {
         char what[32];
         snprintf(what, sizeof what, "key 0x%x", k);
@@ -3096,23 +3420,19 @@ static int walk_keys(walk_t *w, unsigned port60)
     }
     if (w->v98 != 0 || k == 0)
         return 0;
-    unsigned x = party[0], y = party[1], nx = x, ny = y;
-    party[2] = k == 0x48 ? 0 : k == 0x50 ? 1 : k == 0x4B ? 2 : 3;
-    w->v2e = 1;
+    /* 0x13aed: up, down, left, right, then up and down again without sliding: each runs when the key is still its own */
     if (k == 0x48)
-        ny = (y - 1) & 0xFF;
-    else if (k == 0x50)
-        ny = (y + 1) & 0xFF;
-    else if (k == 0x4B)
-        nx = (x - 1) & 0xFF;
-    else
-        nx = (x + 1) & 0xFF;
-    if (walk_foot_ok(s->gmap, s->list, nx, ny)) {
-        walk_trail_step(s->trail, party, nx, ny);
-    } else {
-        w->v2e = 5;
-        w->v48 = 2;   /* the shake; sliding round a corner (the A key) is not built */
-    }
+        k = hero_step(w, k, w->slide);
+    if (k == 0x50)
+        k = hero_step(w, k, w->slide);
+    if (k == 0x4B)
+        k = hero_step(w, k, w->slide);
+    if (k == 0x4D)
+        k = hero_step(w, k, w->slide);
+    if (k == 0x48)
+        k = hero_step(w, k, 0);
+    if (k == 0x50)
+        hero_step(w, k, 0);
     return 0;
 }
 
@@ -3195,6 +3515,8 @@ int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60)
     unsigned x = s->tab_b[0], y = s->tab_b[1];
     w->unbuilt_new = 0;
     w->scr = scr;
+    if (w->left)   /* WALK.SL has ended (key 4) */
+        return 0;
     if (w->talking) {   /* a talk's message box waits (0x1b506) */
         talk_round(w, scr, port60);
         return w->unbuilt_new ? WALK_PASS_UNBUILT : 0;
@@ -3274,13 +3596,19 @@ static int pass_tail(walk_t *w, uint32_t ticks, unsigned port60, unsigned stride
         w->v98 = 0;
     if (walk_keys(w, port60))
         return w->unbuilt_new ? WALK_PASS_UNBUILT : 0;
+    walk_counters(w);
+    return w->unbuilt_new ? WALK_PASS_UNBUILT : 0;
+}
+
+/* 0x172a4 .. 0x172ed: the walk frame's counter, at the end of a pass that did not go through 0x172f0. */
+static void walk_counters(walk_t *w)
+{
     w->ctr = (w->ctr + 1) & 0xFF;
-    if (w->ctr > (unsigned)s->speed_class + w->v2e) {
+    if (w->ctr > (unsigned)w->scene->speed_class + w->v2e) {
         w->ctr = 0;
         if (++w->hero_frame > 3)   /* 0x172d7 (a respawn can leave any value here) */
             w->hero_frame = 0;
     }
-    return w->unbuilt_new ? WALK_PASS_UNBUILT : 0;
 }
 
 void walk_state_dump(const walk_t *w, uint8_t out[WALK_STATE_BYTES])
@@ -3472,6 +3800,7 @@ int walk_begin_shown(walk_t *w, screen_t *scr, uint32_t seed, uint32_t ticks, vo
     walk_sound_buttons(w, scr);
     if (walk_reset(w, seed) != 0)
         return -1;
+    walk_palette_load(w, scr);
     for (int k = 0; k < WALK_ZOOM_STEPS; k++) {   /* 0x11c25 .. 0x11ce6: the view comes in before the first pass */
         walk_zoom_step(w, scr, k);
         if (show)
@@ -3653,6 +3982,13 @@ static void mouse_pass(walk_t *w, screen_t *scr, uint8_t *view, unsigned shift)
 void walk_palette_step(walk_t *w, screen_t *scr)
 {
     palette_cycle(w, scr);
+}
+
+void walk_palette_load(const walk_t *w, screen_t *scr)
+{
+    for (int i = 0; i < 16; i++)
+        for (int ch = 0; ch < 3; ch++)
+            scr->pal[i][ch] = w->palbuf[3 * i + ch] & 0x3F;
 }
 
 void walk_palette_step_dim(walk_t *w, screen_t *scr)

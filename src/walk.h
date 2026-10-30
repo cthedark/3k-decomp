@@ -124,10 +124,17 @@ void walk_mouse_reset(walk_t *w, screen_t *scr);
 /* (0x2c8a0) The key a left press at (x, y) stands for in the world, `last` the key of the pass before. */
 unsigned walk_mouse_key(unsigned x, unsigned y, unsigned last);
 /* Which loop the world's next pass is in, for comparing with the original's loop tops: 0 the world (0x11d36), 4 a message box
- * (0x1b506), 8 a talk's yes / no (0x18d23), 9 its number (0x19166), 10 F3's wait after a take (0x160b0, 0x164ad). */
+ * (0x1b506), 8 a talk's yes / no (0x18d23), 9 its number (0x19166), 10 F3's wait after a take (0x160b0, 0x164ad); WALK_KIND_LEFT once
+ * key 4's yes has ended WALK.SL. */
+enum { WALK_KIND_LEFT = 16 };
 int walk_kind(const walk_t *w);
+/* Key 4's yes was chosen: WALK.SL has ended and the original now starts MARK.EXE (its title). The pass that chose it is the last. */
+int walk_left(const walk_t *w);
 /* The palette cycle of 0x1c284 (the battle runs it too, on the same counters). */
 void walk_palette_step(walk_t *w, screen_t *scr);
+/* The DAC's entries 0 .. 15 from the palette buffer (RPG.LCP's first 48 bytes), as the original has them at its loop's first pass. Its
+ * byte 0 is also the speed class TV.EXE wrote there, so colour 0's red is the class (SEEN with classes 0, 1 and 2). */
+void walk_palette_load(const walk_t *w, screen_t *scr);
 /* The same on the dimmed copy of the palette the F-keys make ([bp-0xb0]): what F4's picker and magic list step. */
 void walk_palette_step_dim(walk_t *w, screen_t *scr);
 /* With `show` set, F4's picker shows the steps of a helped member's face flash through it (battle_set_show). */
@@ -205,6 +212,13 @@ const char *walk_unbuilt(const walk_t *w);
  * (y >> 1) + 1, a third when x is odd, the next row's two when y is odd (and a third of them when x is odd too). A tile in the
  * list's last place does not count (the original's scan leaves a count of 0). */
 int walk_foot_ok(const uint8_t *gmap, const uint8_t *list, unsigned x, unsigned y);
+/* (0x2c318) The test sliding round a corner makes (key A): the two cells at (x, y) (x's low bit cleared, row y / 2) both on the list
+ * of walkable tiles. */
+int walk_slide_ok(const uint8_t *gmap, const uint8_t *list, unsigned x, unsigned y);
+/* (0x25e14) The saves' packing: byte 0 the marker (the byte value used least, the lowest of a tie), a word with the packed length,
+ * then the bytes, a run of three or more as (marker, count, byte) with at most 255 a run. The marker byte itself always goes as a run,
+ * counted one short (the unpacker 0x25eeb then writes one fewer). `out` needs n + n / 2 + 3 bytes. Returns the packed length. */
+size_t walk_rle_pack(const uint8_t *in, size_t n, uint8_t *out);
 /* (0x2bfd5) A step: every trail entry (13 of x, y, direction) moves one place on, the hero's new (x, y, direction) goes in front, party record 0
  * gets (x, y) and records 1 to 4 get trail entries 3, 6, 9 and 12. */
 void walk_trail_step(uint8_t trail[WS_TRAIL_BYTES], uint8_t *party, unsigned x, unsigned y);

@@ -27,4 +27,12 @@ int assets_exists(const char *name);
 /* Read `len` bytes at `offset` of a data file into dst. Returns 0 on success. */
 int assets_read_at(const char *name, size_t offset, void *dst, size_t len);
 
+/* Where the files the game writes (its saves, __1.NOW) go: the data directory unless set. A file written there is read from there
+ * afterwards. The comparisons point it at a scratch directory so the shared test data stays as it is. */
+void assets_set_write_dir(const char *dir);
+/* Create (or replace) a file in the write directory, its name upper-cased as DOS keeps it. Returns 0 on success. */
+int assets_write(const char *name, const void *src, size_t len);
+/* Write `len` bytes at `offset` of a file, first copying it into the write directory if it is not there. Returns 0 on success. */
+int assets_write_at(const char *name, size_t offset, const void *src, size_t len);
+
 #endif

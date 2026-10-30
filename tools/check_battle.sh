@@ -678,6 +678,49 @@ run data_mouse 1 106 30 300 --key 1:0x81 --mouse 0:160:100:0 --mouse 3:290:85:1 
     --key 152:0xc4 --key 250:0x01 --key 252:0x81
 for seed in 1 2 3; do run "data_walk$seed" 1 106 30 2500 $($PY tools/walk_keys.py data $seed 2500); done
 DOPTS=""
+# keys 1 to 4 and A (step 37): key 1 the music off and on (with an FM card; held: once; no card: nothing, not even the button), key 2
+# the sounds (off before the house door, on again inside: only the way out sounds); A held, and twice; sliding round corners in
+# scene 0 (random walks with A on: 33 slides between them); key 3 saving into slots 5, 0 (the shipped SAVE00.002 written again the
+# same) and 11 (nothing written), on slow machines (speed classes 0 and 1: the villagers' byte 8), in a dark scene; key 4 left with yes
+# (the original then starts MARK.EXE) and refused; the five buttons with the mouse; walks with all of them
+SV="--key 10:0x04 --key 12:0x84"
+UP5="--key 14:0x48 --key 16:0xc8 --key 18:0x48 --key 20:0xc8 --key 22:0x48 --key 24:0xc8 --key 26:0x48 --key 28:0xc8 --key 30:0x48 --key 32:0xc8"
+run sys_music 1 106 30 80 --opl --key 10:0x02 --key 12:0x82 --key 40:0x02 --key 42:0x82
+run sys_music_held 1 106 30 80 --opl --key 10:0x02 --key 50:0x82
+run sys_nocard 1 106 30 80 --key 10:0x02 --key 12:0x82 --key 20:0x03 --key 22:0x83
+run sys_sound 0 36 22 420 --sb --key 1:0x03 --key 3:0x83 --key 140:0x03 --key 142:0x83 $($PY tools/walk_keys.py door 0 420)
+run sys_slide_key 1 106 30 80 --key 10:0x1e --key 30:0x9e --key 40:0x1e --key 42:0x9e
+run sys_slide0 0 36 22 1500 --key 0:0x1e --key 1:0x9e $($PY tools/walk_keys.py fuzz 4 1500)
+run sys_slide1 0 106 34 1500 --key 0:0x1e --key 1:0x9e $($PY tools/walk_keys.py fuzz 4 1500)
+# sliding where only the side test two rows down is open (a step down to an odd row first), and a sideways slide whose up is blocked
+# too (work/b10/slidesearch.c found them over the 53 scenes)
+A="--key 1:0x1e --key 3:0x9e"
+run sys_slide_mid0 0 24 11 40 $A --key 6:0x50 --key 9:0xd0 --key 14:0x4b --key 20:0xcb
+run sys_slide_mid1 1 192 11 40 $A --key 6:0x50 --key 9:0xd0 --key 14:0x4d --key 20:0xcd
+run sys_slide_up0 0 76 29 40 $A --key 14:0x4b --key 20:0xcb
+run sys_slide_up1 1 178 16 40 $A --key 14:0x4d --key 20:0xcd
+run sys_save5 1 106 30 120 $SV $UP5 --key 40:0x1c --key 42:0x9c
+run sys_save0 1 106 30 60 $SV --key 20:0x1c --key 22:0x9c
+run sys_save11 1 106 30 120 $SV $UP5 --key 34:0x4b --key 36:0xcb --key 38:0x48 --key 40:0xc8 --key 42:0x50 --key 44:0xd0 \
+    --key 46:0x48 --key 48:0xc8 --key 60:0x1c --key 62:0x9c
+DOPTS="--speed 0"; run sys_save_slow0 1 106 30 160 $SV $UP5 --key 40:0x1c --key 42:0x9c
+DOPTS="--speed 1"; run sys_save_slow1 1 106 30 160 $SV $UP5 --key 40:0x1c --key 42:0x9c; DOPTS=""
+run sys_save_dark 13 100 40 120 $SV --key 20:0x48 --key 22:0xc8 --key 40:0x1c --key 42:0x9c
+run sys_leave 1 106 30 60 --key 10:0x05 --key 12:0x85 --key 30:0x1c --key 32:0x9c
+run sys_leave_no 1 106 30 80 --key 10:0x05 --key 12:0x85 --key 20:0x4d --key 22:0xcd --key 30:0x1c --key 32:0x9c
+M="--key 1:0x81 --mouse 0:160:100:0"
+run sys_mouse 1 106 30 120 --opl --sb $M --mouse 10:290:108:0 --mouse 12:290:108:1 --mouse 14:290:108:0 --mouse 30:290:128:1 \
+    --mouse 32:290:128:0 --mouse 50:20:185:1 --mouse 52:20:185:0 --mouse 70:20:185:1 --mouse 90:20:185:0
+run sys_mouse_save 1 106 30 120 $M --mouse 10:290:148:0 --mouse 12:290:148:1 --mouse 14:290:148:0 --mouse 30:160:100:0 \
+    --key 40:0x1c --key 42:0x9c
+run sys_mouse_leave 1 106 30 100 $M --mouse 10:290:168:0 --mouse 12:290:168:1 --mouse 14:290:168:0 --mouse 30:300:45:0 \
+    --mouse 40:300:45:1 --mouse 42:300:45:0
+# the pointer resting where keys 3 and 4 write their message: the corner put back before the number box or the buttons
+run sys_mouse_over_save 1 106 30 60 --key 1:0x81 --mouse 0:150:149:0 --key 10:0x04 --key 12:0x84 --key 30:0x1c --key 32:0x9c
+run sys_mouse_over_leave 1 106 30 60 --key 1:0x81 --mouse 0:150:149:0 --key 10:0x05 --key 12:0x85 --key 20:0x4d --key 22:0xcd \
+    --key 30:0x1c --key 32:0x9c
+for seed in 1 2 3; do run "sys_walk$seed" 0 36 22 2500 $($PY tools/walk_keys.py sys $seed 2500); done
+DOPTS=""
 DOPTS=""
 # the world's start zoom (step 23; tools/zoom_check.py): its 13 steps in scenes 0, 1, 34 and four dark scenes (6, 9, 23, 47), from the
 # data directories of the starts above

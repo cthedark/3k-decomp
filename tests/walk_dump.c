@@ -198,6 +198,10 @@ int main(int argc, char **argv)
                 }
                 continue;
             }
+            if (!strncmp(argv[a], "w:", 2)) {   /* w:DIR, where the files the game writes go (its saves, __1.NOW) */
+                assets_set_write_dir(argv[a] + 2);
+                continue;
+            }
             if (!strncmp(argv[a], "f:", 2)) {
                 if (!(g_flash = fopen(argv[a] + 2, "wb"))) {
                     fprintf(stderr, "idle: cannot write %s\n", argv[a] + 2);
@@ -234,6 +238,7 @@ int main(int argc, char **argv)
             rc = 1;
         } else {
             walk_zoom_keep(w);   /* the start's zoom kept its window (the original's run had it), not shown */
+            walk_palette_load(w, &scr);
             walk_set_show(w, flash_step, NULL);
             if (!fm_shown)
                 walk_sound_buttons(w, &scr);

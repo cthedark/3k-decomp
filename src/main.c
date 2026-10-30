@@ -982,7 +982,7 @@ static void sfx_wait(void *ctx)
 /* WALK.SL's world (walk.h) over what is on `scr` now (the menu's last frame, whose palette it keeps): the first
  * screen, then one pass of the main loop per tick of TK_WALK_PASS_HZ, until the window is closed, with the keys, the
  * mouse (the pointer, walking and shooting in the world, the battle's buttons) and the music. Returns 1 when the window was closed, 2
- * after a lost battle, -1 if the screen could not be made. */
+ * after a lost battle, 3 after key 4's yes (the original then starts MARK.EXE), -1 if the screen could not be made. */
 static int play_walk(screen_t *scr)
 {
     walk_t *w = walk_create();
@@ -1006,7 +1006,8 @@ static int play_walk(screen_t *scr)
     walk_set_show(w, show_flash_step, NULL);   /* F4's picker: the face flash's steps, as in a battle */
     /* WALK.SL draws its own mouse pointer (a driver is taken to be there whenever the window reports a pointer): the world's and the
      * battle's (walk_set_mouse before each pass). In the world the left button walks towards the pointer and the right one shoots; a
-     * press on an on-screen button is its key, whose action (the F-keys, 1 to 4, A) is not built yet. */
+     * press on an on-screen button is its key (the F-keys, 1 to 4, A). Key 3 saves into the data directory (SAVENN.00K, __1.NOW), as
+     * the original does into its own. */
     platform_show_pointer(0);
     uint32_t zoom_due = 0;
     if (walk_begin_shown(w, scr, clock0 & 0xFFFF, clock0, show_zoom_step, &zoom_due) != 0) {
@@ -1082,7 +1083,18 @@ static int play_walk(screen_t *scr)
             continue;
         }
         feed_mouse(w);
+        unsigned world_fm = *walk_fm(w);
         got = walk_pass(w, scr, ticks, platform_port60());
+        if (*walk_fm(w) != world_fm) {   /* key 1 or the music button: 0x165d:0x126 stops, 0x165d:0x3c plays the scene's song from its start */
+            song_stop(song);
+            song = *walk_fm(w) == 0x81 ? song_start_at("walk", sc->song_pos, sc->song_len) : NULL;
+        }
+        if (walk_left(w)) {   /* key 4's yes: WALK.SL ends (0x18b91) and MARK.EXE starts */
+            printf("walk: left the game (the original starts MARK.EXE)\n");
+            platform_present(scr);
+            result = 3;
+            break;
+        }
         /* Esc closes the window in the world, but F3's wait, F4's picker and list take it (they give up or end on it) */
         platform_escape_quits(walk_kind(w) == 0);
         if ((got & WALK_PASS_VILLAGER_EVENT) && !event_reported) {
@@ -1279,6 +1291,10 @@ static int run_game(screen_t *scr, int scale, int faithful)
                         printf("game: the party has lost: game over\n");
                         if (play_gameover(scr) == 0)
                             again = 1;
+                        break;
+                    }
+                    if (q == 3) {   /* key 4's yes: MARK.EXE, its title */
+                        again = 1;
                         break;
                     }
                     rc = q < 0 ? 1 : 0;
@@ -1575,6 +1591,10 @@ int main(int argc, char **argv)
         if (rc == 2) {   /* lost: MARK.EXE's game-over screen; its title is not started from here */
             printf("walk: the party has lost\n");
             play_gameover(&screen);
+            rc = 1;
+        }
+        if (rc == 3) {   /* key 4's yes: the original starts MARK.EXE's title, which is not started from here */
+            printf("walk: left\n");
             rc = 1;
         }
         printf("walk: %s\n", rc == 1 ? "closed" : "could not start");

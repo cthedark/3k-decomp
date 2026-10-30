@@ -52,7 +52,7 @@ KIND = {WORLD_TOP: 0, BATTLE_TOP: 1, REWARDS_TOP: 3, DIALOG_TOP: 4, MAGIC_TOP: 5
         NUMBER_TOP: 9, TAKE_TOPS[0]: 10, TAKE_TOPS[1]: 10, EQUIP_TOP: 11, USE_TOP: 12, MAP_TOP: 13, ORDER_TOP: 14, DATA_TOP: 15}
 KIND_NAME = {0: 'world', 1: 'battle', 2: 'lost', 3: 'rewards', 4: 'message box', 5: 'magic list', 6: 'member picker',
              7: 'item list', 8: 'yes / no', 9: 'number', 10: 'take', 11: 'equipment', 12: 'use prompt', 13: 'map', 14: 'order', 15: 'data',
-             'flash': 'face flash steps', 'sounds': 'sounds'}
+             'flash': 'face flash steps', 'sounds': 'sounds', 'files': 'files written', 16: 'left'}
 MON = 0x3C
 LOCALS = (0x52, 0x70, 0x44, 0x5E, 0x82, 0x72, 0x38, 0x42, 0x8C, 0x0C, 0x58, 0x14, 0x84, 0x36, 0x10, 0x78)
 BSTATE = 4 + MON + len(LOCALS) + 200 + 60
@@ -121,10 +121,23 @@ def oracle(a, n, keys):
 
     for top in KIND:
         emu.uc.hook_add(UC_HOOK_CODE, cb, None, top, top)
+    # 0x18c29: the end of WALK.SL (key 4's yes) calls execl("mark.exe"); the emulator's C runtime returns from it without the exec
+    # reaching DOS (the run then ends with exit code 255), so the call itself is what is recorded
+    execd = []
+    emu.uc.hook_add(UC_HOOK_CODE, lambda uc, address, size, user: execd.append(emu.pass_count - 1), None, 0x18C29, 0x18C29)
     # The loop tops set the clock to base + pass / tick_div. The run's own limit is in emulated time, which a battle's passes use more
     # of than the clock they are given, so it is generous: it only matters when the original waits somewhere that is not a loop top.
     emu.run((a.tick_base or 0) + n + 400, {})
-    return rec, flash, ([e for e in sb.events if e[0] <= n] if sb else None)
+    # the files the run created or changed (key 3's saves, __1.NOW), and whether it ended by starting another program (key 4)
+    files = {}
+    for p in work.iterdir():
+        src = Path(a.data) / p.name
+        if p.name.startswith('_last') or not p.is_file():
+            continue
+        if not src.exists() or src.read_bytes() != p.read_bytes():
+            files[p.name.upper()] = p.read_bytes()
+    files['__stop__'] = (f'exec mark.exe at pass {execd[0]}' if execd else emu.stop_reason or '').encode()
+    return rec, flash, ([e for e in sb.events if e[0] <= n] if sb else None), files
 
 
 def main():
@@ -153,8 +166,10 @@ def main():
     rec = None
     flash = None
     sounds = None
+    files = None
     fcache = Path(a.cache + '.flash') if a.cache else None
     scache = Path(a.cache + '.sb') if a.cache else None
+    wcache = Path(a.cache + '.files') if a.cache else None
     if a.cache and Path(a.cache).exists():
         rec = pickle.loads(zlib.decompress(Path(a.cache).read_bytes()))
         if rec and (len(rec[0][3]) != STATE or isinstance(rec[0][0], bool)):
@@ -171,13 +186,22 @@ def main():
                 sounds = pickle.loads(zlib.decompress(scache.read_bytes()))
             else:
                 rec = None
-    if rec is None or len(rec) < a.n + 1:
-        rec, flash, sounds = oracle(a, a.n, keys)
+        if rec and wcache.exists():   # recordings made before the files were kept have none (they never save)
+            files = pickle.loads(zlib.decompress(wcache.read_bytes()))
+    exec_end = files is not None and files.get('__stop__', b'').startswith(b'exec')
+    if rec is None or (len(rec) < a.n + 1 and not exec_end):
+        rec, flash, sounds, files = oracle(a, a.n, keys)
         if a.cache:
             Path(a.cache).write_bytes(zlib.compress(pickle.dumps(rec), 1))
             fcache.write_bytes(zlib.compress(pickle.dumps(flash), 1))
+            wcache.write_bytes(zlib.compress(pickle.dumps(files), 1))
             if a.sb:
                 scache.write_bytes(zlib.compress(pickle.dumps(sounds), 1))
+    exec_end = files is not None and files.get('__stop__', b'').startswith(b'exec')
+    pdir = Path(a.keep) / 'port_files'
+    if pdir.exists():
+        shutil.rmtree(pdir)
+    pdir.mkdir(parents=True)
     out = Path(a.keep) / 'port.bin'
     fout = Path(a.keep) / 'port_flash.bin'
     if fout.exists():
@@ -193,7 +217,7 @@ def main():
         Path(start).write_bytes(rec[0][1] + rec[0][2])
     r = subprocess.run([a.port, a.data, 'battle', str(out), str(a.n), str(a.tick_base), str(a.tick_div), start] + a.key +
                        ['m:' + m for m in a.mouse] + ([('fm-shown' if a.mouse else 'fm')] if a.opl else []) + ['f:' + str(fout)] +
-                       ([('sb-shown' if a.mouse else 'sb'), 's:' + str(sout)] if a.sb else []),
+                       ([('sb-shown' if a.mouse else 'sb'), 's:' + str(sout)] if a.sb else []) + ['w:' + str(pdir)],
                        capture_output=True, text=True)
     sys.stderr.write(r.stderr)
     if r.returncode != 0:
@@ -205,6 +229,7 @@ def main():
         return 2
     first = {}
     ended = None
+    left = None
     kinds = {}
     in_battle, back, stopped = False, 0, None   # --world-passes: how many world passes after a battle are compared
     for i in range(a.n):
@@ -215,6 +240,13 @@ def main():
             # (after it the oracle, whose exec is not taken, runs on into the world's level-ups and world loop: not compared)
             if i + 1 < len(rec) and rec[i + 1][0] in (1, 3):
                 print(f'pass {i}: the port lost the battle, the original did not leave the battle')
+                first['end'] = i
+            break
+        if pkind == 16:   # key 4's yes: WALK.SL has ended in this pass; the original must have started MARK.EXE there
+            left = i
+            stop = files.get('__stop__', b'').decode() if files else ''
+            if i + 1 < len(rec) or not exec_end or not stop.endswith(f'at pass {i}'):
+                print(f'pass {i}: the port left WALK.SL; the original: {stop or "did not"}')
                 first['end'] = i
             break
         if i + 1 >= len(rec):
@@ -274,7 +306,31 @@ def main():
                 else:
                     print(f'pass {i}: {k} differs')
     n = a.n if ended is None else ended
+    n = n if left is None else left
     n = n if stopped is None else stopped
+    # the files written (key 3's saves, __1.NOW): the same names and bytes; skipped for recordings made before they were kept
+    if files is not None:
+        ofiles = {k: v for k, v in files.items() if k != '__stop__'}
+        if ended is not None:   # a lost battle: the original writes 0x3e into ANI.LCP for MARK.EXE's game-over (not walk_dump's part)
+            ofiles.pop('ANI.LCP', None)
+        pfiles = {p.name.upper(): p.read_bytes() for p in pdir.iterdir() if p.is_file()}
+        for k in list(pfiles):   # written with the bytes the data directory has already: unchanged, as the oracle's list counts it
+            src = next((q for q in Path(a.data).iterdir() if q.name.upper() == k), None)
+            if src is not None and src.read_bytes() == pfiles[k]:
+                del pfiles[k]
+        if set(ofiles) != set(pfiles):
+            print(f'files written: original {sorted(ofiles)}, port {sorted(pfiles)}')
+            first['files'] = 0
+        else:
+            for k in sorted(ofiles):
+                if ofiles[k] != pfiles[k]:
+                    o, p = ofiles[k], pfiles[k]
+                    j = next((j for j in range(min(len(o), len(p))) if o[j] != p[j]), min(len(o), len(p)))
+                    print(f'file {k}: {len(o)} bytes in the original, {len(p)} in the port; first difference at {j}')
+                    first['files'] = 0
+                    break
+            if ofiles and 'files' not in first:
+                kinds['files'] = len(ofiles)
     # the picker face's flash: the screen after each of its steps, in the passes compared
     pf = []
     if fout.exists():
@@ -314,6 +370,8 @@ def main():
     if of:
         kinds['flash'] = len(of)
     end = '' if ended is None else f'; the party lost at pass {ended} in both (not compared after)'
+    if left is not None:
+        end = f'; WALK.SL left for MARK.EXE at pass {left} in both'
     if stopped is not None:
         end = f'; back in the world at pass {stopped - a.world_passes}, compared {a.world_passes} world passes more'
     print(f'all {n} passes identical (' + ', '.join(f'{v} {KIND_NAME[k]}' for k, v in sorted(kinds.items(), key=str)) + f'){end}')

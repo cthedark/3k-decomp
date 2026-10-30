@@ -26,6 +26,8 @@ ap.add_argument("--word", action="append", default=[], metavar="K:OFF:VALUE",
                 help="set the word at byte OFF of party member K's record (4 experience, 8 HP, 0x10 what a blow taken raises)")
 ap.add_argument("--talk", action="append", default=[], metavar="V:SCENE:W",
                 help="give villager V of the start scene the talk of villager W of scene SCENE")
+ap.add_argument("--speed", type=int, metavar="CLASS",
+                help="the speed class TV.EXE measured (RPG.LCP byte 0, 2 shipped): below 2 the villagers walk more slowly")
 a = ap.parse_args()
 for v, name in ((a.scene, "SCENE"), (a.x, "X"), (a.y_half, "Y_HALF")):
     if not 0 <= v <= 255:
@@ -51,6 +53,10 @@ for spec in a.word:
     k, o, v = (int(x, 0) for x in spec.split(":"))
     mi[40 * k + o], mi[40 * k + o + 1] = v & 0xFF, v >> 8
 (out / "MAN_INFO.NOW").write_bytes(bytes(mi))
+if a.speed is not None:
+    rpg = bytearray((out / "RPG.LCP").read_bytes())
+    rpg[0] = a.speed & 0xFF
+    (out / "RPG.LCP").write_bytes(bytes(rpg))
 if a.talk:
     now = bytearray((out / "__1.NOW").read_bytes())
     for spec in a.talk:   # 1750 bytes a scene, 50 a villager record

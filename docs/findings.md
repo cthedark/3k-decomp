@@ -3680,3 +3680,67 @@ the box); a second sale after the first; member 1's item; the counters of scenes
 40 new mutations, all caught (two only after `pawn_odd` and `pawn_mouse_in` were added); three dropped with notes (the records run
 again, `[bp-0x96]`, which no start can read after a sale, and the pointer's corner put back before the yes / no, which is the corner
 just kept). Three older patterns the new code duplicated were repointed and re-run on their own starts.
+
+## WALK.SL step 37: the world's keys 1 to 4 and A, 2026-10-28
+
+Built in C and compared pass by pass. READ from the code (`0x143f7` .. `0x14d46` for the five keys, the four walking handlers
+`0x13aed` .. `0x1423d` for sliding, `0x25e14` for the saves' packing, `0x18b82` .. `0x18c34` for the end of `WALK.SL`), SEEN in the
+oracle (`work/b10/probe_keys.py`: the screens, the number box's frame, the files written), then CONFIRMED by the comparison. The right
+column's four lower buttons are 音樂 (1, music), 音效 (2, sounds), 儲存 (3, save) and 離開 (4, leave); A is the 大 mark at the bottom left.
+
+**Key 1** (`0x144d4`): with an FM card (`0x2cc5:5` not 0), the music flag goes 0x81 -> 0x80 (the song stopped, `0x165d:0x126`) or back
+(the scene's song from its start, `0x165d:0x3c`) and the button at (269, 98) is turned (`0x1c3ba`, the pointer's corner put back
+before and kept after). No card: nothing at all, not even the button. **Key 2** (`0x14597`): the same for the Sound Blaster's flag
+(`0x2cc5:0xc`), the button at (269, 118); a sound already playing is not cut. Both, and A, count as released while they repeat (step 7).
+
+**Key A** (`0x143f7`): `[bp-0x76]` (0 at the start, `0x10ba3`) is turned over and the 41 x 12 at (7, 182) is grabbed into the world
+buffer's start, its colour 0x1f turned 9 (on) or 9 turned 0x1f (off) over the grab's 0x1ec bytes, and put back. **Sliding** (each
+walking handler, when its step is blocked and `[bp-0x76]` is set): the coordinate is taken back, `[bp-0x2e]` is 5, and three places are
+tested with `0x2c318` (both words at map row y / 2 and column x with its low bit cleared on the list of walkable tiles; the foot test
+looks a row lower). Up tests x - 2, x - 1 (left) and x + 2 (right) on row y; down the same on y + 4; left tests x - 2 at y, y + 2 (up)
+and y + 4 (down); right the same at x + 2. The last one open wins and becomes the key the later handlers see, so the sideways step is
+taken in the same pass; none open: the bump (`[bp-0x48]` = 2). After the four handlers, up and down run once more without sliding (a
+sideways slide's key). Up on row y + 1 and left from x - 1 would give the same cells everywhere a hero stands blocked in the 53 scenes
+(`work/b10/slidesearch.c`).
+
+**Key 3, saving** (`0x14647` .. `0x14b4f`): the button at (269, 138); message 0x253 (請輸入欲存編號(0-10)?, colour 0x20, not waiting:
+the window's next copy covers it); the pointer off; the number box of the talks (`0x18fdc`, on the palette itself). Its palette count
+starts at 0xe8, a stack leftover (SEEN; any value from 0x16 up acts the same). Then the pointer's place is 0 and its corner kept, and a
+number below 11 saves into slot NN:
+- the party table's bytes 510 .. 513 are copied to 500 .. 503 (502, 503 again from 512, 513) and its first 504 bytes are packed into
+  `saveNN.000` (the name is "sav" + the slot as three digits, then byte 3 = 'e': `save05`; then `.000`);
+- each villager's byte 8 is put back from its copy after the table (the start lowers it on a slow machine), and the scene's 1750 bytes
+  are written into `__1.NOW` at 1750 x the scene (party byte 510);
+- `__1.NOW` is read back: its first 0xfcee bytes go into a scratch buffer and are packed into `saveNN.001`, the rest (at most 0x9470;
+  28,000 in the shipped file) into the map buffer `[bp-0xba]` and `saveNN.002`. `[bp-0x96]` is left at the last packed length;
+- with a speed class below 2 the villagers' byte 8 is lowered again (by 2 - class, at least 1) and byte 9 zeroed, as at the start.
+Then the button is let go and the pass ends with the walk counter (`0x172a4`), not through the record block. 11 or more: only the button.
+
+**The packing** (`0x25e14`): the counts of the 256 byte values (16-bit words, in the output buffer); the marker is the value used least,
+the lowest of a tie. Byte 0 the marker, then a word with the packed length (header included), then the bytes: a run of three or more as
+(marker, count, byte), at most 255 a run; the marker itself always as such a triple, counted one short (the unpacker `0x25eeb` writes
+`count` copies, so a save drops one marker byte per run: the original's own loss). `src/walk.c` `walk_rle_pack`.
+
+**Key 4, leaving** (`0x14bb4` .. `0x14d46`): the button at (269, 158); message 0x252 (colour 0x20, not waiting); the pointer off; the
+yes / no buttons of the talks (on the palette itself). Then the pointer's place is 0 and its corner kept. **No:** the button let go, the
+walk counter. **Yes:** `[bp-0xbe]` = 0 and `0x172f0` with no record, so `0x18b82` falls through to the end of `WALK.SL`: the Sound
+Blaster's driver ended (`0x290e0 + 0x76`), the music stopped, the buffers freed, and `execl("mark.exe")` (`0x18c29`, string `ds:0x126`):
+MARK.EXE's title. The oracle's C runtime returns from that call without reaching DOS (the run then exits with 255), so
+`tools/battle_check.py` records the call itself.
+
+**Found along the way:** the DAC's entries 0 .. 15 are the palette buffer (RPG.LCP's first 48 bytes) at the loop's first pass, and
+RPG.LCP's byte 0 is also the speed class TV.EXE writes: colour 0's red is the class (SEEN with classes 0, 1 and 2). The port did not
+load them (the shipped class, 2, matched the start's screen). `walk_palette_load`.
+
+**Checked:** `tools/check_battle.sh`, 27 `sys_` starts, all identical at every pass, and `tools/battle_check.py` now also compares the
+files the run wrote (names and bytes; the port writes into a scratch directory, `w:DIR`) and that key 4's yes ends both at the same
+pass. The starts: key 1 twice with an FM card, held, and without a card; key 2 before and inside the house door (only the way out
+sounds); A held and twice; sliding on two 1,500-pass random walks in scene 0 (33 slides) and four starts placed where only one test
+tells the rules apart; saves into slots 5, 0 (the shipped `SAVE00.002` written again the same) and 15 (nothing written), with speed
+classes 0 and 1, in a dark scene; leaving with yes and with no; the five buttons by mouse; the pointer resting where the messages go;
+three 2,500-pass walks with all of them. `tests/test_walk.c` `test_save_pack` pins the packing and the sliding test.
+`tools/mutate_battle.py`: 55 new mutations, all caught (four only after starts were added); two dropped with notes (above); three older
+patterns the new code touched were repointed and re-run on their own starts. ASan / UBSan clean on five starts; a real-time run under
+SDL's dummy drivers saved into slot 2 and left.
+
+**Not built:** loading a save (the menu's slot picker); the scene record block's other kinds.
