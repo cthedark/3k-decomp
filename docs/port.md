@@ -719,7 +719,8 @@ Enter on an empty slot stays.
 **Pace:** the same 35 passes per second as the menu (`TK_MENU_PASS_HZ`), so the marker blinks about 3 times a second.
 GUESS; nobody has watched it.
 
-**Not built:** loading the picked save (the three `saveNN.00x` files into the game state), which belongs with WALK.SL.
+**Not built:** loading the picked save (the three `saveNN.00x` files into the game state), which belongs with WALK.SL. (Built
+2026-10-30, milestone 9p.)
 
 ## Milestone 6: the credits (CAST.SL), built 2026-10-16
 
@@ -1355,3 +1356,23 @@ directory as the original writes into its own); key 4 asks and, on yes, ends the
   `tools/mutate_battle.py` (790): 55 new mutations, all caught, two dropped with notes.
 - **Guesses:** the save's number box count (0xe8) is a stack leftover, SEEN in the oracle.
 - **Not built:** loading a save; the record block's other kinds; the hero stepping onto a kind 0x14 record.
+
+## Milestone 9p: loading a save from the menu (C), built 2026-10-30
+The menu's slot picker (milestone 4f) now loads the picked slot and starts the world, as WALK0.SL does before it starts WALK.SL:
+`saveNN.000` unpacked into `MAN_INFO.NOW`, `.001` and `.002` unpacked one after the other into `__1.NOW` (`docs/findings.md` "WALK0.SL:
+loading a save"). In `--scene game` the world then starts from those files, and leaving it or losing a battle goes on as after a new
+game. The files are written into the data directory, as the original writes into its own; `--write-dir DIR` (new, every scene) sends
+them, and the saves key 3 writes, somewhere else.
+
+- **Code:** `src/menu.c` `menu_load_save`; `src/walk.c` `walk_rle_unpack`; `src/main.c` (`--write-dir`; the stepped menu loads a pick
+  when it is given; `run_game` starts WALK.SL after a load); `tests/test_walk.c` `test_save_pack` (the unpacker).
+- **Checked:** `tools/check_load.sh` (new): 12 of 12 identical. Every shipped save (slots 0, 1, 3, 4, 7, 9
+  and 10) and two saves the port's key 3 wrote (scene 1 into slot 5, the dark scene 13 into slot 0) give byte for byte the
+  `MAN_INFO.NOW` and `__1.NOW` the original writes in the oracle; and 150 world passes from what slots 0, 3 and 7 load (scenes 27, 2
+  and the dark 13) are identical. `tools/mutate_load.py` (new): 9 mutations, all caught; one dropped with a note. `tools/check_menu.sh`
+  640 of 640. ASan / UBSan clean on the nine loads. A real-time run under SDL's dummy drivers went title, menu, slot 1, world, and left
+  slot 1's files in the data copy.
+- **Not reproduced:** the original's check of its own `WALK0.SL` against the copy in `ANI.LCP` at 0x600 after a load (the port has no
+  `WALK0.SL`); a save whose files are cut short (the original's unpacker reads on into its buffer, the port's stops).
+- **Not built:** new game's files (`__1.AL1`, `__1.AL2`, `MAN_INFO.ALL` into the `.NOW` files): the port's new game starts from the
+  `.NOW` files as they are.

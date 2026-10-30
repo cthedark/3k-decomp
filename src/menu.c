@@ -7,6 +7,7 @@
 #include "assets.h"
 #include "gfx.h"
 #include "lcz.h"
+#include "walk.h"
 
 /* Layout facts, all observed in the original (docs/findings.md, "WALK0.SL (the menu)"). */
 enum {
@@ -647,5 +648,54 @@ int menu_picker_pass(menu_t *m, screen_t *scr, unsigned port60, const menu_mouse
     }
     present_panel(scr, panel);
     return MENU_NONE;
+}
+
+/* ---- loading the picked save (0x115c2 .. 0x11810) -------------------------------------------- */
+
+/* Up to `max` bytes of a file, as DOS's read gives them: fewer if the file is shorter. NULL if it cannot be opened. */
+static uint8_t *read_upto(const char *name, size_t max, size_t *n)
+{
+    uint8_t *d = assets_read(name, n);
+    if (d && *n > max)
+        *n = max;
+    return d;
+}
+
+int menu_load_save(int slot)
+{
+    if (slot < 0 || slot >= MENU_SLOTS)
+        return -1;
+    char name[16];
+    size_t n0 = 0, n1 = 0, n2 = 0;
+    snprintf(name, sizeof name, "save%02d.000", slot);
+    uint8_t *p0 = read_upto(name, 0x1F8, &n0);
+    snprintf(name, sizeof name, "save%02d.001", slot);
+    uint8_t *p1 = read_upto(name, 0xFFDC, &n1);
+    snprintf(name, sizeof name, "save%02d.002", slot);
+    uint8_t *p2 = read_upto(name, 0xFFDC, &n2);
+    uint8_t *party = calloc(1, 0xFFFF), *a = malloc(0xFFFF), *b = malloc(0xFFFF);
+    int rc = -1;
+    if (p0 && p1 && p2 && party && a && b) {
+        /* MAN_INFO.NOW: always 504 bytes of the unpacked .000 (the unpacker's length is not used; past a short one the buffer's
+         * earlier bytes would follow, zeros here) */
+        walk_rle_unpack(p0, n0, party, 0xFFFF);
+        /* __1.NOW: the unpacked .001, then the unpacked .002, each as long as its unpacking gave */
+        size_t l1 = walk_rle_unpack(p1, n1, a, 0xFFFF), l2 = walk_rle_unpack(p2, n2, b, 0xFFFF);
+        uint8_t *now = malloc(l1 + l2 + 1);
+        if (now) {
+            memcpy(now, a, l1);
+            memcpy(now + l1, b, l2);
+            if (assets_write("man_info.now", party, 0x1F8) == 0 && assets_write("__1.now", now, l1 + l2) == 0)
+                rc = 0;
+            free(now);
+        }
+    }
+    free(p0);
+    free(p1);
+    free(p2);
+    free(party);
+    free(a);
+    free(b);
+    return rc;
 }
 

@@ -66,6 +66,9 @@ static int g_menu_nmice;
  * --picker-mouse N:X:Y:BUTTONS are applied before picker pass N + 1 (N counted from the picker's first pass),
  * --picker-dump N:FILE writes the screen after N picker passes, --picker-slots MASK says which saves
  * exist (default: look for SAVE00.000 .. SAVE10.000 in the data directory). */
+/* --write-dir DIR: where the files the game writes go (saves, MAN_INFO.NOW, __1.NOW; the data directory without it). With it, a pick
+ * in the stepped menu also loads the slot there (menu_load_save), as the original does before starting WALK.SL. */
+static const char *g_write_dir = NULL;
 static struct { int pass; unsigned code; } g_pick_keys[MAX_SCRIPT];
 static int g_pick_nkeys;
 static struct { int pass; int x, y; unsigned buttons; } g_pick_mice[MAX_SCRIPT];
@@ -327,6 +330,9 @@ static int run_menu_stepped(screen_t *scr, int ndump, const int *dump_pass, char
                         int slot = menu_picker_pass(m, scr, port60, have_mouse ? &mouse : NULL);
                         if (slot != MENU_NONE) {
                             printf("picked slot %d after %d completed picker pass(es)\n", slot, pdone);
+                            if (g_write_dir)
+                                printf(menu_load_save(slot) == 0 ? "loaded slot %d into %s\n" : "could not load slot %d into %s\n",
+                                       slot, g_write_dir);
                             break;
                         }
                     }
@@ -1284,8 +1290,16 @@ static int run_game(screen_t *scr, int scale, int faithful)
                     }
                     continue;
                 }
-                if (c == MENU_NEW_GAME) {   /* WALK.SL */
-                    printf("game: new game (WALK.SL)\n");
+                if (c == MENU_LOAD && slot != MENU_NONE) {   /* the slot's files into MAN_INFO.NOW and __1.NOW, then WALK.SL */
+                    if (menu_load_save(slot) != 0) {
+                        printf("game: slot %d could not be loaded, stopping\n", slot);
+                        rc = 1;
+                        break;
+                    }
+                    printf("game: slot %d loaded\n", slot);
+                }
+                if (c == MENU_NEW_GAME || (c == MENU_LOAD && slot != MENU_NONE)) {   /* WALK.SL */
+                    printf(c == MENU_NEW_GAME ? "game: new game (WALK.SL)\n" : "game: WALK.SL\n");
                     int q = play_walk(scr);
                     if (q == 2) {   /* the party fell: MARK.EXE's game-over screen, then its title as after any start */
                         printf("game: the party has lost: game over\n");
@@ -1371,6 +1385,10 @@ int main(int argc, char **argv)
             g_pick_file[g_pick_count++] = colon + 1;
         } else if (!strcmp(argv[i], "--picker-slots") && i + 1 < argc)
             g_pick_mask = (int)strtol(argv[++i], NULL, 0);
+        else if (!strcmp(argv[i], "--write-dir") && i + 1 < argc) {
+            g_write_dir = argv[++i];
+            assets_set_write_dir(g_write_dir);
+        }
         else if (!strcmp(argv[i], "--picker-key") && i + 1 < argc && g_pick_nkeys < MAX_SCRIPT) {
             int n;
             unsigned code;

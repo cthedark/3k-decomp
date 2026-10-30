@@ -99,6 +99,13 @@ void menu_picker_begin(menu_t *m, unsigned present);
 int menu_picker_pass(menu_t *m, screen_t *scr, unsigned port60, const menu_mouse *mouse);
 int menu_picker_slot(const menu_t *m);   /* the selected cell, 0..10 */
 
+/* (0x115c2 .. 0x11810) Loading the picked slot, before WALK.SL starts: saveNN.000 (at most 504 bytes read) unpacked into MAN_INFO.NOW
+ * (504 bytes), saveNN.001 and .002 (at most 0xffdc bytes each) unpacked one after the other into __1.NOW. The files go into the write
+ * directory (assets_set_write_dir). Returns 0, or -1 if a file is missing or cannot be written. The original then compares its own
+ * WALK0.SL with the copy in ANI.LCP at 0x600 (and writes the copy back and starts the menu again if they differ); the port has no
+ * WALK0.SL, so that is not reproduced. */
+int menu_load_save(int slot);
+
 /* Reset the keyboard latch, as when the menu starts: no break code seen yet. */
 void menu_input_reset(menu_t *m);
 

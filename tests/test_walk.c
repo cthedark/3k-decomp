@@ -1522,6 +1522,19 @@ static void test_save_pack(void)
     CHECK(ne == 262 && out[0] == 1 && out[1] == 6 && out[2] == 1);
     CHECK(out[3] == 0 && out[4] == 0 && out[5] == 1 && out[6] == 0 && out[7] == 1 && out[8] == 2 && out[261] == 255);
 
+    /* the unpacker (WALK0.SL 0x11c97): literals, (marker, count, byte) for count copies; a packed save gives back its bytes except
+     * one marker byte per run of them (e above: the lone 1 is lost) */
+    uint8_t u[512];
+    CHECK(walk_rle_unpack(pa, sizeof pa, u, sizeof u) == sizeof a && memcmp(u, a, sizeof a) == 0);
+    CHECK(walk_rle_unpack(pd, sizeof pd, u, sizeof u) == 300 && u[0] == 7 && u[299] == 7);
+    CHECK(walk_rle_unpack(out, ne, u, sizeof u) == 256 && u[0] == 0 && u[1] == 0 && u[2] == 2 && u[255] == 255);
+    /* a count of 0 gives nothing; the header's length ends it (the bytes after it are not read) */
+    const uint8_t f[] = {9, 9, 0, 1, 9, 0, 4, 2, 9, 2, 5, 3, 0xAA};
+    CHECK(walk_rle_unpack(f, sizeof f, u, sizeof u) == 4 && u[0] == 1 && u[1] == 2 && u[2] == 5 && u[3] == 5);
+    /* past the end of what was read the port stops (the original reads on into its buffer); the output stops at its room */
+    CHECK(walk_rle_unpack(f, 9, u, sizeof u) == 2 && walk_rle_unpack(pd, sizeof pd, u, 10) == 10);
+    CHECK(walk_rle_unpack(f, 2, u, sizeof u) == 0);
+
     /* the sliding test: both words at row y / 2, column x with its low bit cleared, on the list */
     static uint8_t gmap[WS_GMAP_BYTES], list[WS_LIST_BYTES];
     memset(gmap, 0x55, sizeof gmap);

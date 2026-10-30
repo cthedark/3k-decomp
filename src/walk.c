@@ -709,6 +709,31 @@ size_t walk_rle_pack(const uint8_t *in, size_t n, uint8_t *out)
     return o;
 }
 
+size_t walk_rle_unpack(const uint8_t *in, size_t n, uint8_t *out, size_t cap)
+{
+    if (n < 3)
+        return 0;
+    size_t end = (size_t)in[1] | (size_t)in[2] << 8, si = 3, o = 0;
+    if (end > n)
+        end = n;
+    while (si < end) {
+        if (in[si] != in[0]) {
+            if (o < cap)
+                out[o] = in[si];
+            o++;
+            si++;
+            continue;
+        }
+        if (si + 2 >= n)
+            break;
+        for (unsigned k = 0; k < in[si + 1]; k++, o++)
+            if (o < cap)
+                out[o] = in[si + 2];
+        si += 3;
+    }
+    return o < cap ? o : cap;
+}
+
 void walk_trail_step(uint8_t trail[WS_TRAIL_BYTES], uint8_t *party, unsigned x, unsigned y)
 {
     memmove(trail + 3, trail, 12 * 3);       /* entry k + 1 gets entry k, for k = 11 down to 0 */

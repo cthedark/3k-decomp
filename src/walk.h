@@ -219,6 +219,10 @@ int walk_slide_ok(const uint8_t *gmap, const uint8_t *list, unsigned x, unsigned
  * then the bytes, a run of three or more as (marker, count, byte) with at most 255 a run. The marker byte itself always goes as a run,
  * counted one short (the unpacker 0x25eeb then writes one fewer). `out` needs n + n / 2 + 3 bytes. Returns the packed length. */
 size_t walk_rle_pack(const uint8_t *in, size_t n, uint8_t *out);
+/* (WALK0.SL 0x11c97, the same as WALK.SL 0x25eeb) The unpacker: byte 0 the marker, a word with the packed length (header included),
+ * then literals, and (marker, count, byte) for `count` copies (0 gives none). Reads at most `n` bytes of `in` (the original reads on
+ * into its buffer when the header says more than the file held); writes at most `cap` bytes. Returns the unpacked length. */
+size_t walk_rle_unpack(const uint8_t *in, size_t n, uint8_t *out, size_t cap);
 /* (0x2bfd5) A step: every trail entry (13 of x, y, direction) moves one place on, the hero's new (x, y, direction) goes in front, party record 0
  * gets (x, y) and records 1 to 4 get trail entries 3, 6, 9 and 12. */
 void walk_trail_step(uint8_t trail[WS_TRAIL_BYTES], uint8_t *party, unsigned x, unsigned y);

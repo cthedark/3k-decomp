@@ -3744,3 +3744,36 @@ patterns the new code touched were repointed and re-run on their own starts. ASa
 SDL's dummy drivers saved into slot 2 and left.
 
 **Not built:** loading a save (the menu's slot picker); the scene record block's other kinds.
+
+## WALK0.SL: loading a save, 2026-10-30
+
+READ from the code (`0x115c2` .. `0x119de`, the unpacker `0x11c97`), then CONFIRMED in the oracle (`tools/check_load.sh`). WALK0.SL's data
+segment starts at 0x16db0, so the file names are `ds:0xb7` `man_info.now`, `ds:0xc4` `__1.now`, `ds:0xcc` and `ds:0xdd` `walk0.sl`,
+`ds:0xd5` `ani.lcp`, `ds:0xe6` `walk.sl`, `ds:0xee` `cast.sl`.
+
+**After the pick** (`0x115c2`): if `es:[4]` of segment `[0x298]` is set, `0x22d:0x124` and `0x22d:0x14c` are called (GUESS: the music
+stopped; not read); the marker's place `[bp-0x2c]` gives the slot, `(place - 0x129c) / 11`; the name is built as on saving ("sav", the slot in three digits, byte 3 = 'e', byte 6 = '.', then the
+extension).
+- `saveNN.000`: at most 0x1f8 (504) bytes read, unpacked, and 504 bytes of the result written into a new `MAN_INFO.NOW` (the
+  unpacker's length is not used).
+- `saveNN.001` and `.002`: at most 0xffdc bytes each read into two buffers, each unpacked, and a new `__1.NOW` gets the first
+  result, then the second, each as long as its unpacking gave (92,750 bytes with every save tried).
+
+**The unpacker** (`0x11c97`, the same as WALK.SL's `0x25eeb`): byte 0 the marker, the word at 1 the packed length counted from byte 0;
+until that end, a byte other than the marker is copied, and (marker, count, byte) writes `count` copies (`rep stosb`, so 0 writes
+none). It returns the length written. It reads past what the file held if the header says more.
+
+**Then, on every path out of the menu** (`0x11810` ..): `walk0.sl` is read (at most 0xffdc bytes) and compared with as many bytes of
+`ani.lcp` from 0x600. If any differs, the copy from `ani.lcp` is written over `walk0.sl` and the menu starts again (`0x119e8`);
+otherwise `[bp-0x2c]` picks the program: below 0xe51 (0 after a load) `execl("walk.sl")`, 0x1c9c `cast.sl`. This looks like
+a self-repair of the menu program. In the oracle the two match and `walk.sl` is opened. The port has no WALK0.SL to check, so it
+does not reproduce this.
+
+**Checked:** `tools/check_load.sh`, 12 of 12 identical:
+- every shipped save (slots 0, 1, 3, 4, 7, 9 and 10) and two saves the port's key 3 wrote (slot 5 from scene 1, slot 0 from the
+  dark scene 13): the `MAN_INFO.NOW` and `__1.NOW` the original writes in the oracle are byte for byte the port's. The oracle's data
+  copy has neither file beforehand, because slot 0 gives exactly the shipped `__1.NOW`;
+- 150 world passes from what slots 0, 3 and 7 load (scenes 27, 2 and 13).
+
+`tests/test_walk.c` `test_save_pack` pins the unpacker; `tools/mutate_load.py`: 9 mutations, all caught, one dropped (reading all of
+`.000` only differs for a `.000` over 504 bytes, which a party table packs to only if it uses nearly every byte value).
