@@ -1046,6 +1046,41 @@ m("walk.c", "shop: strip not put back", "    if (strip)\n        put(scr, SHOP_S
 # Dropped: the record loop not run again after a shop. A shop sets no flag, so the loop applies again what it applied before.
 m("battle.c", "shop: picker steps the dimmed palette", "    if (b->world && !b->pal_live)", "    if (b->world)")
 
+# the inn's night (step 41); RUNS="shop_night"
+m("walk.c", "inn: not begun", "    (void)party;\n    inn_begin(w, scr);", "    (void)party;")
+m("walk.c", "inn: strip not put back", "    put(scr, SHOP_STRIP_AT, w->shop_strip, 320, 14);\n    shop_set_coins(w, scr, (shop_coins(w) - w16(w->shop_rec, 1)) & 0xFFFF);\n    uint8_t packed",
+  "    shop_set_coins(w, scr, (shop_coins(w) - w16(w->shop_rec, 1)) & 0xFFFF);\n    uint8_t packed")
+m("walk.c", "inn: free", "    shop_set_coins(w, scr, (shop_coins(w) - w16(w->shop_rec, 1)) & 0xFFFF);\n    uint8_t packed", "    shop_set_coins(w, scr, shop_coins(w));\n    uint8_t packed")
+m("walk.c", "inn: no swaps", "        memmove(sc + a, sc + b, 0x100);\n        memcpy(sc + b, t, 0x100);", "        (void)t;")
+m("walk.c", "inn: swaps from 0", "        unsigned a = ((walk_rand(&w->rng) / 0x199A) << 8) + 0xA0,", "        unsigned a = ((walk_rand(&w->rng) / 0x199A) << 8),")
+m("walk.c", "inn: window not black", "    fill(scr, 0x1440, WALK_ZOOM_W, WALK_ZOOM_H, 0);\n    unsigned at = 0x6E73", "    unsigned at = 0x6E73")
+m("walk.c", "inn: fallen drawn", "        if (w16(party, o + 8) == 0 || party[o + 3] >= 5)\n            continue;", "        if (party[o + 3] >= 5)\n            continue;")
+m("walk.c", "inn: HP not healed", "        party[o + 8] = party[o + 0xA];\n        party[o + 9] = party[o + 0xB];\n        unsigned mp", "        unsigned mp")
+m("walk.c", "inn: MP cap 4001", "        if (mp > 0xFA0)\n            mp = 0xFA0;", "        if (mp > 0xFA1)\n            mp = 0xFA1;")
+m("walk.c", "inn: MP not raised", "        if (mp > w16(party, o + 0xD)) {", "        if (0) {")
+m("walk.c", "inn: no bed", "        inn_blit(pic, 4 + 0x190, 4, 0x10, sc, 0x10, 0xA);\n", "")
+m("walk.c", "inn: sprite a row lower", "        inn_blit(pic, 4 + 0x190, 0x44, 0x10, s->bank2 + off, 0x10, 0x10);", "        inn_blit(pic, 4 + 0x190, 0x54, 0x10, s->bank2 + off, 0x10, 0x10);")
+m("walk.c", "inn: sprite not random", "+ (walk_rand(&w->rng) / 0x2AAB) * 0x300;", "+ (walk_rand(&w->rng) / 0x2AAB) * 0;")
+m("walk.c", "inn: quilt stays", "    for (unsigned o = 0; o < 0xC8; o += WS_PARTY_SIZE, quilt += 0x100) {", "    for (unsigned o = 0; o < 0xC8; o += WS_PARTY_SIZE) {")
+# Dropped: the sleepers' picture cleared for each member (the original draws each over the last): the bed, the sprite and the
+# quilt leave no pixel of the one before showing, with every member's sprite (SEEN with five members).
+m("walk.c", "inn: sleepers 16 apart", "        at += 0x12;\n        w->inn_n++;", "        at += 0x10;\n        w->inn_n++;")
+m("walk.c", "inn: Zzz place not random", "        unsigned v = (walk_rand(&w->rng) / 0x2000) * 0x7E + 0x5A0;", "        unsigned v = (walk_rand(&w->rng) / 0x2000) * 0 + 0x5A0;")
+m("walk.c", "inn: Zzz frame from 0", "        sc[k + 2] = (uint8_t)(walk_rand(&w->rng) / 0x82);", "        sc[k + 2] = (uint8_t)(walk_rand(&w->rng) * 0);")
+# Dropped: the music kept through the night: only the caller's song follows walk_inn_nights; nothing compared reads it.
+m("walk.c", "inn: Zzz a row lower", "    unsigned at = 0x5BB1;", "    unsigned at = 0x5CF1;")
+m("walk.c", "inn: count every fourth", "    if (w->inn_c > 4) {", "    if (w->inn_c > 3) {")
+m("walk.c", "inn: count from 0", "    w->inn_c = w->shop_c;", "    w->inn_c = 0;")
+m("walk.c", "inn: frame resets at 0xfd", "            if (f > 0xFE) {", "            if (f > 0xFD) {")
+m("walk.c", "inn: Zzz does not wrap", "                if (v > 0x71A)\n                    v = 0x5A0;", "")
+m("walk.c", "inn: no sound", "        walk_sfx_play(w, SFX_RPG, 0x7DCB);", "        (void)0;")
+m("walk.c", "inn: sound over itself", "    if (w->sb == 0x81 && !walk_sfx_busy(w))", "    if (w->sb == 0x81)")
+m("walk.c", "inn: mouse ignored", "    if (!end && walk_mouse(w, &mx, &my, &mb) && (mb & 0xFF))", "    if (0 && walk_mouse(w, &mx, &my, &mb) && (mb & 0xFF))")
+m("walk.c", "inn: Enter held does not end", "    int end = (port60 & 0xFF) < 0x80;", "    int end = (port60 & 0xFF) < 0x80 && (port60 & 0xFF) != 0x1C;")
+m("walk.c", "inn: sound not cut", "    if (w->sb == 0x81)\n        walk_sfx_stop(w);\n    shop_end(w, scr, 0);", "    shop_end(w, scr, 0);")
+m("walk.c", "inn: strip put back at the end", "    shop_end(w, scr, 0);\n}", "    shop_end(w, scr, 1);\n}")
+m("walk.c", "shop: no mouse leftover", "        w->shop_c = mb;\n", "")
+
 def main():
     if not (ROOT / "work/check_battle").exists():
         print("run tools/check_battle.sh first")

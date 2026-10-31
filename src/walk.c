@@ -70,6 +70,11 @@ struct walk {
     unsigned shop_items[3], shop_prices[3];
     unsigned shop_cur, shop_prev, shop_pic, shop_count, shop_pal, shop_latch, shop_mlatch, shop_gw, shop_si;
     unsigned shop_pkc;                  /* what the next picker's count ([bp-0x16]) starts from, a stack leftover */
+    /* the inn's night: the scratch buffer's pictures (RPG.LCP 0x7777 unpacked, the Zzz's places and counts at its start), the
+     * sleepers drawn ([bp-0x1c]), the round counter ([bp-0xc]), and how many nights stopped the music (walk_inn_nights) */
+    uint8_t inn_scr[0x798];
+    unsigned inn_n, inn_c, inn_nights;
+    unsigned shop_c;                    /* the shop's [bp-0xc]: the latched buttons, or the member a picker gave; the night counts from it */
     uint8_t yn_pic[3][47 * 20];         /* the buttons' place as it was, with "yes" pressed, with "no" pressed */
     unsigned yn_shown, yn_sel;          /* [bp-4], [bp-0xc]: 1 yes, 0 no (2: none shown yet) */
     uint8_t ask_art[0x284 + 94 * 16];   /* RPG.LCP 0x1643b decoded: ten 8 x 8 digits, then the 94 x 16 number box after a 4-byte header */
@@ -1425,6 +1430,8 @@ static void order_round(walk_t *w, screen_t *scr, unsigned port60);
 static void data_round(walk_t *w, screen_t *scr, unsigned port60);
 static void shop_round(walk_t *w, screen_t *scr, unsigned port60);
 static void shop_pick_round(walk_t *w, screen_t *scr, unsigned port60);
+static void inn_begin(walk_t *w, screen_t *scr);
+static void inn_round(walk_t *w, screen_t *scr, unsigned port60);
 static void save_given(walk_t *w, screen_t *scr, unsigned slot);
 static void leave_answer(walk_t *w, screen_t *scr, int yes);
 
@@ -1803,6 +1810,10 @@ static void talk_round(walk_t *w, screen_t *scr, unsigned port60)
     }
     if (w->talking == 13) {
         shop_pick_round(w, scr, port60);
+        return;
+    }
+    if (w->talking == 14) {
+        inn_round(w, scr, port60);
         return;
     }
     int mx, my;
@@ -2697,7 +2708,7 @@ unsigned walk_look_entry(const uint8_t *party, const uint8_t *r)
 
 int walk_kind(const walk_t *w)
 {
-    static const int kind[14] = {0, 4, 8, 9, 4, 10, 4, 0, 12, 13, 14, 15, 17, 6};
+    static const int kind[15] = {0, 4, 8, 9, 4, 10, 4, 0, 12, 13, 14, 15, 17, 6, 18};
     if (w->boss_box)
         return 4;
     if (w->left)
@@ -3399,6 +3410,7 @@ static void shop_open(walk_t *w, screen_t *scr, unsigned si)
     w->shop_pic = 0x1482;
     w->shop_count = 0xBB7;
     w->shop_pkc = 0xC6;   /* the picker's [bp-0x16], never set: 0xc6 (a segment byte) at the first picker in every start probed */
+    w->shop_c = 0xBC;     /* [bp-0xc] before anything sets it: 0xbc at scene 2's inn without a mouse (INFERRED constant) */
     w->talking = 12;
 }
 
@@ -3466,6 +3478,7 @@ static void shop_picked(walk_t *w, screen_t *scr)
 {
     unsigned m = battle_picked(w->cast);
     w->shop_pkc = battle_pick_count(w->cast);   /* a picker after it starts from its count (INFERRED, as in F5) */
+    w->shop_c = m & 0xFF;   /* 0x238f4, 0x23af2 */
     battle_free(w->cast);
     w->cast = NULL;
     w->talking = 12;
@@ -3550,6 +3563,7 @@ static void shop_round(walk_t *w, screen_t *scr, unsigned port60)
             mb = 0;
         if (mb)
             w->shop_mlatch = 0;
+        w->shop_c = mb;
         unsigned x = (unsigned)mx, y = (unsigned)my;
         if (x > 0x96 && x < 0xF5) {
             if (y > 0x18 && y < 0x2D)
@@ -3597,7 +3611,119 @@ static void shop_round(walk_t *w, screen_t *scr, unsigned port60)
         return;
     }
     (void)party;
-    note_unbuilt(w, "the inn's night (shop type 4)", w->shop_si / WS_RECORD_SIZE);
+    inn_begin(w, scr);
+}
+
+/* 0x26c04: `h` rows of a `bw`-wide picture, colour 0 clear, into a picture `stride` wide at `at` */
+static void inn_blit(uint8_t *dst, size_t limit, unsigned at, unsigned stride, const uint8_t *px, unsigned bw, unsigned h)
+{
+    blit_nz(dst, limit, stride, at, px, bw, h, -1);
+}
+
+/* 0x23c4e .. 0x240e9, the inn (type 4) with the coins: the strip put back and the price taken; the window shaded 16 times and then
+ * filled with colour 0 (only that is seen); RPG.LCP 0x7777 (0x366 bytes) unpacked into the scratch buffer (0x798 bytes: the bed at 0,
+ * the sleepers' 9 x 14 pictures, the quilts from 0xa0, 0x100 apart), five of its 256-byte blocks from 0xa0 swapped at random; a 16 x 25
+ * picture in the world buffer, cleared once. For each member alive (HP not 0, number below 5): HP to the most, MP (word 0xd) to at least
+ * 20 x his level (byte 0xc, at most 4000); the bed's top 10 rows, his sprite (bank 2, number x 0xc00 + 0x400, one of three at random) at
+ * row 4 and a quilt at row 9 into the picture (each over what the last one left), shown at (115, 88) + 18 a member. Then five Zzz's (a
+ * word: where in the scratch buffer, 0x5a0 .. 0x71a; a byte: a frame count) at random; the music stopped. */
+static void inn_begin(walk_t *w, screen_t *scr)
+{
+    walk_scene_t *s = w->scene;
+    uint8_t *party = s->tab_b, *sc = w->inn_scr, *pic = w->buf;
+    put(scr, SHOP_STRIP_AT, w->shop_strip, 320, 14);
+    shop_set_coins(w, scr, (shop_coins(w) - w16(w->shop_rec, 1)) & 0xFFFF);
+    uint8_t packed[0x366];
+    memset(sc, 0, sizeof w->inn_scr);
+    if (assets_read_at("RPG.LCP", 0x7777, packed, sizeof packed) != 0)
+        note_unbuilt(w, "RPG.LCP without the inn's pictures (0x7777)", w->shop_si / WS_RECORD_SIZE);
+    else
+        walk_rle_unpack(packed, sizeof packed, sc, sizeof w->inn_scr);
+    pic[0] = 0x10, pic[1] = 0, pic[2] = 0x19, pic[3] = 0;
+    memset(pic + 4, 0, 0x190);
+    for (int k = 0; k < 5; k++) {   /* 0x23dab: 0x25c8e swaps the two blocks */
+        unsigned a = ((walk_rand(&w->rng) / 0x199A) << 8) + 0xA0, b = ((walk_rand(&w->rng) / 0x199A) << 8) + 0xA0;
+        uint8_t t[0x100];
+        memcpy(t, sc + a, 0x100);
+        memmove(sc + a, sc + b, 0x100);
+        memcpy(sc + b, t, 0x100);
+    }
+    fill(scr, 0x1440, WALK_ZOOM_W, WALK_ZOOM_H, 0);
+    unsigned at = 0x6E73, quilt = 0xA0;
+    w->inn_n = 0;
+    w->inn_c = w->shop_c;
+    for (unsigned o = 0; o < 0xC8; o += WS_PARTY_SIZE, quilt += 0x100) {
+        if (w16(party, o + 8) == 0 || party[o + 3] >= 5)
+            continue;
+        party[o + 8] = party[o + 0xA];
+        party[o + 9] = party[o + 0xB];
+        unsigned mp = (party[o + 0xC] * 20u) & 0xFFFF;
+        if (mp > 0xFA0)
+            mp = 0xFA0;
+        if (mp > w16(party, o + 0xD)) {
+            party[o + 0xD] = (uint8_t)mp;
+            party[o + 0xE] = (uint8_t)(mp >> 8);
+        }
+        inn_blit(pic, 4 + 0x190, 4, 0x10, sc, 0x10, 0xA);
+        unsigned off = party[o + 3] * 0xC00u + 0x400 + (walk_rand(&w->rng) / 0x2AAB) * 0x300;
+        inn_blit(pic, 4 + 0x190, 0x44, 0x10, s->bank2 + off, 0x10, 0x10);
+        inn_blit(pic, 4 + 0x190, 0x94, 0x10, sc + quilt, 0x10, 0x10);
+        blit_nz(scr->pix, sizeof scr->pix, SCREEN_W, at, pic + 4, 0x10, 0x19, -1);   /* 0x27371 */
+        at += 0x12;
+        w->inn_n++;
+    }
+    for (unsigned k = 0; k < 15; k += 3) {   /* 0x2400b */
+        unsigned v = (walk_rand(&w->rng) / 0x2000) * 0x7E + 0x5A0;
+        sc[k] = (uint8_t)v;
+        sc[k + 1] = (uint8_t)(v >> 8);
+        sc[k + 2] = (uint8_t)(walk_rand(&w->rng) / 0x82);
+    }
+    if (w->fm == 0x81)   /* 0x24081: the music stopped (0x165d:0x126) */
+        w->inn_nights++;
+    w->talking = 14;
+}
+
+/* 0x240ec .. 0x2428b: a round of the night. Each sleeper's Zzz (9 x 14, at (113, 73) + 18 a member) from its place in the scratch buffer;
+ * every fifth round each frame count goes up, and past 0xfe back to 0 with the place one picture on (0x7e, from 0x71a back to 0x5a0);
+ * with the sounds on and none playing, RPG.LCP 0x7dcb played again. A make code on the keyboard port (no release needed: the key that
+ * chose the inn, still held, ends it at once) or any mouse button ends it: the sound cut, and the shop left without its strip. */
+static void inn_round(walk_t *w, screen_t *scr, unsigned port60)
+{
+    uint8_t *sc = w->inn_scr;
+    unsigned at = 0x5BB1;
+    for (unsigned i = 0; i < w->inn_n; i++, at += 0x12) {
+        unsigned v = sc[3 * i] | sc[3 * i + 1] << 8;
+        if (v + 9 * 14 <= sizeof w->inn_scr)
+            put(scr, at, sc + v, 9, 14);
+    }
+    w->inn_c = (w->inn_c + 1) & 0xFF;
+    if (w->inn_c > 4) {
+        w->inn_c = 0;
+        for (unsigned k = 0; k < 15; k += 3) {
+            uint8_t f = (uint8_t)(sc[k + 2] + 1);
+            if (f > 0xFE) {
+                f = 0;
+                unsigned v = (sc[k] | sc[k + 1] << 8) + 0x7E;
+                if (v > 0x71A)
+                    v = 0x5A0;
+                sc[k] = (uint8_t)v;
+                sc[k + 1] = (uint8_t)(v >> 8);
+            }
+            sc[k + 2] = f;
+        }
+    }
+    if (w->sb == 0x81 && !walk_sfx_busy(w))
+        walk_sfx_play(w, SFX_RPG, 0x7DCB);
+    int end = (port60 & 0xFF) < 0x80;
+    int mx, my;
+    unsigned mb = 0;
+    if (!end && walk_mouse(w, &mx, &my, &mb) && (mb & 0xFF))
+        end = 1;
+    if (!end)
+        return;
+    if (w->sb == 0x81)
+        walk_sfx_stop(w);
+    shop_end(w, scr, 0);
 }
 
 static void shop_pick_round(walk_t *w, screen_t *scr, unsigned port60)
@@ -4585,6 +4711,11 @@ void walk_set_show(walk_t *w, void (*show)(void *ctx, screen_t *scr), void *ctx)
 void walk_set_live_port(walk_t *w, unsigned (*port)(void))
 {
     w->live_port = port;
+}
+
+unsigned walk_inn_nights(const walk_t *w)
+{
+    return w->inn_nights;
 }
 
 unsigned walk_scene_changes(const walk_t *w)

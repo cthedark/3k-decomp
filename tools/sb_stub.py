@@ -41,7 +41,7 @@ def block_passes(block):
 class SoundBlaster:
     def __init__(self, emu, data_dir):
         self.emu = emu
-        self.files = {name: Path(data_dir, name).read_bytes() for name in ('SND_EF.1', '_1_.LOC')}
+        self.files = {name: Path(data_dir, name).read_bytes() for name in ('SND_EF.1', '_1_.LOC', 'RPG.LCP')}
         self.events = []
         self.callers = []
         self.until = None     # the pass at whose top the sound playing is over; None when none plays

@@ -1024,7 +1024,7 @@ static int play_walk(screen_t *scr)
         return -1;
     }
     const walk_scene_t *sc = walk_scene(w);
-    unsigned scene_changes = walk_scene_changes(w);
+    unsigned scene_changes = walk_scene_changes(w), inn_nights = walk_inn_nights(w);
     const uint32_t start = platform_ticks_ms();
     uint32_t next = start;
     int event_reported = 0;
@@ -1093,6 +1093,11 @@ static int play_walk(screen_t *scr)
         feed_mouse(w);
         unsigned world_fm = *walk_fm(w);
         got = walk_pass(w, scr, ticks, platform_port60());
+        if (walk_inn_nights(w) != inn_nights) {   /* an inn's night stops the music (0x24081); nothing read starts it again */
+            inn_nights = walk_inn_nights(w);
+            song_stop(song);
+            song = NULL;
+        }
         if (walk_scene_changes(w) != scene_changes) {   /* a door: the new scene's song from its start, with the music on (0x1132e) */
             scene_changes = walk_scene_changes(w);
             sc = walk_scene(w);

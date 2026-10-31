@@ -97,7 +97,7 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
 The earlier list (formats, chaining, `TAB.TAB`, `TV.EXE`, the speed class) is done or folded into the port; the save format (`SAVEnn.000/.001/.002`)
 is known for writing (`findings.md` step 37) and reading ("WALK0.SL: loading a save", `port.md` 9p). For the world, in the order the operator and Kiro agreed to work:
 1. The keys of `WALK.SL`'s main loop: the F-key actions, 1-4 and A (sliding) are built (`port.md` 9a to 9o), and Space (shots) (7f).
-2. The scene record block `0x172f0` .. `0x18b82` (a dispatch on the record's kind) and the kinds 0, 7, 8, 0xe, 0x11 and 0x13 (step 39 says what each is); kind 5, the shops, is built except the inn's night
+2. The scene record block `0x172f0` .. `0x18b82` (a dispatch on the record's kind) and the kinds 0, 7, 8, 0xe, 0x11 and 0x13 (step 39 says what each is); kind 5, the shops and the inn, is built
    (`port.md` 9r).
    Kind 1 is a door to another scene and kind 4 sets a flag, both built (`port.md` 9q); kind 0x14 is a sell counter, built for F7
    (`port.md` 9n).

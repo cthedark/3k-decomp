@@ -802,6 +802,23 @@ DOPTS="--word 7:10:1000 --hp 0:5"
 run shop_heal_row2 2 160 36 100 $HIN --key 40:0x50 --key 42:0xd0 --key 50:0x1c --key 52:0x9c --key 80:0x01 --key 82:0x81
 DOPTS="--word 7:10:1000 --join 1 --join 2"
 run shop_inn 2 212 48 100 --key 1:0x4d --key 20:0xcd --key 80:0x01 --key 82:0x81
+# the inn's night (step 41): Enter released at once then Space; Enter held (one round); the Sound Blaster (its sound again and
+# again); by mouse (a button ends it); 2460 rounds with five members, one fallen; too few coins
+P="--key 1:0x4d --key 20:0xcd"
+DOPTS="--word 7:10:1000 --join 1 --join 2 --hp 0:5 --hp 1:7"
+run shop_night 2 212 48 400 $P --key 40:0x1c --key 41:0x9c --key 300:0x39 --key 302:0xb9 --key 380:0x01 --key 382:0x81
+DOPTS="--word 7:10:1000 --join 1"
+run shop_night_held 2 212 48 120 $P --key 40:0x1c --key 50:0x9c --key 100:0x01 --key 102:0x81
+run shop_night_sb 2 212 48 500 --sb $P --key 40:0x1c --key 41:0x9c --key 450:0x39 --key 452:0xb9
+run shop_night_mouse 2 212 48 300 $P --key 30:0x81 --mouse 0:300:180:0 --mouse 35:200:30:0 --mouse 40:200:30:1 \
+    --mouse 41:200:30:0 --mouse 200:200:30:1 --mouse 202:200:30:0
+DOPTS="--word 7:10:1000 --join 1 --join 2 --join 3 --join 4 --hp 2:0"
+run shop_night_long 2 212 48 2500 $P --key 40:0x1c --key 41:0x9c
+# MP: the hero's 0 rises to 20 x his level; a level of 250 gives the cap, 4000; a member whose MP is above it keeps it
+DOPTS="--word 7:10:1000 --word 0:13:0 --join 1 --byte 1:12:250 --word 1:13:0 --join 2 --word 2:13:9000"
+run shop_night_mp 2 212 48 120 $P --key 40:0x1c --key 41:0x9c --key 100:0x39 --key 102:0xb9
+DOPTS="--word 7:10:10 --join 1"
+run shop_night_poor 2 212 48 100 $P --key 40:0x1c --key 41:0x9c --key 80:0x01 --key 82:0x81
 DOPTS=""
 DOPTS=""
 DOPTS=""

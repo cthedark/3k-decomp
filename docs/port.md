@@ -1418,4 +1418,7 @@ the price), Esc or the right button leave. A healer (type 3) restores one member
   its Enter presses reached the shop, not the world.
 - **Guesses:** three stack leftovers (findings step 40): the healer's palette count is the hero's y, the first picker's count 0xc6, the
   count after a picker that bought nothing.
-- **Not built:** the inn's night (type 4); the record block's kinds 0, 7, 8, 0xe, 0x11 and 0x13.
+- **The inn's night (also 2026-10-31):** the inn heals every member alive, raises his MP to 20 x his level, and shows the party asleep with
+  Zzz's until a key or a button (`inn_begin`, `inn_round`; findings step 41); the music stops, and with the Sound Blaster its sound
+  loops (`SFX_RPG`). Checked: 7 more `shop_night` starts, all identical; 28 mutations, all caught, two dropped with notes.
+- **Not built:** the record block's kinds 0, 7, 8, 0xe, 0x11 and 0x13.

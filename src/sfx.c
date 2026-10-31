@@ -18,7 +18,7 @@ struct sfx_bank {
     int ncache;
 };
 
-static const char *const NAMES[SFX_FILES] = {"SND_EF.1", "_1_.LOC"};
+static const char *const NAMES[SFX_FILES] = {"SND_EF.1", "_1_.LOC", "RPG.LCP"};
 
 const char *sfx_file_name(unsigned file)
 {

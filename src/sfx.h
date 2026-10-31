@@ -12,7 +12,7 @@
 
 #include "voc.h"
 
-enum { SFX_EF = 0, SFX_LOC = 1, SFX_FILES = 2 };   /* SND_EF.1, _1_.LOC */
+enum { SFX_EF = 0, SFX_LOC = 1, SFX_RPG = 2, SFX_FILES = 3 };   /* SND_EF.1, _1_.LOC, RPG.LCP (the inn's night, 0x7dcb) */
 
 typedef struct sfx_bank sfx_bank_t;
 

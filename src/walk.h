@@ -144,6 +144,8 @@ void walk_set_zoom_show(walk_t *w, void (*show)(void *ctx, screen_t *scr), void 
 /* How many doors have changed the scene: when it moves, walk_scene() is a new scene (the old pointer is freed) and, with the music
  * on, the original starts the new scene's song from its start (the loader, 0x1132e). */
 unsigned walk_scene_changes(const walk_t *w);
+/* How many inn nights have stopped the music (0x24081, with the music on): the caller stops the song when it moves. */
+unsigned walk_inn_nights(const walk_t *w);
 /* The keyboard port's value now (platform_port60), which a door's picture reads between its steps; without it, the pass's value. */
 void walk_set_live_port(walk_t *w, unsigned (*port)(void));
 /* F4's picker and magic list while they run (a battle_t in its world mode, battle.h), else NULL. */

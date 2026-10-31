@@ -3933,4 +3933,38 @@ picker, Down past the third row, the mouse and the rows' edges, a 900-pass and a
 `tools/mutate_battle.py`: 42 shop mutations, all caught (8 only after the last starts were added); one dropped (the record loop not run
 again after a shop: a shop sets no flag). Three older patterns the shop duplicated were repointed and caught.
 
-**Not built:** the inn's night (type 4, Enter on the first row with the coins): the port says so and the shop stays open.
+**The inn's night** (type 4): built 2026-10-31, step 41.
+
+## WALK.SL step 41: the inn's night (shop type 4, `0x23c09` .. `0x2428b`), 2026-10-31
+
+READ from the code (`work/b11/shop.asm`), built and CONFIRMED by the comparison. Enter, Space or the left button on the inn's first row,
+with the coins for its price (its record's word times the members alive):
+- the strip at (0, 152) put back and the price taken (the coins drawn again);
+- the window grabbed and shaded 16 times, each put back, then filled with colour 0 (only that is seen: no wait between);
+- `RPG.LCP` 0x7777 (0x366 bytes) read into the world buffer and unpacked into the scratch buffer: 0x798 bytes, a 16 x 10 bed at 0, the
+  Zzz's 9 x 14 pictures from 0x5a0 (0x7e apart), and five 16 x 16 quilts from 0xa0 (0x100 apart); a 16 x 25 picture with its header
+  at the world buffer's start, cleared once (`0x273f8`);
+- five times, two `rand()`s: the 256-byte blocks at 0xa0 + 0x100 x (rand / 0x199a) swapped (`0x25c8e`), which shuffles the quilts;
+- for each party record alive (HP not 0, number below 5): HP to the most (word 0xa), MP (word 0xd) to at least 20 x his level (byte
+  0xc), the floor at most 4000; then into the picture (`0x26c04`, colour 0 clear, each over what the last left): the bed's 10 rows at row
+  0, his sprite (bank 2 + number x 0xc00 + 0x400 + 0x300 x (rand / 0x2aab)) at row 4, the quilt of his place in the party at row 9; the
+  picture shown (`0x27371`) at (115, 88) + 18 a sleeper. A fallen member is neither healed nor drawn, and his quilt is skipped;
+- the scratch buffer's first 15 bytes: five Zzz's, a word (0x5a0 + 0x7e x (rand / 0x2000)) and a byte (rand / 0x82);
+- the music stopped (`0x165d:0x126`) when its flag is 0x81; with the Sound Blaster's flag 0x81, `RPG.LCP` 0x7dcb (0xc350 bytes, a VOC
+  sound-data block) read into the world buffer.
+
+**The night's loop** (`0x240ec`, kind 18 in `tools/battle_check.py`): each round, every sleeper's Zzz (9 x 14 from the scratch buffer at
+its word, opaque) at (113, 73) + 18 a sleeper; a counter `[bp-0xc]`, and past 4 every Zzz's byte goes up, and from 0xfe to 0 with its
+word 0x7e on (past 0x71a back to 0x5a0); with the sounds on and none playing, the sound again (`0x1c68e`); then the keyboard port read
+raw: a make code ends it, so the Enter that chose the inn, if still held, ends it in its first round; else any mouse button ends it.
+At the end the sound is cut and the shop ends without putting its strip back; the world draws its window again on the next pass.
+Nothing read starts the music again (GUESS: it stays off until the next song is started).
+
+**Stack leftover:** the counter `[bp-0xc]` is the shop's: the latched mouse buttons of its last round with a driver, or the low byte of
+the member a picker gave; before either, 0xbc (SEEN at scene 2's inn without a mouse; INFERRED constant).
+
+**Checked:** `tools/check_battle.sh`, 7 `shop_night` starts, all identical at every pass: Enter released at once then Space, Enter held
+(one round), the Sound Blaster (its sound five times), the mouse, 2,460 rounds with five members one fallen, the MP floor (0, the 4000
+cap, one above it), too few coins. `tools/mutate_battle.py`: 28 inn mutations, all caught (two after the MP start was added); two
+dropped with notes. ASan / UBSan clean on four starts; a real-time night under SDL's dummy drivers. `tools/sb_stub.py` now also finds
+sounds in `RPG.LCP`, and `src/sfx.c` reads it (`SFX_RPG`).
