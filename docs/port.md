@@ -1403,3 +1403,19 @@ from its start.
   `src/walkscene.c`; `tests/test_walk.c` `test_door_records`. Checked: 7 more `door_` starts (25 in all), all identical; the
   picture's rounds compared one by one; 36 door, picture, kind 4 and loop mutations in all, every one caught, two dropped with notes.
 - **Not built:** the record block's other kinds (0, 5, 7, 8, 0xe, 0x11, 0x13).
+
+## Milestone 9r: shops (kind 5) (C), built 2026-10-31
+Walking onto a shop's record opens it as the original does (`docs/findings.md` "WALK.SL step 40"): the view darkens, the shopkeeper's
+picture and a list of up to three items with prices appear, and a greeting runs along the bottom. Up and Down (or the pointer) light a
+row, Enter, Space or the left button buy it for a member chosen in the picker (into his first empty item place, when the coins cover
+the price), Esc or the right button leave. A healer (type 3) restores one member's HP for its price.
+
+- **Code:** `src/walk.c` (`shop_open`, `shop_round`, `shop_pick`, `shop_picked`, `shop_end`, `shop_number`); `src/battle.c`
+  (`battle_world_pick`, `battle_picked`, `battle_pick_count`: the member picker alone, on the palette itself);
+  `tools/battle_check.py` (the shop's loop `0x23386`, kind 17, and the inn's `0x240ec`, kind 18).
+- **Checked:** `tools/check_battle.sh`, 19 `shop_` starts, all identical at every pass; `tools/mutate_battle.py`: 42 shop mutations, all
+  caught, one dropped with a note; ASan / UBSan clean on five starts; a real-time run under SDL's dummy drivers went into the shop and
+  its Enter presses reached the shop, not the world.
+- **Guesses:** three stack leftovers (findings step 40): the healer's palette count is the hero's y, the first picker's count 0xc6, the
+  count after a picker that bought nothing.
+- **Not built:** the inn's night (type 4); the record block's kinds 0, 7, 8, 0xe, 0x11 and 0x13.

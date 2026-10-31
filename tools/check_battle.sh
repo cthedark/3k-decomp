@@ -753,6 +753,56 @@ DOPTS="--speed 0"; run door_trip_slow0 0 62 49 200 $TRIP
 DOPTS="--speed 1"; run door_trip_slow1 0 62 49 200 $TRIP; DOPTS=""
 run door_trip_mouse 0 62 49 200 $TRIP --mouse 0:150:60:0
 for seed in 1 2 3; do run "door_walk$seed" 0 62 49 1500 $($PY tools/walk_keys.py fuzz $seed 1500); done
+# shops (kind 5, step 40): scene 0's food shop (type 0) entered from outside its door: purchases by the hero, the second member and the
+# fifth, too few coins, no room, Esc in the picker, the mouse, a 900-pass stay; scene 2's two type 2 shops; scene 2's healer (type 3:
+# the hero, a fallen member, too few coins, the second row) and its inn's opening (type 4; the night is not built)
+SIN="--key 1:0x48 --key 32:0xc8 --key 33:0x4d --key 45:0xcd"
+DOPTS="--word 7:10:1000"
+run shop_buy 0 106 33 140 $SIN --key 60:0x1c --key 62:0x9c --key 75:0x1c --key 77:0x9c --key 120:0x01 --key 122:0x81
+run shop_pkesc 0 106 33 140 $SIN --key 60:0x1c --key 62:0x9c --key 75:0x01 --key 77:0x81 --key 110:0x01 --key 112:0x81
+run shop_long 0 106 33 900 $SIN --key 60:0x1c --key 62:0x9c --key 75:0x1c --key 77:0x9c
+FULL=""; for o in 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39; do FULL="$FULL --byte 0:$o:1"; done
+DOPTS="--word 7:10:1000 $FULL"
+run shop_full 0 106 33 140 $SIN --key 60:0x1c --key 62:0x9c --key 75:0x1c --key 77:0x9c --key 120:0x01 --key 122:0x81
+DOPTS="--word 7:10:1000 --join 1"
+run shop_buy2 0 106 33 160 $SIN --key 60:0x50 --key 62:0xd0 --key 64:0x50 --key 66:0xd0 --key 70:0x1c --key 72:0x9c \
+    --key 80:0x4d --key 82:0xcd --key 90:0x1c --key 92:0x9c --key 140:0x01 --key 142:0x81
+run shop_mouse 0 106 33 160 $SIN --key 46:0x81 --mouse 0:300:180:0 --mouse 55:200:60:0 --mouse 60:200:60:1 \
+    --mouse 62:200:60:0 --mouse 70:160:83:0 --mouse 74:160:83:1 --mouse 76:160:83:0 --mouse 100:200:30:0 --mouse 120:250:100:2 \
+    --mouse 122:250:100:0
+DOPTS="--word 7:10:1000 --join 1 --join 2 --join 3 --join 4"
+run shop_fifth 0 106 33 160 $SIN --key 60:0x1c --key 62:0x9c --key 70:0x4b --key 72:0xcb --key 80:0x1c --key 82:0x9c \
+    --key 140:0x01 --key 142:0x81
+# Space buys, with the Sound Blaster; two purchases (the second picker's count starts after the coins are drawn); Down past the third
+# row; the pointer on the rows' edges (y 45 and 66); a 4000-pass stay for the shopkeeper's blinks
+DOPTS="--word 7:10:1000"
+run shop_space_sb 0 106 33 120 --sb $SIN --key 60:0x39 --key 62:0xb9 --key 75:0x1c --key 77:0x9c --key 100:0x01 --key 102:0x81
+run shop_twice 0 106 33 260 $SIN --key 60:0x1c --key 62:0x9c --key 75:0x1c --key 77:0x9c --key 90:0x1c --key 92:0x9c \
+    --key 160:0x1c --key 162:0x9c --key 240:0x01 --key 242:0x81
+run shop_down4 0 106 33 120 $SIN --key 60:0x50 --key 62:0xd0 --key 64:0x50 --key 66:0xd0 --key 68:0x50 --key 70:0xd0 \
+    --key 72:0x48 --key 74:0xc8 --key 76:0x1c --key 78:0x9c --key 100:0x01 --key 102:0x81
+run shop_edges 0 106 33 120 $SIN --key 46:0x81 --mouse 0:300:180:0 --mouse 55:200:45:0 --mouse 65:200:66:0 --mouse 75:200:44:0 \
+    --mouse 85:200:87:0 --mouse 95:200:86:0 --mouse 105:250:100:2 --mouse 107:250:100:0
+run shop_stay 0 106 33 4000 $SIN
+DOPTS="--word 7:10:5"
+run shop_poor 0 106 33 120 $SIN --key 60:0x50 --key 62:0xd0 --key 64:0x50 --key 66:0xd0 --key 70:0x1c --key 72:0x9c \
+    --key 100:0x01 --key 102:0x81
+DOPTS="--word 7:10:1000"
+run shop_t2a 2 56 15 160 --key 1:0x4d --key 20:0xcd --key 40:0x50 --key 42:0xd0 --key 44:0x50 --key 46:0xd0 --key 48:0x48 \
+    --key 50:0xc8 --key 60:0x1c --key 62:0x9c --key 75:0x1c --key 77:0x9c --key 140:0x01 --key 142:0x81
+run shop_t2b 2 130 18 120 --key 1:0x4b --key 20:0xcb --key 40:0x48 --key 60:0xc8 --key 70:0x1c --key 72:0x9c --key 85:0x1c \
+    --key 87:0x9c --key 110:0x01 --key 112:0x81
+HIN="--key 1:0x4d --key 14:0xcd"
+DOPTS="--word 7:10:1000 --hp 0:5 --word 0:16:7 --join 1 --hp 1:0"
+run shop_heal 2 160 36 160 $HIN --key 40:0x1c --key 42:0x9c --key 55:0x1c --key 57:0x9c --key 80:0x1c --key 82:0x9c \
+    --key 90:0x4d --key 92:0xcd --key 100:0x1c --key 102:0x9c --key 140:0x01 --key 142:0x81
+DOPTS="--word 7:10:40 --hp 0:5"
+run shop_heal_poor 2 160 36 100 $HIN --key 40:0x1c --key 42:0x9c --key 80:0x01 --key 82:0x81
+DOPTS="--word 7:10:1000 --hp 0:5"
+run shop_heal_row2 2 160 36 100 $HIN --key 40:0x50 --key 42:0xd0 --key 50:0x1c --key 52:0x9c --key 80:0x01 --key 82:0x81
+DOPTS="--word 7:10:1000 --join 1 --join 2"
+run shop_inn 2 212 48 100 --key 1:0x4d --key 20:0xcd --key 80:0x01 --key 82:0x81
+DOPTS=""
 DOPTS=""
 DOPTS=""
 # the world's start zoom (step 23; tools/zoom_check.py): its 13 steps in scenes 0, 1, 34 and four dark scenes (6, 9, 23, 47), from the

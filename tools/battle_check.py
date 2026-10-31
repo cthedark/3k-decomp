@@ -48,11 +48,12 @@ MAP_TOP = 0x1CA82
 ORDER_TOP = 0x1B834
 # F10's party data (0x1a122): screen, palette and rand
 DATA_TOP = 0x1A641
+SHOP_TOP, INN_TOP = 0x23386, 0x240EC
 KIND = {WORLD_TOP: 0, BATTLE_TOP: 1, REWARDS_TOP: 3, DIALOG_TOP: 4, MAGIC_TOP: 5, PICK_TOP: 6, ITEMS_TOP: 7, YESNO_TOP: 8,
-        NUMBER_TOP: 9, TAKE_TOPS[0]: 10, TAKE_TOPS[1]: 10, EQUIP_TOP: 11, USE_TOP: 12, MAP_TOP: 13, ORDER_TOP: 14, DATA_TOP: 15}
+        NUMBER_TOP: 9, TAKE_TOPS[0]: 10, TAKE_TOPS[1]: 10, EQUIP_TOP: 11, USE_TOP: 12, MAP_TOP: 13, ORDER_TOP: 14, DATA_TOP: 15, SHOP_TOP: 17, INN_TOP: 18}
 KIND_NAME = {0: 'world', 1: 'battle', 2: 'lost', 3: 'rewards', 4: 'message box', 5: 'magic list', 6: 'member picker',
              7: 'item list', 8: 'yes / no', 9: 'number', 10: 'take', 11: 'equipment', 12: 'use prompt', 13: 'map', 14: 'order', 15: 'data',
-             'flash': 'face flash and zoom steps', 'sounds': 'sounds', 'files': 'files written', 16: 'left'}
+             'flash': 'face flash and zoom steps', 'sounds': 'sounds', 'files': 'files written', 16: 'left', 17: 'shop', 18: 'inn'}
 MON = 0x3C
 LOCALS = (0x52, 0x70, 0x44, 0x5E, 0x82, 0x72, 0x38, 0x42, 0x8C, 0x0C, 0x58, 0x14, 0x84, 0x36, 0x10, 0x78)
 BSTATE = 4 + MON + len(LOCALS) + 200 + 60

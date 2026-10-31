@@ -3844,3 +3844,93 @@ picture, kind 4 and loop mutations, all caught (two only after the last two star
 with a picture taken like the others: no start reached one before they were built; turning ten records: 0 or 60 turns leave them
 as they were). The two cut-scene patterns the loop change moved were repointed and re-run, both caught. The loader does not set the DAC (its only `0x1732` call is the window's
 copy), so the port's door does not either.
+
+## WALK.SL step 39: the scene-record kinds still unbuilt (read only), 2026-10-31
+
+READ from the code (`work/b11/rec.asm`, `0x172f0` .. `0x18b82`), not run or compared. Far calls are named by their linear address
+(segment x 16 + offset + 0x10000); WALK.SL's data segment starts at 0x2cc60, so `ds:0x11c` is `ending.sl`. Counts are of the shipped
+`__1.NOW` (`work/b11/kinds.py`). The flag tests are `0x2c158` mode 0 on (byte, bit); "the pointer off / on" is `0x1732:8` /
+`0x1723:0xc` around the action when a mouse driver is there (`[0x382]:4`).
+
+- **Kind 0, a warp (26: scenes 23 and 50):** if flag (byte 3, bit byte 4) is set: up to 60 steps of the party turning (`0x2489a`,
+  one every second round), the world drawn (`0x19680`) and shown, a key down ends it; then the view slides one cell a round towards
+  (byte 5, byte 6), the world drawn with the buffer's byte 0 = 0, until it is there; then all five party records and the 13 trail
+  entries are put at that place. Byte 6 is a full y here.
+- **Kind 5, a shop (29):** the pointer off; the record's bytes 3 .. 8 copied to `[bp-0x80]`; `0x22c42` (it reads `SHOP_PIC.LCC`,
+  `MES_TXT.LCC` and `OBJECT.LCC`: the bytes are GUESSED to be the six things for sale); the pointer on. The record finder returns
+  0x320 (no record) for a kind 5 under odd coordinates, so the hero must stand exactly on it.
+- **Kind 7, a number lock (8: scenes 4, 21, 30, 43):** if flag (byte 5, bit byte 6) is not set: message 9 (colour 0x68, not waiting),
+  the number box (`0x18fdc`); a number equal to the word at byte 3 sets the flag and plays SND_EF 0x1bf5; another gives message 10
+  (waiting). Scene 43 has five of them.
+- **Kind 8, a boat ride (8: scenes 1, 3, 7):** the pointer off; `0x1be44` (it reads `BOAT.LCZ`); then as a door: the villagers' byte
+  8 put back, the scene's state into `__1.NOW` (`ds:0x114`), party bytes 510 .. 513 = the record's bytes 3 .. 6, `[bp-0x74]` set.
+- **Kind 0xe (1: scene 22):** if the party table's word at 0x122 is not 0: `0x24962` (it reads `RPG.LCP`, `MES_TXT.LCC` and
+  `SHOP_PIC.LCC`; not read further), then the party and trail put at (byte 3, 2 x byte 4) and the roof flag `[bp-0x9e]` cleared.
+- **Kind 0x11, a scripted talk (2: scenes 22, 42), with kind 0x12 after it (1):** if flag (byte 3, bit byte 4) is set and byte 5 is not
+  0: flag (byte 0xd, bit byte 0xe) set, byte 5 = 0, `0x1732:0xd8(map buffer, 0x14, 0)` (not read); bytes 6 .. 11, and when the next
+  record is kind 0x12 its bytes 3 .. 14, are up to six (message word, sound byte) entries: for each, the sound (`0x1c5e2`) when not 0,
+  then the message box (colour 0xa8, waiting) when the word is not 0.
+- **Kind 0x13, the ending (2: scene 52):** if flag (byte 3, bit byte 4) is set: the Sound Blaster driver ended, the music stopped,
+  the buffers freed and `execl("ending.sl")`.
+
+## WALK.SL step 40: the shop (kind 5, `0x22c42`), 2026-10-31
+
+READ from the code (`work/b11/shop.asm`, `0x22c42` .. `0x24301`), built for types 0 to 3 and CONFIRMED by the comparison (see
+**Checked** below); the inn's night (type 4) is read only. First SEEN in the oracle: the shipped start walked into scene 0's
+shop (record 9 at (110, 28); `work/b11/shop1.sh`: `tools/walk_route.py 110:56` gives the keys), the loop entered at pass 347 and left on
+Esc at pass 460. `tools/battle_check.py` now knows the shop's loop top `0x23386` (kind 17) and the inn's rest `0x240ec` (kind 18).
+The record's bytes 3 .. 8 are copied to `[bp-0x80]` and passed: byte 3 is the shop's type `t`, bytes 4 .. 6 its three items (types 0
+to 2) or a price word at 4 (types 3, 4). Of the 29 shops: types 0, 1, 2 sell things; 3 and 4 have one price. All the helpers are
+ones the port already has.
+
+**Opening:**
+- the window (192 x 168 at (64, 16)) grabbed and shaded six times (`0x25dca` with the shading table) and put back: it darkens;
+- the 320 x 14 strip at (0, 152) grabbed into a scratch buffer, copied twice (+0x1954 and +0x2ad8), the first shaded three times;
+- `SHOP_PIC.LCC` at `t` x 0x3d86, 0x3d86 bytes: three 70 x 75 pictures of the shopkeeper, 0x1482 apart; the first at (70, 22);
+- `MES_TXT.LCC` at `t` x 0x80 + 6: the greeting (0x78 bytes, up to `#`) drawn centred, colour 0x10, into the first strip copy, and
+  10 bytes at 0x306 into the second at x 120 (SEEN: 歡迎光臨!要買些吃的嗎? under scene 0's shop);
+- three boxes (`0x270e0(at, w, h, colour)`): 97 x 64 of colour 0x63 at (149, 23), 97 x 64 of 0x66 at (150, 24), its inside 96 x 63
+  of 0xae (a frame with a shadow);
+- types 0 to 2: for each of the three items, its `OBJECT.LCC` record ((item - 1) x 30, 0x1c bytes) into the map buffer; the item number
+  and its price (word 0x12) kept at map buffer + 0xbb8 + 3k; its name (12 bytes, colour 0x10) with a shadow of colour 0x1a a row
+  down, in the list's row k (21 rows apart from (150, 24)); its price (`0x24302`, five digits) 15 rows and 48 pixels in;
+- types 3 and 4: `MES_TXT.LCC` 0x3cb (type 3) or 0x3bf (type 4), 12 bytes, colour 0xa8 with a shadow of 0xac, in the first row; the
+  price at row 2: type 3 the record's word, type 4 that times the members alive (number below 5, HP not 0), which is written back
+  into the record.
+
+**The loop** (`0x23386`):
+- a pass counter from 0xbb7 (at most 60,000): at 2 the second strip is shown, at 3000 the first; so the greeting shows at once;
+- the palette steps every 26th pass (on the palette itself); now and then (`rand()` below 7 or above 0x7ff8) the shopkeeper's
+  picture moves to the next of its three, which blinks;
+- the lit row: its 96 x 21 recoloured 0xae -> 9, the one before back 9 -> 0xae;
+- the keys after a release (`0x274b8` then the BIOS buffer emptied); the mouse: over the list (x 151 .. 244) the row under it is lit,
+  the left button is Enter, the right is Esc. Esc leaves; Up and Down move the lit row (three rows);
+- **Enter or Space, types 0 to 2 (a purchase):** if the coins (party word 0x122) cover the price, the member picker without faces
+  (`0x1a8a4` with faces, a fallen member not taken, as F4's); the item goes into the first empty item place (bytes 0x14 .. 0x27) of the member picked, the price is taken
+  from the coins, the coins redrawn (`0x1bd6e`), and SND_EF 0x1bf5 plays. No room: nothing. Too few coins: nothing;
+- **type 3, first row (healing one member):** if the coins cover the price, the picker (args 1, 1); the member's HP (word 8) becomes
+  his most HP (word 0xa), word 0x10 becomes 0, the price is taken, the sound; the picker here takes a fallen member too;
+- **type 4, first row (the inn):** if the coins cover the price: it is taken; the window is shaded 16 times; `RPG.LCP` 0x7777
+  (0x366 bytes) is unpacked into the scratch buffer (the stars' pictures); every member alive gets his HP to the most, word 0x10 to 0 and his MP (word 0xd)
+  to at least 20 x his level (byte 0xc), at most 4000; then the night: five stars at random places, the music stopped and, with a Sound Blaster, a
+  sound read from `RPG.LCP` 0x7dcb (0xc350 bytes) played over and over, and a loop (`0x240ec`) twinkling them until a key or a button.
+- **Leaving:** the pointer off, the strip at (0, 152) put back; the world redraws itself on the next pass.
+
+**The mouse** (`0x23664`): over x 151 .. 244 the row is y 25 .. 44, 45 .. 65 or 67 .. 86 (66 lights none), and the left button is
+Enter there; the right button leaves anywhere. **The second strip** (MES_TXT.LCC 0x306) shows at the counter's 2, after a purchase or a
+healing, until 3000.
+
+**Stack leftovers:** the palette count `[bp-0x16]` is never set for types 3 and 4: 0x48 at scene 2's healer and 0x60 at its inn, the
+hero's y both times (INFERRED: y; any value above 0x19 steps at once). For types 0 to 2 the item records' file offsets count it down to
+1. The first picker's count is 0xc6 (SEEN at three shops, a segment byte, as F8's); after the coins are drawn it is 0 (SEEN once: what
+`0x1bd6e`'s callees leave there); after a picker that bought nothing the port keeps the picker's own count (INFERRED, as in F5).
+
+**Checked:** `tools/check_battle.sh`, 19 `shop_` starts, all identical at every pass, the member picker's passes included
+(`tools/battle_check.py` counts the shop's loop `0x23386` as kind 17): scene 0's food shop entered from outside its door (purchases by
+the hero, the second member and the fifth, with Space and the Sound Blaster, twice in a row, too few coins, no room, Esc in the
+picker, Down past the third row, the mouse and the rows' edges, a 900-pass and a 4000-pass stay for the shopkeeper's blinks); scene
+2's two type 2 shops; its healer (the hero, a fallen member with word 0x10 set, too few coins, the second row); its inn's opening.
+`tools/mutate_battle.py`: 42 shop mutations, all caught (8 only after the last starts were added); one dropped (the record loop not run
+again after a shop: a shop sets no flag). Three older patterns the shop duplicated were repointed and caught.
+
+**Not built:** the inn's night (type 4, Enter on the first row with the coins): the port says so and the shop stays open.

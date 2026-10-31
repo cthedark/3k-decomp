@@ -103,7 +103,9 @@ struct battle {
     /* F4 in the world (battle_world_cast): the list's buffer byte 0 is 0 there ([bp-0xe] of 0x21486); 0 while the caster is being
      * picked, 1 from his list on */
     int world, world_stage;
-    int world_items;                   /* F5 (battle_world_items, 1) or F6 (battle_world_equip, 2): after the picker, not the magic list */
+    int world_items;                   /* F5 (battle_world_items, 1) or F6 (battle_world_equip, 2): after the picker, not the magic list;
+                                        * 3: a shop's picker alone (battle_world_pick) */
+    int pal_live;                      /* the picker steps the palette itself, not the dimmed copy (a shop's) */
     int use;                           /* F7 (battle_world_use): the list's buffer byte 0 is 2 ([bp-0x10] of 0x20412) */
     unsigned use_item;                 /* what the list returns there ([bp-8]) */
     uint8_t use_rec[30];               /* the chosen item's record, copied to the map buffer (0x20eef) */
@@ -608,6 +610,31 @@ battle_t *battle_world_cast(walk_t *w, screen_t *scr)
     /* [bp-0x16] is never set: 0x2d in every F4 tried (INFERRED constant; any value from 0x29 on gives a palette step at once) */
     b->pk_count = 0x2D;
     return b;
+}
+
+battle_t *battle_world_pick(walk_t *w, screen_t *scr, int dead, unsigned count)
+{
+    battle_t *b = calloc(1, sizeof *b);
+    if (!b)
+        return NULL;
+    b->w = w;
+    b->mon = b->bmem;
+    b->world = 1;
+    b->world_items = 3;
+    b->pal_live = 1;
+    pick_begin(b, scr, 1, dead);
+    b->pk_count = count;
+    return b;
+}
+
+unsigned battle_picked(const battle_t *b)
+{
+    return b->v44;
+}
+
+unsigned battle_pick_count(const battle_t *b)
+{
+    return b->last_gw;
 }
 
 battle_t *battle_world_items(walk_t *w, screen_t *scr)
@@ -1303,7 +1330,7 @@ static void equip_begin(battle_t *b, screen_t *scr);
  * ([bp-0xb0]) in the world. */
 static void step_palette(battle_t *b, screen_t *scr)
 {
-    if (b->world)
+    if (b->world && !b->pal_live)
         walk_palette_step_dim(b->w, scr);
     else
         walk_palette_step(b->w, scr);
@@ -1591,6 +1618,11 @@ static void magic_round(battle_t *b, screen_t *scr, unsigned port60)
  * face is drawn again in the strip. */
 static void magic_picked(battle_t *b, screen_t *scr, unsigned m)
 {
+    if (b->world_items == 3) {   /* a shop's picker alone (battle_world_pick): the member it gave */
+        b->v44 = m;
+        b->over = BATTLE_BACK;
+        return;
+    }
     if (b->world && b->world_stage == 0) {   /* F4's caster (0x15551 .. 0x155d4): one with HP left opens his list */
         if (m >= 0xC8 || w16(party_of(b), m + 8) == 0) {
             b->over = BATTLE_BACK;

@@ -60,6 +60,16 @@ struct walk {
     void (*show)(void *ctx, screen_t *scr);   /* walk_set_show, handed to F4's picker */
     void *show_ctx;
     uint8_t talk_mbg[60];               /* the 6 x 10 under their pointer (the pointer's own + 0x40) */
+    /* a shop (kind 5, 0x22c42): its record's bytes 3 .. 14 ([bp-0x80]), the shopkeeper's three 70 x 75 pictures, the strip at (0, 152)
+     * as it was and its two shaded copies with their texts (the scratch buffer + 0x7d0, 0x1954, 0x2ad8), the picker's place kept
+     * (+0x64); the items and prices (the map buffer + 0xbb8); [bp-0xa], [bp-0x10] (the lit row, the one lit last), [bp-0xe] (the
+     * picture shown), [bp-0x18] (the pass counter), [bp-0x16] (the palette count), [bp-0x1c] and [bp-8] (the key and button latches) */
+    uint8_t shop_rec[12];
+    uint8_t shop_pics[3 * 0x1482];
+    uint8_t shop_strip[320 * 14], shop_a[320 * 14], shop_b[320 * 14], shop_pk[90 * 18];
+    unsigned shop_items[3], shop_prices[3];
+    unsigned shop_cur, shop_prev, shop_pic, shop_count, shop_pal, shop_latch, shop_mlatch, shop_gw, shop_si;
+    unsigned shop_pkc;                  /* what the next picker's count ([bp-0x16]) starts from, a stack leftover */
     uint8_t yn_pic[3][47 * 20];         /* the buttons' place as it was, with "yes" pressed, with "no" pressed */
     unsigned yn_shown, yn_sel;          /* [bp-4], [bp-0xc]: 1 yes, 0 no (2: none shown yet) */
     uint8_t ask_art[0x284 + 94 * 16];   /* RPG.LCP 0x1643b decoded: ten 8 x 8 digits, then the 94 x 16 number box after a 4-byte header */
@@ -808,6 +818,7 @@ int walk_roof(uint8_t *omap, uint8_t *alt, const uint8_t *rec, int enter)
 static void records_again(walk_t *w, unsigned which);
 
 static void door(walk_t *w, unsigned si);
+static void shop_open(walk_t *w, screen_t *scr, unsigned si);
 
 void walk_record_kind4(uint8_t *party, const uint8_t *rec)
 {
@@ -830,6 +841,10 @@ static void hit_record(walk_t *w, unsigned si)
         door(w, si);
         return;
     }
+    if (kind == 5 && w->scr) {   /* a shop (0x17d6c): its loop runs until it is left, then the record loop */
+        shop_open(w, w->scr, si);
+        return;
+    }
     if (kind == 4)
         walk_record_kind4(s->tab_b, rec);
     if (kind == 3) {
@@ -848,7 +863,7 @@ static void hit_record(walk_t *w, unsigned si)
             s->weather -= 3;
             walk_sfx_play(w, SFX_EF, 0x127D);   /* 0x17c2a */
         }
-    } else if (kind == 0 || kind == 5 || kind == 7 || kind == 8 || kind == 0xE ||
+    } else if (kind == 0 || kind == 7 || kind == 8 || kind == 0xE ||
                (kind >= 0x11 && kind <= 0x14)) {
         char what[48];
         snprintf(what, sizeof what, "scene record kind 0x%x", kind);
@@ -1408,6 +1423,8 @@ static void use_done(walk_t *w, screen_t *scr);
 static void map_round(walk_t *w, screen_t *scr, unsigned port60);
 static void order_round(walk_t *w, screen_t *scr, unsigned port60);
 static void data_round(walk_t *w, screen_t *scr, unsigned port60);
+static void shop_round(walk_t *w, screen_t *scr, unsigned port60);
+static void shop_pick_round(walk_t *w, screen_t *scr, unsigned port60);
 static void save_given(walk_t *w, screen_t *scr, unsigned slot);
 static void leave_answer(walk_t *w, screen_t *scr, int yes);
 
@@ -1778,6 +1795,14 @@ static void talk_round(walk_t *w, screen_t *scr, unsigned port60)
     }
     if (w->talking == 11) {
         data_round(w, scr, port60);
+        return;
+    }
+    if (w->talking == 12) {
+        shop_round(w, scr, port60);
+        return;
+    }
+    if (w->talking == 13) {
+        shop_pick_round(w, scr, port60);
         return;
     }
     int mx, my;
@@ -2672,7 +2697,7 @@ unsigned walk_look_entry(const uint8_t *party, const uint8_t *r)
 
 int walk_kind(const walk_t *w)
 {
-    static const int kind[12] = {0, 4, 8, 9, 4, 10, 4, 0, 12, 13, 14, 15};
+    static const int kind[14] = {0, 4, 8, 9, 4, 10, 4, 0, 12, 13, 14, 15, 17, 6};
     if (w->boss_box)
         return 4;
     if (w->left)
@@ -3218,6 +3243,369 @@ static void cast_round(walk_t *w, screen_t *scr, unsigned port60)
         note_unbuilt(w, battle_unbuilt(w->cast) ? battle_unbuilt(w->cast) : "?", 0);
     if (battle_over(w->cast))
         cast_done(w, scr);
+}
+
+/* ---- a shop (kind 5, 0x22c42 .. 0x24301) ---- */
+
+enum { SHOP_ROW0 = 0x1E96, SHOP_ROW = 0x1A40, SHOP_PIC_AT = 0x1BC6, SHOP_STRIP_AT = 0xBE00, SHOP_PK_AT = 0x5D06 };
+
+/* 0x25dca: n bytes through the shading table */
+static void shade(walk_t *w, uint8_t *px, size_t n)
+{
+    for (size_t i = 0; i < n; i++)
+        px[i] = w->table[px[i]];
+}
+
+/* A picture's non-zero pixels: in colour c (0x25b54) or as they are (0x27371, 0x26ad2), w wide and h high, at `at` in a picture
+ * `stride` wide holding `limit` bytes (the screen: SCREEN_W, its size). */
+static void blit_nz(uint8_t *dst, size_t limit, unsigned stride, unsigned at, const uint8_t *px, unsigned bw, unsigned bh, int c)
+{
+    for (unsigned r = 0; r < bh; r++)
+        for (unsigned x = 0; x < bw; x++) {
+            size_t o = at + (size_t)r * stride + x;
+            if (px[r * bw + x] && o < limit)
+                dst[o] = c >= 0 ? (uint8_t)c : px[r * bw + x];
+        }
+}
+
+/* 0x24302 with its flag clear: a number in five 7 x 5 digits 8 apart (colour 0 clear), leading zeros left out but their places kept */
+static void shop_number(walk_t *w, screen_t *scr, unsigned at, unsigned v)
+{
+    int started = 0;
+    for (unsigned div = 10000; div; at += 8) {
+        unsigned d = (v / div) & 0xFF;
+        v -= d * div;
+        div /= 10;
+        if (div == 0 || d || started) {
+            blit_nz(scr->pix, sizeof scr->pix, SCREEN_W, at, w->art + ART_DIGITS + d * 35, 7, 5, -1);
+            started |= d != 0;
+        }
+    }
+}
+
+/* 0x243ec into the map buffer (header, then the picture), as the original leaves it; the picture in `px` */
+static void shop_text(walk_t *w, const uint8_t *s, unsigned n, uint8_t colour, uint8_t *px)
+{
+    if (battle_text_pic(w->font8, s, n, colour, px, &w->shop_gw))
+        note_unbuilt(w, "a character the font does not have", w->shop_si / WS_RECORD_SIZE);
+    uint8_t *mb = w->zoom_grab;
+    mb[0] = (uint8_t)(8 * n), mb[1] = (uint8_t)((8 * n) >> 8), mb[2] = 14, mb[3] = 0;
+    memcpy(mb + 4, px, (size_t)8 * n * 14);
+}
+
+static unsigned shop_coins(walk_t *w)
+{
+    return w16(w->scene->tab_b, WALK_GOLD_AT);
+}
+
+static void shop_set_coins(walk_t *w, screen_t *scr, unsigned v)
+{
+    w->scene->tab_b[WALK_GOLD_AT] = (uint8_t)v;
+    w->scene->tab_b[WALK_GOLD_AT + 1] = (uint8_t)(v >> 8);
+    walk_show_gold(w, scr);   /* 0x1bd6e */
+    w->shop_pkc = 0;   /* what 0x1bd6e's callees leave where the picker's count lies (SEEN once: 0) */
+}
+
+/* 0x22c42 .. 0x23383: the opening (the record's bytes 3 .. 14 as the shop's arguments; byte 3 the type): the window shaded six times;
+ * the strip at (0, 152) kept, and two copies of it shaded three times, one with the greeting (MES_TXT.LCC type x 0x80 + 6, up to '#')
+ * centred in colour 0x10, the other with the 10 bytes at 0x306 at x 120; the shopkeeper's middle picture (SHOP_PIC.LCC type x 0x3d86) at
+ * (70, 22); the list's box at (150, 24); for types 0 to 2 the three items' names (OBJECT.LCC, colour 0x10, a shadow of 0x1a a row down)
+ * and prices (word 0x12) in its rows, for types 3 and 4 one row (MES_TXT.LCC 0x3cb or 0x3bf, colour 0xa8, shadow 0xac) and the price
+ * (type 4: times the members alive). The pointer at 0, the first row lit next round. */
+static void shop_open(walk_t *w, screen_t *scr, unsigned si)
+{
+    walk_scene_t *s = w->scene;
+    const uint8_t *rec = s->tab_a + 1000 + si;
+    uint8_t *party = s->tab_b, *mb = w->zoom_grab;
+    w->shop_si = si;
+    memcpy(w->shop_rec, rec + 3, 12);
+    unsigned t = w->shop_rec[0];
+    if (w->mouse_on)   /* 0x17d7f: the world's pointer off */
+        walk_mouse_put(scr, w->mprev, w->mbg, 0);
+    static uint8_t win[WALK_ZOOM_W * WALK_ZOOM_H];
+    grab(scr, 0x1440, WALK_ZOOM_W, WALK_ZOOM_H, win);
+    for (int k = 0; k < 6; k++)
+        shade(w, win, sizeof win);
+    put(scr, 0x1440, win, WALK_ZOOM_W, WALK_ZOOM_H);
+    grab(scr, SHOP_STRIP_AT, 320, 14, w->shop_strip);
+    if (assets_read_at("SHOP_PIC.LCC", (size_t)t * 0x3D86, w->shop_pics, sizeof w->shop_pics) != 0) {
+        note_unbuilt(w, "SHOP_PIC.LCC without this shop's pictures", si / WS_RECORD_SIZE);
+        memset(w->shop_pics, 0, sizeof w->shop_pics);
+    }
+    put(scr, SHOP_PIC_AT, w->shop_pics + 0x1482, 70, 75);
+    memcpy(w->shop_a, w->shop_strip, sizeof w->shop_a);
+    for (int k = 0; k < 3; k++)
+        shade(w, w->shop_a, sizeof w->shop_a);
+    memcpy(w->shop_b, w->shop_a, sizeof w->shop_b);
+    uint8_t msg[0x78 + 10], px[8 * 0x78 * 14];
+    memset(msg, 0, sizeof msg);
+    if (assets_read_at("MES_TXT.LCC", (size_t)t * 0x80 + 6, msg, 0x78) != 0 || assets_read_at("MES_TXT.LCC", 0x306, msg + 0x78, 10) != 0)
+        note_unbuilt(w, "MES_TXT.LCC without the shop's greeting", si / WS_RECORD_SIZE);
+    unsigned n = 0;
+    while (n < 0x78 && msg[n] != '#')
+        n++;
+    shop_text(w, msg, n, 0x10, px);
+    blit_nz(w->shop_a, sizeof w->shop_a, 320, ((320 - 8 * n) & 0xFFFF) >> 1, px, 8 * n, 14, -1);
+    shop_text(w, msg + 0x78, 10, 0x10, px);
+    blit_nz(w->shop_b, sizeof w->shop_b, 320, 0x78, px, 80, 14, -1);
+    fill(scr, 0x1D55, 0x61, 0x40, 0x63);   /* 0x270e0 */
+    fill(scr, SHOP_ROW0, 0x61, 0x40, 0x66);
+    fill(scr, SHOP_ROW0, 0x60, 0x3F, 0xAE);
+    w->shop_pal = party[1];   /* [bp-0x16], never set for types 3 and 4: 0x48, the hero's y, at scene 2's healer (INFERRED: y) */
+    if (t < 3) {
+        unsigned row = SHOP_ROW0;
+        for (unsigned k = 0; k < 3; k++, row += SHOP_ROW) {
+            unsigned id = w->shop_rec[1 + k];
+            uint8_t o[0x1C];
+            w->shop_pal = id > 1 ? 1 : id;   /* [bp-0x16] counted down to 1 for the file offset */
+            if (assets_read_at("OBJECT.LCC", id ? (size_t)(id - 1) * 30 : 0, o, sizeof o) != 0)
+                memset(o, 0, sizeof o);
+            memcpy(mb, o, sizeof o);
+            shop_text(w, o, 12, 0x10, px);
+            unsigned price = w16(o, 0x12);
+            w->shop_items[k] = id;
+            w->shop_prices[k] = price;
+            mb[0xBB8 + 3 * k] = (uint8_t)id;
+            mb[0xBB9 + 3 * k] = (uint8_t)price;
+            mb[0xBBA + 3 * k] = (uint8_t)(price >> 8);
+            blit_nz(scr->pix, sizeof scr->pix, SCREEN_W, row + SCREEN_W, px, 96, 14, 0x1A);
+            blit_nz(scr->pix, sizeof scr->pix, SCREEN_W, row, px, 96, 14, -1);
+            shop_number(w, scr, row + 0x12F0, price);
+        }
+    } else {
+        uint8_t name[12];
+        if (assets_read_at("MES_TXT.LCC", t == 4 ? 0x3BF : 0x3CB, name, sizeof name) != 0)
+            memset(name, 0, sizeof name);
+        memcpy(mb, name, sizeof name);
+        shop_text(w, name, 12, 0xA8, px);
+        blit_nz(scr->pix, sizeof scr->pix, SCREEN_W, SHOP_ROW0 + SCREEN_W, px, 96, 14, 0xAC);
+        blit_nz(scr->pix, sizeof scr->pix, SCREEN_W, SHOP_ROW0, px, 96, 14, -1);
+        unsigned price = w16(w->shop_rec, 1);
+        if (t == 4) {   /* the inn: the price for each member alive */
+            unsigned sum = 0;
+            for (unsigned o = 0; o < 0xC8; o += WS_PARTY_SIZE)
+                if (party[o + 3] < 5 && w16(party, o + 8))
+                    sum = (sum + price) & 0xFFFF;
+            w->shop_rec[1] = (uint8_t)sum;
+            w->shop_rec[2] = (uint8_t)(sum >> 8);
+            price = sum;
+        }
+        shop_number(w, scr, SHOP_ROW0 + 0x12F0, price);
+    }
+    talk_mouse_start(w, scr);   /* 0x23332: [bp-0x22] 0, the corner kept */
+    w->shop_prev = 0x38D6;
+    w->shop_cur = SHOP_ROW0;
+    w->shop_latch = w->shop_mlatch = 0;
+    w->shop_pic = 0x1482;
+    w->shop_count = 0xBB7;
+    w->shop_pkc = 0xC6;   /* the picker's [bp-0x16], never set: 0xc6 (a segment byte) at the first picker in every start probed */
+    w->talking = 12;
+}
+
+/* 0x242ad .. 0x24301 and back in 0x17dff: the pointer off, the strip put back when the shop ends on a key (not after the inn), the
+ * world's pointer at 0 with the corner kept; then the record loop again as for any record (0x18b82). */
+static void shop_end(walk_t *w, screen_t *scr, int strip)
+{
+    if (w->mouse_on)
+        walk_mouse_put(scr, w->talk_mprev, w->talk_mbg, 0);
+    if (strip)
+        put(scr, SHOP_STRIP_AT, w->shop_strip, 320, 14);
+    if (w->mouse_on) {
+        w->mprev = 0;
+        walk_mouse_grab(scr, 0, w->mbg);
+    }
+    w->talking = 0;
+    w->vbe = 5;
+    records_again(w, w->shop_si / WS_RECORD_SIZE);
+}
+
+/* The pointer off and on around a drawing (it stays where it is) */
+static void shop_ptr_off(walk_t *w, screen_t *scr)
+{
+    if (w->mouse_on)
+        walk_mouse_put(scr, w->talk_mprev, w->talk_mbg, 0);
+}
+
+static void shop_ptr_on(walk_t *w, screen_t *scr)
+{
+    if (w->mouse_on) {
+        walk_mouse_grab(scr, w->talk_mprev, w->talk_mbg);
+        walk_mouse_put(scr, w->talk_mprev, w->mpic, 1);
+    }
+}
+
+/* the 96 x 21 row at `at` with colour `from` turned `to` (0x2723c, 0x2741b, 0x27328) */
+static void shop_recolour(screen_t *scr, unsigned at, uint8_t from, uint8_t to)
+{
+    for (unsigned r = 0; r < 21; r++)
+        for (unsigned x = 0; x < 96; x++) {
+            unsigned o = at + r * SCREEN_W + x;
+            if (o < SCREEN_W * SCREEN_H && scr->pix[o] == from)
+                scr->pix[o] = to;
+        }
+}
+
+/* The picker for a purchase (dead 0) or a healing (dead 1) runs as w->cast (talking 13); then shop_picked. */
+static void shop_pick(walk_t *w, screen_t *scr, int dead)
+{
+    w->cast = battle_world_pick(w, scr, dead, w->shop_pkc);
+    if (!w->cast) {
+        note_unbuilt(w, "the shop's picker", w->shop_si / WS_RECORD_SIZE);
+        put(scr, SHOP_PK_AT, w->shop_pk, 90, 18);
+        talk_mouse_start(w, scr);
+        return;
+    }
+    battle_set_show(w->cast, w->show, w->show_ctx);
+    w->talking = 13;
+}
+
+/* 0x238f4 .. 0x23a2d (a purchase) and 0x23af2 .. 0x23bf8 (a healing): with the member picked, the item into his first empty item place
+ * or his HP to the most and word 0x10 to 0; the price taken, the coins
+ * drawn again, the pass counter 0 and SND_EF 0x1bf5; then the picker's place put back and the pointer from the corner. */
+static void shop_picked(walk_t *w, screen_t *scr)
+{
+    unsigned m = battle_picked(w->cast);
+    w->shop_pkc = battle_pick_count(w->cast);   /* a picker after it starts from its count (INFERRED, as in F5) */
+    battle_free(w->cast);
+    w->cast = NULL;
+    w->talking = 12;
+    uint8_t *party = w->scene->tab_b;
+    unsigned t = w->shop_rec[0];
+    if (t < 3) {
+        unsigned k = (w->shop_cur - SHOP_ROW0) / SHOP_ROW, slot = m + 0x14;
+        int found = 0;
+        for (unsigned i = 0; slot < 0xC8 && i < 0x14; i++, slot++)
+            if (party[slot] == 0) {
+                found = 1;
+                break;
+            }
+        if (found) {
+            party[slot] = (uint8_t)w->shop_items[k];
+            shop_set_coins(w, scr, (shop_coins(w) - w->shop_prices[k]) & 0xFFFF);
+            w->shop_count = 0;
+            walk_sfx_play(w, SFX_EF, 0x1BF5);
+        }
+    } else if (m + 8 < 0xC8) {
+        shop_set_coins(w, scr, (shop_coins(w) - w16(w->shop_rec, 1)) & 0xFFFF);
+        w->shop_count = 0;
+        party[m + 8] = party[m + 0xA];
+        party[m + 9] = party[m + 0xB];
+        party[m + 0x10] = party[m + 0x11] = 0;
+        walk_sfx_play(w, SFX_EF, 0x1BF5);
+    }
+    put(scr, SHOP_PK_AT, w->shop_pk, 90, 18);
+    talk_mouse_start(w, scr);
+}
+
+/* 0x23386 .. 0x242aa: a round of the shop. The pass counter (at most 60,000) shows the greeting's strip at 3000 and the other at 2 (after
+ * a purchase); the palette steps every 26th; now and then (rand() below 7 or above 0x7ff8) the shopkeeper's picture moves to the one
+ * before or after; a new lit row has its colour 0xae turned 9, the old one's back. Keys after a release, buttons after all are up; the
+ * pointer over the list (x 151 .. 244) lights the row under it and the left button takes it, the right one leaves; Esc leaves; Up and Down
+ * move; Enter or Space buy the lit item (types 0 to 2) or, on the first row, heal (type 3), when the coins cover the price. */
+static void shop_round(walk_t *w, screen_t *scr, unsigned port60)
+{
+    uint8_t *party = w->scene->tab_b;
+    unsigned t = w->shop_rec[0];
+    if (++w->shop_count > 0xEA60)
+        w->shop_count = 0xEA60;
+    if (w->shop_count == 2)
+        put(scr, SHOP_STRIP_AT, w->shop_b, 320, 14);
+    if (w->shop_count == 0xBB8)
+        put(scr, SHOP_STRIP_AT, w->shop_a, 320, 14);
+    w->shop_pal = (w->shop_pal + 1) & 0xFF;
+    if (w->shop_pal > 0x19) {
+        w->shop_pal = 0;
+        palette_cycle(w, scr);
+    }
+    unsigned r = walk_rand(&w->rng);
+    if (r < 7 || r > 0x7FF8) {
+        if (r < 7 && w->shop_pic)
+            w->shop_pic -= 0x1482;
+        if (r > 0x7FF8 && w->shop_pic < 0x2904)
+            w->shop_pic += 0x1482;
+        shop_ptr_off(w, scr);
+        put(scr, SHOP_PIC_AT, w->shop_pics + w->shop_pic, 70, 75);
+        shop_ptr_on(w, scr);
+    }
+    if (w->shop_cur != w->shop_prev) {
+        shop_ptr_off(w, scr);
+        shop_recolour(scr, w->shop_cur, 0xAE, 9);
+        shop_recolour(scr, w->shop_prev, 9, 0xAE);
+        w->shop_prev = w->shop_cur;
+        shop_ptr_on(w, scr);
+    }
+    unsigned k = port60 & 0xFF;
+    if (k > 0x7F)
+        w->shop_latch = 1;
+    if (!w->shop_latch)
+        k = 0x82;
+    int mx, my;
+    unsigned mb = 0;
+    if (w->mouse_on) {   /* 0x23664 */
+        talk_mouse_move(w, scr, &mx, &my, &mb);
+        mb &= 0xFF;
+        if (mb == 0)
+            w->shop_mlatch = 1;
+        if (!w->shop_mlatch)
+            mb = 0;
+        if (mb)
+            w->shop_mlatch = 0;
+        unsigned x = (unsigned)mx, y = (unsigned)my;
+        if (x > 0x96 && x < 0xF5) {
+            if (y > 0x18 && y < 0x2D)
+                w->shop_cur = SHOP_ROW0;
+            if (y > 0x2C && y < 0x42)
+                w->shop_cur = SHOP_ROW0 + SHOP_ROW;
+            if (y > 0x42 && y < 0x57)
+                w->shop_cur = SHOP_ROW0 + 2 * SHOP_ROW;
+            if (mb == 1)
+                k = 0x1C;
+        }
+        if (mb == 2) {
+            shop_end(w, scr, 1);
+            return;
+        }
+    }
+    if (k >= 0x7F)
+        return;
+    w->shop_latch = 0;
+    if (k == 1) {
+        shop_end(w, scr, 1);
+        return;
+    }
+    if (k == 0x48 && w->shop_cur > SHOP_ROW0)
+        w->shop_cur -= SHOP_ROW;
+    if (k == 0x50 && w->shop_cur < SHOP_ROW0 + 2 * SHOP_ROW)
+        w->shop_cur += SHOP_ROW;
+    if (k != 0x1C && k != 0x39)
+        return;
+    if (t < 3) {
+        unsigned i = (w->shop_cur - SHOP_ROW0) / SHOP_ROW;
+        if (shop_coins(w) < w->shop_prices[i])
+            return;
+        shop_ptr_off(w, scr);
+        grab(scr, SHOP_PK_AT, 90, 18, w->shop_pk);
+        shop_pick(w, scr, 0);
+        return;
+    }
+    if (w->shop_cur != SHOP_ROW0 || shop_coins(w) < w16(w->shop_rec, 1))
+        return;
+    if (t == 3) {
+        grab(scr, SHOP_PK_AT, 90, 18, w->shop_pk);
+        shop_ptr_off(w, scr);
+        shop_pick(w, scr, 1);
+        return;
+    }
+    (void)party;
+    note_unbuilt(w, "the inn's night (shop type 4)", w->shop_si / WS_RECORD_SIZE);
+}
+
+static void shop_pick_round(walk_t *w, screen_t *scr, unsigned port60)
+{
+    if (battle_pass(w->cast, scr, port60) & WALK_PASS_UNBUILT)
+        note_unbuilt(w, battle_unbuilt(w->cast) ? battle_unbuilt(w->cast) : "?", 0);
+    if (battle_over(w->cast))
+        shop_picked(w, scr);
 }
 
 /* 0x2c8a0: the key a left press at (x, y) stands for. While an arrow was the last key (`last`), or over the play window, the arrow
@@ -4212,7 +4600,7 @@ void walk_set_zoom_show(walk_t *w, void (*show)(void *ctx, screen_t *scr), void 
 
 battle_t *walk_cast(const walk_t *w)
 {
-    return w->talking == 7 ? w->cast : NULL;
+    return w->talking == 7 || w->talking == 13 ? w->cast : NULL;
 }
 
 void walk_show_gold(walk_t *w, screen_t *scr)

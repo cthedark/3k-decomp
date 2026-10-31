@@ -398,8 +398,8 @@ m("walk.c", "sb: spark sound over a busy card", "if (f == 2 && w->sb == 0x81 && 
 m("walk.c", "sb: spark, other sound", "                walk_sfx_play(w, SFX_EF, 0x5F80);", "                walk_sfx_play(w, SFX_EF, 0x127D);")
 m("walk.c", "sb: roof off silent", "            walk_sfx_play(w, SFX_EF, 0x127D);   /* 0x17b9e */", "")
 m("walk.c", "sb: roof back silent", "            walk_sfx_play(w, SFX_EF, 0x127D);   /* 0x17c2a */", "")
-m("walk.c", "sb: right answer silent", "        walk_sfx_play(w, SFX_EF, 0x1BF5);\n    }", "    }")
-m("walk.c", "sb: right answer, other file", "        walk_sfx_play(w, SFX_EF, 0x1BF5);\n    }", "        walk_sfx_play(w, SFX_LOC, 0x1BF5);\n    }")
+m("walk.c", "sb: right answer silent", "        walk_flag_set(w->scene->tab_b, r[w->talk_k + 2], r[w->talk_k + 3]);\n        walk_sfx_play(w, SFX_EF, 0x1BF5);\n    }", "        walk_flag_set(w->scene->tab_b, r[w->talk_k + 2], r[w->talk_k + 3]);\n    }")
+m("walk.c", "sb: right answer, other file", "        walk_flag_set(w->scene->tab_b, r[w->talk_k + 2], r[w->talk_k + 3]);\n        walk_sfx_play(w, SFX_EF, 0x1BF5);\n    }", "        walk_flag_set(w->scene->tab_b, r[w->talk_k + 2], r[w->talk_k + 3]);\n        walk_sfx_play(w, SFX_LOC, 0x1BF5);\n    }")
 m("walk.c", "sb: plays with the sounds off", "    if (w->sb == 0x81 && w->sfx.play)", "    if (w->sb && w->sfx.play)")
 m("walk.c", "sb: never busy", "    return w->sfx.busy ? w->sfx.busy(w->sfx.ctx) : 0;", "    return 0;")
 m("walk.c", "sb: sound button not pressed at the start", "    if (w->sb == 0x81)\n        walk_button_toggle", "    if (0)\n        walk_button_toggle")
@@ -891,7 +891,7 @@ m("battle.c", "cast: monsters' spell takes MP", "    if (b->world)   /* 0x22107:
 m("battle.c", "cast: monsters' spell ends the list", "    if (b->world)   /* 0x22107: a spell on the monsters does nothing in the world; the list goes on */\n        return;",
   "    if (b->world) {   /* 0x22107 */\n        b->over = BATTLE_BACK;\n        return;\n    }")
 m("battle.c", "cast: revived face in the strip", "    if (res == 0x1F && !b->world)", "    if (res == 0x1F)")
-m("battle.c", "cast: battle's step in the world", "    if (b->world)\n        walk_palette_step_dim(b->w, scr);", "    if (0)\n        walk_palette_step_dim(b->w, scr);")
+m("battle.c", "cast: battle's step in the world", "    if (b->world && !b->pal_live)\n        walk_palette_step_dim(b->w, scr);", "    if (0)\n        walk_palette_step_dim(b->w, scr);")
 # F3, taking (step 28; RUNS=take). Left out: the hero's frame from the first cell's y instead of the third's (they differ by one, and
 # any frame of 3 or more draws the same sprite, walk_sprite_off_party, and is reset at the next step; both are below 3 only for
 # y / 2 < 3, where no scene lets the hero stand).
@@ -1000,6 +1000,51 @@ m("walkscene.c", "cut flash not drawn", "                if (fired)   /* 0x11b2b
 m("walkscene.c", "door: place copied from 500 again", "    if (party) {\n        memcpy(tb, party, WS_TAB_B);\n    } else {",
   "    if (party) {\n        memcpy(tb, party, WS_TAB_B);\n        memcpy(tb + 510, tb + 500, 4);\n    } else {")
 
+
+# shops (kind 5, step 40); RUNS="shop_"
+m("walk.c", "shop: not opened", "    if (kind == 5 && w->scr) {", "    if (0) {")
+m("walk.c", "shop: window shaded five times", "    for (int k = 0; k < 6; k++)\n        shade(w, win, sizeof win);", "    for (int k = 0; k < 5; k++)\n        shade(w, win, sizeof win);")
+m("walk.c", "shop: strip shaded twice", "    for (int k = 0; k < 3; k++)\n        shade(w, w->shop_a, sizeof w->shop_a);", "    for (int k = 0; k < 2; k++)\n        shade(w, w->shop_a, sizeof w->shop_a);")
+m("walk.c", "shop: first picture shown", "    put(scr, SHOP_PIC_AT, w->shop_pics + 0x1482, 70, 75);", "    put(scr, SHOP_PIC_AT, w->shop_pics, 70, 75);")
+m("walk.c", "shop: pictures of the next type", "(size_t)t * 0x3D86, w->shop_pics", "(size_t)(t + 1) * 0x3D86, w->shop_pics")
+m("walk.c", "shop: greeting not centred", "((320 - 8 * n) & 0xFFFF) >> 1", "0")
+m("walk.c", "shop: greeting past the #", "    while (n < 0x78 && msg[n] != '#')\n        n++;", "    while (n < 0x78 && msg[n] != '#')\n        n++;\n    n += n < 0x78;")
+m("walk.c", "shop: box's shadow colour", "    fill(scr, 0x1D55, 0x61, 0x40, 0x63);", "    fill(scr, 0x1D55, 0x61, 0x40, 0x64);")
+m("walk.c", "shop: no inside", "    fill(scr, SHOP_ROW0, 0x60, 0x3F, 0xAE);\n", "")
+m("walk.c", "shop: no name shadow", "            blit_nz(scr->pix, sizeof scr->pix, SCREEN_W, row + SCREEN_W, px, 96, 14, 0x1A);\n", "")
+m("walk.c", "shop: price two pixels left", "            shop_number(w, scr, row + 0x12F0, price);", "            shop_number(w, scr, row + 0x12EE, price);")
+m("walk.c", "shop: leading zeros drawn", "        if (div == 0 || d || started) {", "        if (1) {")
+m("walk.c", "shop: healer's name", "t == 4 ? 0x3BF : 0x3CB", "t == 4 ? 0x3CB : 0x3BF")
+m("walk.c", "shop: inn price not per member", "            price = sum;\n", "")
+m("walk.c", "shop: palette count from 0 at the healer", "    w->shop_pal = party[1];", "    w->shop_pal = 0;")
+m("walk.c", "shop: palette every 27th", "    if (w->shop_pal > 0x19) {", "    if (w->shop_pal > 0x1A) {")
+m("walk.c", "shop: greeting at 2999", "    if (w->shop_count == 0xBB8)", "    if (w->shop_count == 0xBB7)")
+m("walk.c", "shop: no thanks strip", "    if (w->shop_count == 2)\n        put(scr, SHOP_STRIP_AT, w->shop_b, 320, 14);\n", "")
+m("walk.c", "shop: picture never blinks", "    if (r < 7 || r > 0x7FF8) {", "    if (0) {")
+m("walk.c", "shop: picture blinks the other way", "        if (r < 7 && w->shop_pic)\n            w->shop_pic -= 0x1482;", "        if (r < 7 && w->shop_pic < 0x2904)\n            w->shop_pic += 0x1482;")
+m("walk.c", "shop: lit colour", "        shop_recolour(scr, w->shop_cur, 0xAE, 9);", "        shop_recolour(scr, w->shop_cur, 0xAE, 10);")
+m("walk.c", "shop: old row stays lit", "        shop_recolour(scr, w->shop_prev, 9, 0xAE);\n", "")
+m("walk.c", "shop: no key latch", "    if (!w->shop_latch)\n        k = 0x82;\n    int mx, my;", "    int mx, my;")
+m("walk.c", "shop: Down past the third row", "    if (k == 0x50 && w->shop_cur < SHOP_ROW0 + 2 * SHOP_ROW)", "    if (k == 0x50 && w->shop_cur < SHOP_ROW0 + 3 * SHOP_ROW)")
+m("walk.c", "shop: Space does not buy", "    if (k != 0x1C && k != 0x39)\n        return;\n    if (t < 3) {", "    if (k != 0x1C)\n        return;\n    if (t < 3) {")
+m("walk.c", "shop: buys without the coins", "        if (shop_coins(w) < w->shop_prices[i])\n            return;\n", "")
+m("walk.c", "shop: the price not taken", "            shop_set_coins(w, scr, (shop_coins(w) - w->shop_prices[k]) & 0xFFFF);", "            shop_set_coins(w, scr, shop_coins(w));")
+m("walk.c", "shop: item into the last place", "            if (party[slot] == 0) {\n                found = 1;\n                break;\n            }", "            if (party[slot] == 0)\n                found = 1;")
+m("walk.c", "shop: no purchase sound", "            w->shop_count = 0;\n            walk_sfx_play(w, SFX_EF, 0x1BF5);\n        }\n    } else", "            w->shop_count = 0;\n        }\n    } else")
+m("walk.c", "shop: counter not reset", "            party[slot] = (uint8_t)w->shop_items[k];\n            shop_set_coins(w, scr, (shop_coins(w) - w->shop_prices[k]) & 0xFFFF);\n            w->shop_count = 0;", "            party[slot] = (uint8_t)w->shop_items[k];\n            shop_set_coins(w, scr, (shop_coins(w) - w->shop_prices[k]) & 0xFFFF);")
+m("walk.c", "shop: picker's place not put back", "    put(scr, SHOP_PK_AT, w->shop_pk, 90, 18);\n    talk_mouse_start(w, scr);\n}", "    talk_mouse_start(w, scr);\n}")
+m("walk.c", "shop: heal not to the most", "        party[m + 8] = party[m + 0xA];\n        party[m + 9] = party[m + 0xB];", "        party[m + 8] = party[m + 0xA];")
+m("walk.c", "shop: heal keeps word 0x10", "        party[m + 0x10] = party[m + 0x11] = 0;\n", "")
+m("walk.c", "shop: heal only the living", "        shop_pick(w, scr, 1);", "        shop_pick(w, scr, 0);")
+m("walk.c", "shop: heal on any row", "    if (w->shop_cur != SHOP_ROW0 || shop_coins(w) < w16(w->shop_rec, 1))", "    if (shop_coins(w) < w16(w->shop_rec, 1))")
+m("walk.c", "shop: first picker's count 0", "    w->shop_pkc = 0xC6;", "    w->shop_pkc = 0;")
+m("walk.c", "shop: count kept after the coins", "    w->shop_pkc = 0;   /* what 0x1bd6e", "    (void)0;   /* what 0x1bd6e")
+m("walk.c", "shop: mouse rows one lower", "            if (y > 0x2C && y < 0x42)\n                w->shop_cur = SHOP_ROW0 + SHOP_ROW;", "            if (y > 0x2D && y < 0x43)\n                w->shop_cur = SHOP_ROW0 + SHOP_ROW;")
+m("walk.c", "shop: right button does not leave", "        if (mb == 2) {\n            shop_end(w, scr, 1);", "        if (mb == 4) {\n            shop_end(w, scr, 1);")
+m("walk.c", "shop: no button latch", "        if (!w->shop_mlatch)\n            mb = 0;\n", "")
+m("walk.c", "shop: strip not put back", "    if (strip)\n        put(scr, SHOP_STRIP_AT, w->shop_strip, 320, 14);", "")
+# Dropped: the record loop not run again after a shop. A shop sets no flag, so the loop applies again what it applied before.
+m("battle.c", "shop: picker steps the dimmed palette", "    if (b->world && !b->pal_live)", "    if (b->world)")
 
 def main():
     if not (ROOT / "work/check_battle").exists():

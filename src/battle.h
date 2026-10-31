@@ -71,6 +71,12 @@ battle_t *battle_world_equip(walk_t *w, screen_t *scr);
 /* F7's item (0x16898 .. 0x16919): the same picker, then his item list with its buffer's byte 0 = 2 (two icons, no giving): key 1 on an
  * item ends it with that item. Run as battle_world_cast; then battle_use_item says what was chosen. */
 battle_t *battle_world_use(walk_t *w, screen_t *scr);
+/* A shop's member picker alone (0x1a8a4 with faces; `dead`: a fallen member may be chosen), stepping the palette itself, its count
+ * starting at `count`. Run as battle_world_cast; then battle_picked gives the member's party offset (0xc8: none). */
+battle_t *battle_world_pick(walk_t *w, screen_t *scr, int dead, unsigned count);
+unsigned battle_picked(const battle_t *b);
+/* The picker's count when it ended (its [bp-0x16], left on the stack for the next picker). */
+unsigned battle_pick_count(const battle_t *b);
 /* What F7's list returned: the item (its OBJECT.LCC record, 30 bytes, in `rec`), 0xff for F6 (rec untouched), 0 for none; the member
  * picked (his party offset) in *member. */
 unsigned battle_use_item(const battle_t *b, uint8_t rec[30], unsigned *member);
