@@ -144,6 +144,8 @@ void walk_set_zoom_show(walk_t *w, void (*show)(void *ctx, screen_t *scr), void 
 /* How many doors have changed the scene: when it moves, walk_scene() is a new scene (the old pointer is freed) and, with the music
  * on, the original starts the new scene's song from its start (the loader, 0x1132e). */
 unsigned walk_scene_changes(const walk_t *w);
+/* The keyboard port's value now (platform_port60), which a door's picture reads between its steps; without it, the pass's value. */
+void walk_set_live_port(walk_t *w, unsigned (*port)(void));
 /* F4's picker and magic list while they run (a battle_t in its world mode, battle.h), else NULL. */
 struct battle;
 struct battle *walk_cast(const walk_t *w);
@@ -228,6 +230,12 @@ size_t walk_rle_pack(const uint8_t *in, size_t n, uint8_t *out);
  * then literals, and (marker, count, byte) for `count` copies (0 gives none). Reads at most `n` bytes of `in` (the original reads on
  * into its buffer when the header says more than the file held); writes at most `cap` bytes. Returns the unpacked length. */
 size_t walk_rle_unpack(const uint8_t *in, size_t n, uint8_t *out, size_t cap);
+/* (0x2489a) A door's picture turns the party: each of the five records' direction (byte 2) 0 -> 3 -> 1 -> 2 -> 0; others stay. */
+void walk_spin(uint8_t *party);
+/* (0x17c41 .. 0x17d5a) A kind 4 record: the member whose number (record byte 3) is the record's byte 3, if he has HP (word 8), gets
+ * his byte 0xc raised to the record's byte 4, and flag (byte 5, bit byte 6) is set; a member not in the five records, or with no HP:
+ * nothing. */
+void walk_record_kind4(uint8_t *party, const uint8_t *rec);
 /* (0x2bfd5) A step: every trail entry (13 of x, y, direction) moves one place on, the hero's new (x, y, direction) goes in front, party record 0
  * gets (x, y) and records 1 to 4 get trail entries 3, 6, 9 and 12. */
 void walk_trail_step(uint8_t trail[WS_TRAIL_BYTES], uint8_t *party, unsigned x, unsigned y);

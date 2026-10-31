@@ -94,6 +94,8 @@ void walk_scene_free(walk_scene_t *s);
  * record's position): patches the maps, the villager table, the flags and the list of walkable tiles. Returns 0, or -1 (with a message on stderr)
  * if a record writes outside its map or the list overflows. */
 int walk_scene_apply_records(walk_scene_t *s);
+/* The same, calling `fired` where a kind 0x10 record fires (the records after it not yet applied), when it is not NULL. */
+int walk_scene_apply_records_cb(walk_scene_t *s, void (*fired)(void *ctx), void *ctx);
 
 /* The flag test of the original (0x2c158, mode 0): bit `bit` of byte `idx` of the flag table, with the shift count
  * bit + 1 masked to 5 bits as the CPU does; a count of 0 leaves the carry as the compare before it set it, i.e. 1. */

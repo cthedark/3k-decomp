@@ -1729,6 +1729,37 @@ static void test_missing_data(void)
     assets_set_dir(saved);
 }
 
+/* A door's picture turns the party (0x2489a); a kind 4 record (0x17c41 .. 0x17d5a). Values worked by hand from the code. */
+static void test_door_records(void)
+{
+    printf("doors: the party turning; kind 4 records\n");
+    static uint8_t p[WS_TAB_B];
+    p[2] = 0, p[0x2A] = 1, p[0x52] = 2, p[0x7A] = 3, p[0xA2] = 7;
+    walk_spin(p);
+    CHECK(p[2] == 3 && p[0x2A] == 2 && p[0x52] == 0 && p[0x7A] == 1 && p[0xA2] == 7);
+    walk_spin(p);
+    CHECK(p[2] == 1 && p[0x2A] == 0 && p[0x52] == 3 && p[0x7A] == 2);
+    /* member 2 in the second record, with HP: byte 0xc raised to 9, flag 0x8c bit 5 set */
+    memset(p, 0, sizeof p);
+    p[3] = 0, p[8] = 1;
+    p[0x2B] = 2, p[0x30] = 0x58, p[0x31] = 2, p[0x34] = 4;
+    const uint8_t r[15] = {0, 0, 4, 2, 9, 0x8C, 5};
+    walk_record_kind4(p, r);
+    CHECK(p[0x34] == 9 && p[WS_FLAGS_AT + 0x8C] == 0x20 && p[0x0C] == 0);
+    /* byte 0xc only raised, never lowered; the flag still set */
+    const uint8_t r2[15] = {0, 0, 4, 2, 3, 0x10, 0};
+    walk_record_kind4(p, r2);
+    CHECK(p[0x34] == 9 && p[WS_FLAGS_AT + 0x10] == 1);
+    /* no HP (word 8 is 0): nothing; a number no record has: nothing */
+    p[0x30] = p[0x31] = 0;
+    const uint8_t r3[15] = {0, 0, 4, 2, 20, 0x11, 1};
+    walk_record_kind4(p, r3);
+    CHECK(p[0x34] == 9 && p[WS_FLAGS_AT + 0x11] == 0);
+    const uint8_t r4[15] = {0, 0, 4, 6, 20, 0x12, 1};
+    walk_record_kind4(p, r4);
+    CHECK(p[WS_FLAGS_AT + 0x12] == 0);
+}
+
 int main(int argc, char **argv)
 {
     assets_set_dir(argc > 1 ? argv[1] : "original_bin");
@@ -1758,6 +1789,7 @@ int main(int argc, char **argv)
     test_look();
     test_use();
     test_save_pack();
+    test_door_records();
     test_map();
     test_party_order();
     test_data_number();

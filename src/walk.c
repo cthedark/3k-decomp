@@ -85,6 +85,8 @@ struct walk {
     void (*zoom_show)(void *ctx, screen_t *scr);    /* walk_begin_shown's: called after each zoom step (a door's too) */
     void *zoom_ctx;
     unsigned scene_changes;                         /* doors gone through (walk_scene_changes) */
+    unsigned port60;                                /* the keyboard port as the current pass reads it */
+    unsigned (*live_port)(void);                    /* the port now, for a door's picture (walk_set_live_port), or NULL */
     /* [bp-0x62]: 5 shots (x, y, direction, zigzag phase; one per party member number), then [bp-0xcc]: 10 sparks
      * (frame, x, y, direction). All 0xfa at the start (0x102fe). */
     uint8_t fx[WALK_FX_BYTES];
@@ -807,15 +809,29 @@ static void records_again(walk_t *w, unsigned which);
 
 static void door(walk_t *w, unsigned si);
 
+void walk_record_kind4(uint8_t *party, const uint8_t *rec)
+{
+    unsigned di = 3;
+    while (di < 0xC8 && party[di] != rec[3])
+        di += WS_PARTY_SIZE;
+    if (di >= 0xC8 || (party[di + 5] | party[di + 6] << 8) == 0)
+        return;
+    if (party[di + 9] < rec[4])
+        party[di + 9] = rec[4];
+    walk_flag_set(party, rec[5], rec[6]);
+}
+
 static void hit_record(walk_t *w, unsigned si)
 {
     walk_scene_t *s = w->scene;
     const uint8_t *rec = s->tab_a + 1000 + si;
     unsigned kind = rec[2], d = s->tab_b[2];
-    if (kind == 1 && rec[0xE] == 0) {
+    if (kind == 1) {
         door(w, si);
         return;
     }
+    if (kind == 4)
+        walk_record_kind4(s->tab_b, rec);
     if (kind == 3) {
         if (d == 0 && rec[3] == 0 && w->alt[0] == 0) {
             if (walk_roof(s->omap, w->alt, rec, 1) != 0)
@@ -832,9 +848,7 @@ static void hit_record(walk_t *w, unsigned si)
             s->weather -= 3;
             walk_sfx_play(w, SFX_EF, 0x127D);   /* 0x17c2a */
         }
-    } else if (kind == 1) {
-        note_unbuilt(w, "a door with its own picture (kind 1, byte 0xe set)", si / WS_RECORD_SIZE);
-    } else if (kind == 0 || kind == 4 || kind == 5 || kind == 7 || kind == 8 || kind == 0xE ||
+    } else if (kind == 0 || kind == 5 || kind == 7 || kind == 8 || kind == 0xE ||
                (kind >= 0x11 && kind <= 0x14)) {
         char what[48];
         snprintf(what, sizeof what, "scene record kind 0x%x", kind);
@@ -847,23 +861,25 @@ static void hit_record(walk_t *w, unsigned si)
 /* 0x18b82: the end of a pass that went through 0x172f0 (a scene record, or an F-key's action from 0x1729e): the record loop runs again
  * on the live state while [bp-0xbe] is not 0. After a talk this applies what its flags changed (a member who joins in scene 43: the
  * picture of him in the object map goes). */
+/* 0x11b2b .. 0x11c08, where a kind 0x10 record fires in the loop (the records after it not applied yet): the world drawn again
+ * (0x19680, the party standing), its window grabbed into the map buffer (0x2725d), then 50 rounds of the window filled with colour 0x10
+ * and the grab put back over it. The rounds do not wait, so only the last is seen: the grab. */
+static void cut_flash(void *ctx)
+{
+    walk_t *w = ctx;
+    walk_zoom_keep(w);
+    for (int r = 0; r < WALK_ZOOM_H; r++)
+        memcpy(w->scr->pix + 0x1440 + r * SCREEN_W, w->zoom_grab + r * WALK_ZOOM_W, WALK_ZOOM_W);
+}
+
 static void records_again(walk_t *w, unsigned which)
 {
     walk_scene_t *s = w->scene;
     if (!w->vbe)
         return;
-    int events = s->events;
-    if (walk_scene_apply_records(s) != 0)
+    if (walk_scene_apply_records_cb(s, w->scr ? cut_flash : NULL, w) != 0)
         note_unbuilt(w, "the record loop failed", which);
     w->use_count = 0;   /* [bp-0xc4], which the loop writes (0x11409, 0x11b07, ...): 0 after it in every start probed (INFERRED) */
-    if (s->events != events && w->scr) {
-        /* 0x11b2b .. 0x11c08, for each kind 0x10 record that fires: the world drawn again (0x19680, the party standing), its window
-         * grabbed into the map buffer (0x2725d), then 50 rounds of the window filled with colour 0x10 and the grab put back over it.
-         * The rounds do not wait, so only the last is seen: the grab. */
-        walk_zoom_keep(w);
-        for (int r = 0; r < WALK_ZOOM_H; r++)
-            memcpy(w->scr->pix + 0x1440 + r * SCREEN_W, w->zoom_grab + r * WALK_ZOOM_W, WALK_ZOOM_W);
-    }
 }
 
 /* (0x199b4) A door's zoom out: the window (192 x 168 at (64, 16)) grabbed with its header into the buffer [bp-0x8c], then 13 steps:
@@ -910,11 +926,76 @@ static int scene_enter(walk_t *w, screen_t *scr)
     return 0;
 }
 
-/* Kind 1, a door (0x1768a .. 0x17b0b, byte 0xe 0): the first 100 words of [bp-0x8c] set to 10000, 10050, .. (not kept here: the
- * zoom out's grab covers them, and the DAC does not change); each villager's byte 8 put back from its copy; the sound at SND_EF
- * 0x4086; the zoom out; the scene's 1750 bytes written into
+/* Kind 1, a door (0x1768a .. 0x17b0b): the first 100 words of [bp-0x8c] set to 10000, 10050, .. (not kept here: the zoom out's grab
+ * covers them, and the DAC does not change); each villager's byte 8 put back from its copy; with byte 0xe set the door's picture
+ * (door_picture) and the sound at SND_EF 0x5571, else the sound at 0x4086; the zoom out; the scene's 1750 bytes written into
  * __1.NOW at 1750 x the scene (party byte 510); party bytes 510 .. 513 = the record's bytes 3 .. 6 (the new scene, its byte 511, x and
  * y / 2); [bp-0x74] set, so 0x18b82 goes on to the loader (0x10bf9) for the new scene. */
+static void fkey_frame(walk_t *w);
+
+void walk_spin(uint8_t *party)
+{
+    static const uint8_t next[4] = {3, 2, 0, 1};
+    for (unsigned i = 0; i < 0xC8; i += WS_PARTY_SIZE)
+        if (party[i + 2] < 4)
+            party[i + 2] = next[party[i + 2]];
+}
+
+/* 0x1772a .. 0x17a2b, a door with byte 0xe set: RPG.LCP 0x1236 (0x14e bytes) read into the world buffer and unpacked (0x25eeb) into
+ * [bp-0x20]; its two 256-byte halves are map rows 1 and 4, and 7 and 10, of the map buffer [bp-0xba], whose rows 0 .. 11 are then copied
+ * three times below (the other rows keep what the map buffer held). Then up to 60 steps: a round counter ([bp-0x10], 0 here in every
+ * start probed) counts up and, once past [bp-0x78] (3, then 0 from step 20), goes back to 0, the party turns (0x2489a) and a step is
+ * counted; the world drawn as the F-keys draw it (0x19680), on the map buffer's map once past step 20; the window copied to the
+ * screen (0x2b9ec). A make code on the keyboard port ends it (0x1732:0x198). */
+static void door_picture(walk_t *w)
+{
+    walk_scene_t *s = w->scene;
+    uint8_t *mb = w->zoom_grab;
+    uint8_t packed[0x14E];
+    if (assets_read_at("RPG.LCP", 0x1236, packed, sizeof packed) != 0) {
+        note_unbuilt(w, "RPG.LCP without the door's picture (0x1236)", 0);
+        return;
+    }
+    memcpy(w->buf, packed, sizeof packed);
+    walk_rle_unpack(packed, sizeof packed, w->dbuf, WALK_BUF_LEN);
+    memcpy(mb + 0x100, w->dbuf, 0x100);
+    memcpy(mb + 0x400, w->dbuf, 0x100);
+    memcpy(mb + 0x700, w->dbuf + 0x100, 0x100);
+    memcpy(mb + 0xA00, w->dbuf + 0x100, 0x100);
+    for (unsigned k = 1; k <= 4; k++)
+        memcpy(mb + 0xC00 * k, mb, 0xC00);
+    /* past the map buffer's 192 x 168 the port has zeros (a villager's sprite read from the party bank's far end, GUESS) */
+    static uint8_t alt_bank[WS_BANK2_PAD];
+    unsigned v10 = 0, v78 = 3, c4 = 0;
+    while (c4 < 0x3C) {
+        v10 = (v10 + 1) & 0xFF;
+        if (v10 > v78) {
+            v10 = 0;
+            walk_spin(s->tab_b);
+            c4++;
+        }
+        if (c4 == 0x14)
+            v78 = 0;
+        if (c4 > 0x14) {   /* the map buffer as the party's sprite bank ([bp-0x38]): the party drawn as the picture's ball */
+            uint8_t *bank = s->bank2;
+            memcpy(alt_bank, mb, sizeof w->zoom_grab);
+            s->bank2 = alt_bank;
+            fkey_frame(w);
+            s->bank2 = bank;
+        } else {
+            fkey_frame(w);
+        }
+        if (w->scr) {
+            walk_copy_window(w->scr, w->buf);
+            if (w->zoom_show)
+                w->zoom_show(w->zoom_ctx, w->scr);
+        }
+        unsigned key = (w->live_port ? w->live_port() : w->port60) & 0xFF;
+        if (key < 0x7F)
+            break;
+    }
+}
+
 static void door(walk_t *w, unsigned si)
 {
     walk_scene_t *s = w->scene;
@@ -922,7 +1003,12 @@ static void door(walk_t *w, unsigned si)
     const uint8_t *rec = ta + 1000 + si;
     for (int i = 0; i < WS_VILLAGERS; i++)
         ta[WS_VILLAGER_SIZE * i + 8] = ta[WS_STATE + i];
-    walk_sfx_play(w, SFX_EF, 0x4086);   /* [bp-0x96] = 0x4086 (0x17709); 0x5571 after a door with its own picture */
+    if (rec[0xE]) {
+        door_picture(w);
+        walk_sfx_play(w, SFX_EF, 0x5571);   /* 0x17a2b */
+    } else {
+        walk_sfx_play(w, SFX_EF, 0x4086);   /* [bp-0x96] = 0x4086 (0x17709) */
+    }
     if (w->scr)
         zoom_out(w, w->scr);
     if (assets_write_at("__1.now", (size_t)WS_STATE * tb[510], ta, WS_STATE) != 0)
@@ -3614,6 +3700,7 @@ static void mouse_pass(walk_t *w, screen_t *scr, uint8_t *view, unsigned shift);
 
 int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60)
 {
+    w->port60 = port60;
     walk_scene_t *s = w->scene;
     unsigned x = s->tab_b[0], y = s->tab_b[1];
     w->unbuilt_new = 0;
@@ -4105,6 +4192,11 @@ void walk_set_show(walk_t *w, void (*show)(void *ctx, screen_t *scr), void *ctx)
 {
     w->show = show;
     w->show_ctx = ctx;
+}
+
+void walk_set_live_port(walk_t *w, unsigned (*port)(void))
+{
+    w->live_port = port;
 }
 
 unsigned walk_scene_changes(const walk_t *w)

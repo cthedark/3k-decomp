@@ -134,6 +134,11 @@ void walk_scene_free(walk_scene_t *s)
 
 int walk_scene_apply_records(walk_scene_t *s)
 {
+    return walk_scene_apply_records_cb(s, NULL, NULL);
+}
+
+int walk_scene_apply_records_cb(walk_scene_t *s, void (*fired)(void *ctx), void *ctx)
+{
     /* The 50 scene records (the loop at 0x113c4 .. 0x11c0e). R(k) is byte k of the record, W(k) the word at k. The loader runs
      * this once; the main loop runs it again, on the live state, each time the hero stands on a record's position. */
     uint8_t *ta = s->tab_a, *tb = s->tab_b;
@@ -212,6 +217,8 @@ int walk_scene_apply_records(walk_scene_t *s)
             if (R(5) != 0 && walk_flag_test(tb, R(3), R(4))) {
                 s->events++;
                 ta[o + 5] = 0;
+                if (fired)   /* 0x11b2b: here, with the records after this one not applied yet */
+                    fired(ctx);
             }
         }
 #undef R

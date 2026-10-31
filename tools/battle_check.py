@@ -89,11 +89,11 @@ def oracle(a, n, keys):
 
     emu.uc.hook_add(UC_HOOK_CODE, flash_cb, None, 0x22087, 0x22087)
 
-    def zoom_cb(uc, address, size, user):   # a door's zoom steps: out (0x19a8e) and in (0x19b75), not the start's zoom in
+    def zoom_cb(uc, address, size, user):   # a door's steps: its picture (0x17a00), the zoom out (0x19a8e) and in (0x19b75), not the start's
         if 1 <= emu.pass_count and emu.pass_count - 1 <= n:
             flash.append((emu.pass_count - 1, bytes(uc.mem_read(VGA, 64000))))
 
-    for top in (0x19A8E, 0x19B75):
+    for top in (0x17A00, 0x19A8E, 0x19B75):
         emu.uc.hook_add(UC_HOOK_CODE, zoom_cb, None, top, top)
 
     def far(uc, ss, bp, off):

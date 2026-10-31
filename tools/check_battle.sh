@@ -732,6 +732,17 @@ run door_s13s1 13 26 17 150 --key 1:0x4d --key 60:0xcd
 run door_s9s12 9 94 14 150 --key 1:0x50 --key 60:0xd0
 run door_s42s10 42 62 77 150 --key 1:0x50 --key 60:0xd0
 run door_s43s9 43 46 57 150 --key 1:0x50 --key 60:0xd0
+# doors with their own picture (byte 0xe): scene 23 to 28 with an arrow held (the picture ends after one round) and by mouse (all
+# 120 rounds, the party as the ball after step 20); scene 28 back to 23 both ways, through a kind 4 record first; scene 1's kind 4
+# record (it raises the bridge, after the kind 0x10 record's flash has drawn the world without it)
+run door_pic_key 23 114 38 120 --key 1:0x50 --key 40:0xd0
+run door_pic_mouse 23 114 38 200 --key 1:0x81 --mouse 0:160:150:0 --mouse 2:160:150:1 --mouse 30:160:150:0
+run door_pic_sb 23 114 38 120 --key 1:0x50 --key 40:0xd0 --sb
+DOPTS="--join 1 --join 2 --join 3 --join 4"; run door_pic_party 23 114 38 200 --key 1:0x81 --mouse 0:160:150:0 --mouse 2:160:150:1 \
+    --mouse 30:160:150:0; DOPTS=""
+run door_pic28_left 28 102 14 200 --key 1:0x81 --mouse 0:70:60:0 --mouse 2:70:60:1 --mouse 150:70:60:0
+run door_pic28_right 28 102 14 200 --key 1:0x4d --key 150:0xcd
+run door_kind4 1 102 85 200 --key 1:0x50 --key 12:0xd0
 # a shot still flying when the door is taken
 run door_shot 0 62 49 150 --key 1:0x50 --key 15:0x39 --key 16:0xb9 --key 17:0x50 --key 60:0xd0
 TRIP="--key 1:0x50 --key 20:0xd0 --key 30:0x48 --key 34:0xc8 --key 40:0x4b --key 60:0xcb"

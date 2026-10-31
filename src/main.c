@@ -1010,6 +1010,7 @@ static int play_walk(screen_t *scr)
     if (bank)
         walk_set_sfx(w, &sfx);
     walk_set_show(w, show_flash_step, NULL);   /* F4's picker: the face flash's steps, as in a battle */
+    walk_set_live_port(w, platform_port60);    /* a door's picture ends on a key pressed while it runs */
     /* WALK.SL draws its own mouse pointer (a driver is taken to be there whenever the window reports a pointer): the world's and the
      * battle's (walk_set_mouse before each pass). In the world the left button walks towards the pointer and the right one shoots; a
      * press on an on-screen button is its key (the F-keys, 1 to 4, A). Key 3 saves into the data directory (SAVENN.00K, __1.NOW), as

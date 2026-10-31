@@ -97,9 +97,9 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
 The earlier list (formats, chaining, `TAB.TAB`, `TV.EXE`, the speed class) is done or folded into the port; the save format (`SAVEnn.000/.001/.002`)
 is known for writing (`findings.md` step 37) and reading ("WALK0.SL: loading a save", `port.md` 9p). For the world, in the order the operator and Kiro agreed to work:
 1. The keys of `WALK.SL`'s main loop: the F-key actions, 1-4 and A (sliding) are built (`port.md` 9a to 9o), and Space (shots) (7f).
-2. The scene record block `0x172f0` .. `0x18b82` (a dispatch on the record's kind) and the kinds 4, 5, 7, 8, 0xe, 0x11 and 0x13. Kind 1
-   is a door to another scene, built (`port.md` 9q) except the 13 with byte 0xe set (the boat trips, behind kind 4); kind 0x14 is a
-   sell counter, built for F7 (`port.md` 9n).
+2. The scene record block `0x172f0` .. `0x18b82` (a dispatch on the record's kind) and the kinds 0, 5, 7, 8, 0xe, 0x11 and 0x13.
+   Kind 1 is a door to another scene and kind 4 sets a flag, both built (`port.md` 9q); kind 0x14 is a sell counter, built for F7
+   (`port.md` 9n).
 3. The battle that touching an enemy starts, in stages (`findings.md` steps 12-18): the first screen and idle passes, the command and target
    choice with the keys, the attack and the monsters' turn, what follows a win or a loss, the other three commands (flee, magic, items)
    and the mouse are built (`port.md` 8a-8f; the world's mouse buttons 8g), then story enemies, keys 1 and 2 and the sounds (8h, 8i): the

@@ -689,8 +689,8 @@ m("walk.c", "use: pointer corner after the number", "    if (w->mouse_on) {\n   
 m("walk.c", "use: blink from the rain not kept", "        w->v96 = (ticks & 0xFFFF) < 0x5000 ? (ticks & 0xFFFF) >> 10 : ticks & 0xFFFF;", "        (void)0;")
 m("walk.c", "use: rain not shifted", "(ticks & 0xFFFF) < 0x5000 ? (ticks & 0xFFFF) >> 10 : ticks & 0xFFFF;", "ticks & 0xFFFF;")
 m("walk.c", "use: pointer not kept for the blink", "        w->v96 = (unsigned)(x - 0x30);   /* 0x126ba */", "        (void)0;   /* 0x126ba */")
-m("walk.c", "use: cut scene not drawn", "        walk_zoom_keep(w);\n        for (int r = 0; r < WALK_ZOOM_H; r++)\n            memcpy(w->scr->pix + 0x1440", "        for (int r = 0; r < WALK_ZOOM_H; r++)\n            memcpy(w->scr->pix + 0x1440")
-m("walk.c", "use: cut scene not shown", "            memcpy(w->scr->pix + 0x1440 + r * SCREEN_W, w->zoom_grab + r * WALK_ZOOM_W, WALK_ZOOM_W);", "            (void)r;")
+m("walk.c", "use: cut scene not drawn", "    walk_zoom_keep(w);\n    for (int r = 0; r < WALK_ZOOM_H; r++)\n        memcpy(w->scr->pix + 0x1440", "    for (int r = 0; r < WALK_ZOOM_H; r++)\n        memcpy(w->scr->pix + 0x1440")
+m("walk.c", "use: cut scene not shown", "        memcpy(w->scr->pix + 0x1440 + r * SCREEN_W, w->zoom_grab + r * WALK_ZOOM_W, WALK_ZOOM_W);\n}", "        (void)r;\n}")
 # keys 1 to 4 and A (step 37; RUNS=sys_). Left out: the music flag itself (only the caller's song follows it; the battle reads it as
 # "a card is there", not "on"); the party table's start bytes copied to 500 .. 503 before a save (the same bytes: nothing yet changes
 # 510 .. 513 after the start); __1.NOW's second part capped at 0x9470 bytes (the file has 28,000 after its first 0xfcee); the second
@@ -953,9 +953,9 @@ m("walkscene.c", "edge: raw block not kept", "    s->view_head = s->raw_head;", 
 
 # doors (kind 1, step 38); RUNS="door_". Dropped: taking a door with byte 0xe set like the others (no start reaches one: they are not
 # built, and the one a start can reach, scene 23's, differs either way).
-m("walk.c", "door: not taken", "    if (kind == 1 && rec[0xE] == 0) {\n        door(w, si);", "    if (0) {\n        door(w, si);")
-m("walk.c", "door: byte 8 not put back", "    for (int i = 0; i < WS_VILLAGERS; i++)\n        ta[WS_VILLAGER_SIZE * i + 8] = ta[WS_STATE + i];\n    walk_sfx_play(w, SFX_EF, 0x4086);",
-  "    walk_sfx_play(w, SFX_EF, 0x4086);")
+m("walk.c", "door: not taken", "    if (kind == 1) {\n        door(w, si);", "    if (0) {\n        door(w, si);")
+m("walk.c", "door: byte 8 not put back", "    for (int i = 0; i < WS_VILLAGERS; i++)\n        ta[WS_VILLAGER_SIZE * i + 8] = ta[WS_STATE + i];\n    if (rec[0xE]) {",
+  "    if (rec[0xE]) {")
 m("walk.c", "door: no sound", "    walk_sfx_play(w, SFX_EF, 0x4086);   /*", "    (void)0;   /*")
 m("walk.c", "door: the picture door's sound", "    walk_sfx_play(w, SFX_EF, 0x4086);   /*", "    walk_sfx_play(w, SFX_EF, 0x5571);   /*")
 m("walk.c", "door: no zoom out", "    if (w->scr)\n        zoom_out(w, w->scr);", "")
@@ -975,6 +975,28 @@ m("walk.c", "door: shots fly on", "    w->scene_changes++;\n    memset(w->fx, 0x
 m("walk.c", "door: shake not reset", "    w->v48 = n->header[3];   /* 0x11233 */", "")
 m("walk.c", "door: no zoom in", "    for (int k = 0; k < WALK_ZOOM_STEPS; k++) {\n        walk_zoom_step(w, scr, k);\n        if (w->zoom_show)\n            w->zoom_show(w->zoom_ctx, scr);\n    }\n    return 0;",
   "    return 0;")
+m("walk.c", "door: picture skipped", "    if (rec[0xE]) {\n        door_picture(w);", "    if (rec[0xE]) {")
+m("walk.c", "door: picture's sound is the door's", "        walk_sfx_play(w, SFX_EF, 0x5571);   /* 0x17a2b */", "        walk_sfx_play(w, SFX_EF, 0x4086);")
+m("walk.c", "door: picture 59 steps", "    while (c4 < 0x3C) {", "    while (c4 < 0x3B) {")
+m("walk.c", "door: picture's first speed 4", "unsigned v10 = 0, v78 = 3, c4 = 0;", "unsigned v10 = 0, v78 = 4, c4 = 0;")
+m("walk.c", "door: picture's count starts at 1", "unsigned v10 = 0, v78 = 3, c4 = 0;", "unsigned v10 = 1, v78 = 3, c4 = 0;")
+m("walk.c", "door: picture never speeds up", "        if (c4 == 0x14)\n            v78 = 0;", "")
+m("walk.c", "door: picture's ball a step late", "        if (c4 > 0x14) {   /* the map buffer", "        if (c4 > 0x15) {   /* the map buffer")
+m("walk.c", "door: picture's party does not turn", "            v10 = 0;\n            walk_spin(s->tab_b);", "            v10 = 0;")
+m("walk.c", "door: turning 0 -> 1", "static const uint8_t next[4] = {3, 2, 0, 1};", "static const uint8_t next[4] = {1, 2, 0, 1};")
+# Dropped: turning ten records instead of five. The picture turns the party 0 or 60 times (a key ends it at once, or it runs to
+# the end), and four turns are no turn, so records 5 to 9 (never drawn) end as they were.
+m("walk.c", "door: picture not shown", "            walk_copy_window(w->scr, w->buf);\n            if (w->zoom_show)", "            if (w->zoom_show)")
+m("walk.c", "door: picture ignores keys", "        if (key < 0x7F)\n            break;\n    }", "    }")
+m("walk.c", "door: picture's ball rows not doubled", "    memcpy(mb + 0x400, w->dbuf, 0x100);\n", "")
+m("walk.c", "door: picture's second half", "    memcpy(mb + 0x700, w->dbuf + 0x100, 0x100);", "    memcpy(mb + 0x700, w->dbuf, 0x100);")
+m("walk.c", "door: picture's rows copied once", "    for (unsigned k = 1; k <= 4; k++)\n        memcpy(mb + 0xC00 * k, mb, 0xC00);", "    memcpy(mb + 0xC00, mb, 0xC00);")
+m("walk.c", "door: ball replaces the ground", "            uint8_t *bank = s->bank2;\n            memcpy(alt_bank, mb, sizeof w->zoom_grab);\n            s->bank2 = alt_bank;",
+  "            uint8_t *bank = s->bank2;\n            memcpy(alt_bank, mb, sizeof w->zoom_grab);\n            memcpy(s->gmap, mb, WS_GMAP_BYTES);")
+m("walk.c", "kind4: not done", "    if (kind == 4)\n        walk_record_kind4(s->tab_b, rec);", "")
+m("walk.c", "kind4: flag without the member", "    if (di >= 0xC8 || (party[di + 5] | party[di + 6] << 8) == 0)\n        return;", "")
+m("walk.c", "kind4: flag bit one higher", "    walk_flag_set(party, rec[5], rec[6]);", "    walk_flag_set(party, rec[5], rec[6] + 1u);")
+m("walkscene.c", "cut flash not drawn", "                if (fired)   /* 0x11b2b", "                if (0)   /* 0x11b2b")
 m("walkscene.c", "door: place copied from 500 again", "    if (party) {\n        memcpy(tb, party, WS_TAB_B);\n    } else {",
   "    if (party) {\n        memcpy(tb, party, WS_TAB_B);\n        memcpy(tb + 510, tb + 500, 4);\n    } else {")
 

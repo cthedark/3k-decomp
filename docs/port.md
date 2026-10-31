@@ -1396,5 +1396,10 @@ from its start.
   `__1.NOW` written included; `tools/mutate_battle.py`: 17 door mutations, all caught, one dropped with a note; ASan / UBSan clean on
   five starts; a real-time run under SDL's dummy drivers went from scene 0 to 1 and back.
 - **Not reproduced:** the 100 words a door writes at the start of the world buffer (covered at once by the zoom out's grab).
-- **Not built:** the 13 doors with byte 0xe set (the boat trips; the port says so and stays); the kind 4 record that seems to lead
-  to them; the record block's other kinds (5, 7, 8, 0xe, 0x11, 0x13).
+- **Doors with a picture and kind 4 (also 2026-10-30):** the 13 doors with byte 0xe set play their picture first (the party
+  turning, then drawn as a ball; a key ends it), and kind 4 records raise a member's byte 0xc and set a flag. A kind 0x10 record's
+  flash now draws the world where it stands in the record loop. Code: `door_picture`, `walk_spin`, `walk_record_kind4`,
+  `walk_set_live_port` (in real time the picture reads the keyboard as it runs) in `src/walk.c`; `walk_scene_apply_records_cb` in
+  `src/walkscene.c`; `tests/test_walk.c` `test_door_records`. Checked: 7 more `door_` starts (25 in all), all identical; the
+  picture's rounds compared one by one; 36 door, picture, kind 4 and loop mutations in all, every one caught, two dropped with notes.
+- **Not built:** the record block's other kinds (0, 5, 7, 8, 0xe, 0x11, 0x13).
