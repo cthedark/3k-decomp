@@ -88,6 +88,11 @@ The port uses **fixed durations**, never a CPU-speed or emulator cycle setting.
 - Sound: `MARK` loads blocks of `muc.all` for an FM music driver. OPL emulation is a
   separate decision (library choice and licence); milestones 2-4 run silent.
 - Aspect ratio: a DOSBox capture had aspect about 1.6; the port scales uniformly.
+- macOS microphone prompt (found 2026-10-30, not fixed by the operator's choice): starting `build/3k` makes macOS ask for
+  microphone access. The port opens only output devices (`src/platform_sdl.c`, both `SDL_OpenAudioDevice` calls with capture 0)
+  and records nothing. With `--no-audio` the prompt does not appear (CONFIRMED by the operator), so SDL's audio start-up triggers
+  it. GUESS: SDL3's CoreAudio backend (Homebrew `sdl2-compat` 2.32.74 on SDL3 3.4.18) lists the input devices too. Denying the
+  prompt changes nothing in the game.
 
 ## Milestone 2: the title screen
 
