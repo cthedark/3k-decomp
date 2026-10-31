@@ -240,6 +240,7 @@ int main(int argc, char **argv)
             walk_zoom_keep(w);   /* the start's zoom kept its window (the original's run had it), not shown */
             walk_palette_load(w, &scr);
             walk_set_show(w, flash_step, NULL);
+            walk_set_zoom_show(w, flash_step, NULL);   /* a door's zoom steps, recorded with the face flash's */
             if (!fm_shown)
                 walk_sound_buttons(w, &scr);
             FILE *f = fopen(out, "wb");

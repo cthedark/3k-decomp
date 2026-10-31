@@ -3777,3 +3777,51 @@ does not reproduce this.
 
 `tests/test_walk.c` `test_save_pack` pins the unpacker; `tools/mutate_load.py`: 9 mutations, all caught, one dropped (reading all of
 `.000` only differs for a `.000` over 504 bytes, which a party table packs to only if it uses nearly every byte value).
+
+## WALK.SL step 38: doors to other scenes (kind 1 records), 2026-10-30
+
+READ from the code (`0x1767b` .. `0x17b0b`, the zoom out `0x199b4`, the start's jump into the loader `0x10bad` .. `0x10bf9`), then
+CONFIRMED by the comparison. A kind 1 record is a door: byte 3 the scene it leads to, byte 4 (0 in every record) goes to party byte
+511, bytes 5 and 6 the arrival's x and y / 2. 227 of the 1,262 non-empty records in the shipped `__1.NOW` are doors; 13 of them have byte 0xe
+set (below).
+
+**The start is a door too.** Before its loop the start sets `[bp-0xbe]` = 1 and `[bp-0x74]` = 1 and jumps to `0x18b82`; with
+`[bp-0xbe]` not 0 that goes to `0x10bf9`, and with `[bp-0x74]` set `0x10bf9` runs the loader (the scene in party byte 510 read from
+`__1.NOW`, the map, the tiles, the banks, the song from its start at `0x1132e` when the music is on, the party at bytes 512 and 513,
+the records) and the zoom in (`0x19ab2`). Without `[bp-0x74]` it only runs the record loop again (`0x113c4`, step 7). So what the
+start does before `0x10bf9` is not done again after a door: bytes 500 .. 503 copied to 510 .. 513 (`0x10b17`), the sound and mouse
+set-up, sliding off (`0x10ba3`), `[bp-0x2e]` = 3, the rain's random lists.
+
+**A door, byte 0xe 0** (`0x1768a` ..):
+- the first 100 words of `[bp-0x8c]` set to 10000, 10050, .. 14950. `[bp-0x8c]` is the world buffer here (the F-keys' drawing
+  writes its header there, step 26), so the zoom out's grab covers them at once; the DAC does not change (SEEN: the first door
+  compared, the port's first try also put them into the palette and the comparison caught it);
+- each villager's byte 8 put back from its copy after the table (as on saving, step 37);
+- the sound at `[bp-0x4c]` + 0x4086 (`SND_EF.1`; `[bp-0x96]` = 0x4086 at `0x17709`);
+- the zoom out (`0x199b4`): the window, 192 x 168 at (64, 16), grabbed with its header into `[bp-0x8c]`; with the Sound Blaster's flag
+  (`[0x388]:0xc`) set, `[0x24e]` 0 and `[0x38a]:6` set, two calls into the Sound Blaster driver (`0x190e:0x6d`, `0x190e:0x49(0)`; not
+  read further); then 13 steps, each after a retrace
+  wait: the grab's middle w x h (192 x 168 shrinking by 14 x 12, from 0x487 k in) scaled to the window into the map buffer
+  `[bp-0xba]` and copied to the screen. These are the start's zoom in backwards;
+- the scene's 1750 bytes written into `__1.NOW` at 1750 x party byte 510 (the old scene), as on saving;
+- the record's bytes 3 .. 6 copied (two words, `0x27503`) to party bytes 510 .. 513, and `[bp-0x74]` = 1.
+Then the other kind tests fail, `0x18b82` goes to `0x10bf9`, and the loader and the zoom in run for the new scene. On a slow machine
+the loader lowers the villagers' byte 8 again (`0x11358`).
+
+**A door with byte 0xe set** (13 records: scenes 1 <-> 9, 3 <-> 8, 7 <-> 10, 23 <-> 28): READ only, not built. RPG.LCP 0x1236
+(0x14e bytes, the saves' packing) is unpacked into `[bp-0x20]` and laid out as a map in the map buffer (rows 1, 4, 7 and 10, then
+rows 0 .. 11 copied three times below); then up to 60 steps of the party turning (`0x2489a`: each member's direction 0 -> 3 -> 1 -> 2
+-> 0), every fourth round for the first 20 steps and every round after, the world drawn around the arrival place of the start with
+that map as its ground after step 20, and shown; a key down on port 0x60 ends it early. The sound is 0x5571, then the same as a door.
+Scene 1's is behind a kind 4 record at (102, 85) (SEEN: walking onto it from the north reaches the kind 4 first), so these look like
+the boat trips.
+
+**Checked:** `tools/check_battle.sh`, 18 `door_` starts, all identical at every pass, with the zoom out and the zoom in after a door
+compared step by step (`tools/battle_check.py` now records the screen after each step of `0x199b4` and `0x19ab2` once the loop has
+started) and `__1.NOW` compared byte for byte: scene 0's south door to scene 1, doors from scenes 1 (two), 6, 13 (dark), 9 and 42
+(their shake's floor, map header byte 3, is 1; a battle follows the one from 42) and 43; a shot still flying when the door is taken;
+scene 0 to 1 and back again (the first door's state read again), with music, the Sound Blaster, speed classes 0 and 1, and the
+mouse; three 1,500-pass random walks from beside the south door (one goes through two doors). `tools/mutate_battle.py`: 17 door
+mutations, all caught (two only after starts were added: the shot and the shake's floor); one dropped (a door with byte 0xe taken
+like the others: no start reaches one that the port builds). The loader does not set the DAC (its only `0x1732` call is the window's
+copy), so the port's door does not either.

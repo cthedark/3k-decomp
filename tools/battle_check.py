@@ -52,7 +52,7 @@ KIND = {WORLD_TOP: 0, BATTLE_TOP: 1, REWARDS_TOP: 3, DIALOG_TOP: 4, MAGIC_TOP: 5
         NUMBER_TOP: 9, TAKE_TOPS[0]: 10, TAKE_TOPS[1]: 10, EQUIP_TOP: 11, USE_TOP: 12, MAP_TOP: 13, ORDER_TOP: 14, DATA_TOP: 15}
 KIND_NAME = {0: 'world', 1: 'battle', 2: 'lost', 3: 'rewards', 4: 'message box', 5: 'magic list', 6: 'member picker',
              7: 'item list', 8: 'yes / no', 9: 'number', 10: 'take', 11: 'equipment', 12: 'use prompt', 13: 'map', 14: 'order', 15: 'data',
-             'flash': 'face flash steps', 'sounds': 'sounds', 'files': 'files written', 16: 'left'}
+             'flash': 'face flash and zoom steps', 'sounds': 'sounds', 'files': 'files written', 16: 'left'}
 MON = 0x3C
 LOCALS = (0x52, 0x70, 0x44, 0x5E, 0x82, 0x72, 0x38, 0x42, 0x8C, 0x0C, 0x58, 0x14, 0x84, 0x36, 0x10, 0x78)
 BSTATE = 4 + MON + len(LOCALS) + 200 + 60
@@ -88,6 +88,13 @@ def oracle(a, n, keys):
             flash.append((emu.pass_count - 1, bytes(uc.mem_read(VGA, 64000))))
 
     emu.uc.hook_add(UC_HOOK_CODE, flash_cb, None, 0x22087, 0x22087)
+
+    def zoom_cb(uc, address, size, user):   # a door's zoom steps: out (0x19a8e) and in (0x19b75), not the start's zoom in
+        if 1 <= emu.pass_count and emu.pass_count - 1 <= n:
+            flash.append((emu.pass_count - 1, bytes(uc.mem_read(VGA, 64000))))
+
+    for top in (0x19A8E, 0x19B75):
+        emu.uc.hook_add(UC_HOOK_CODE, zoom_cb, None, top, top)
 
     def far(uc, ss, bp, off):
         o, s = struct.unpack('<HH', bytes(uc.mem_read(ss * 16 + ((bp - off) & 0xFFFF), 4)))
@@ -331,7 +338,7 @@ def main():
                     break
             if ofiles and 'files' not in first:
                 kinds['files'] = len(ofiles)
-    # the picker face's flash: the screen after each of its steps, in the passes compared
+    # the picker face's flash and a door's zoom steps: the screen after each step, in the passes compared
     pf = []
     if fout.exists():
         fb = fout.read_bytes()
@@ -339,12 +346,12 @@ def main():
     of = [(p, s) for p, s in (flash or []) if p < n]
     pf = [(p, s) for p, s in pf if p < n]
     if len(of) != len(pf):
-        print(f'the picker face\'s flash: {len(of)} steps in the original, {len(pf)} in the port')
+        print(f'the flash and zoom steps: {len(of)} steps in the original, {len(pf)} in the port')
         first['flash'] = 0
     else:
         for j, ((op, os_), (pp, ps)) in enumerate(zip(of, pf)):
             if op != pp or os_ != ps:
-                print(f'the picker face\'s flash, step {j}: original pass {op}, port pass {pp}, '
+                print(f'the flash and zoom steps, step {j}: original pass {op}, port pass {pp}, '
                       f'{sum(x != y for x, y in zip(os_, ps))} pixels differ')
                 first['flash'] = j
                 break

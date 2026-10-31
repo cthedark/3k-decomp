@@ -85,6 +85,9 @@ unsigned walk_seg_byte(const walk_scene_t *s, unsigned off);
 /* Load the scene named by MAN_INFO.NOW from the data directory. Returns NULL (and a message on stderr) if a file
  * is missing or malformed, or a record writes outside its map. */
 walk_scene_t *walk_scene_load(void);
+/* The same after a scene change (0x10bf9 ..): the scene and the party's place are bytes 510 .. 513 of `party` (the table in memory,
+ * WS_TAB_B bytes), and the scene's block of __1.NOW is read as the door just wrote it. */
+walk_scene_t *walk_scene_load_party(const uint8_t *party);
 void walk_scene_free(walk_scene_t *s);
 
 /* The loop over the 50 scene records (what the loader runs once, and the main loop runs again on the live state whenever the hero stands on a

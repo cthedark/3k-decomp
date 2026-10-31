@@ -1376,3 +1376,20 @@ them, and the saves key 3 writes, somewhere else.
   `WALK0.SL`); a save whose files are cut short (the original's unpacker reads on into its buffer, the port's stops).
 - **Not built:** new game's files (`__1.AL1`, `__1.AL2`, `MAN_INFO.ALL` into the `.NOW` files): the port's new game starts from the
   `.NOW` files as they are.
+
+## Milestone 9q: doors to other scenes (C), built 2026-10-30
+Walking onto a door (a kind 1 record) now takes the party to the scene it names: the view zooms out, the old scene's state is
+written into `__1.NOW`, the new scene is loaded with the party at the door's arrival place, and the view zooms in, as at the start
+(`docs/findings.md` "WALK.SL step 38"). Going back finds the old scene as it was left. With the music on the new scene's song starts
+from its start.
+
+- **Code:** `src/walk.c` (`door`, `zoom_out`, `scene_enter`, `walk_scene_changes`, `walk_set_zoom_show`); `src/walkscene.c`
+  (`walk_scene_load_party`: the loader on the party table in memory); `src/main.c` (the song after a door; the zoom's pace restarts
+  for a door's steps); `tests/walk_dump.c` (a door's zoom steps go to `f:`); `tools/battle_check.py` (the oracle's zoom steps after
+  the loop has started, `0x199b4` and `0x19ab2`, compared with them).
+- **Checked:** `tools/check_battle.sh`, 18 `door_` starts, all identical at every pass, the 13 + 13 zoom steps of each door and the
+  `__1.NOW` written included; `tools/mutate_battle.py`: 17 door mutations, all caught, one dropped with a note; ASan / UBSan clean on
+  five starts; a real-time run under SDL's dummy drivers went from scene 0 to 1 and back.
+- **Not reproduced:** the 100 words a door writes at the start of the world buffer (covered at once by the zoom out's grab).
+- **Not built:** the 13 doors with byte 0xe set (the boat trips; the port says so and stays); the kind 4 record that seems to lead
+  to them; the record block's other kinds (5, 7, 8, 0xe, 0x11, 0x13).

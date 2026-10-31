@@ -224,7 +224,9 @@ int walk_scene_apply_records(walk_scene_t *s)
     return 0;
 }
 
-walk_scene_t *walk_scene_load(void)
+/* `party` NULL: the start (MAN_INFO.NOW read, its bytes 500..503 copied to 510..513, 0x10b17); else a scene change (0x10bf9 on): the
+ * party table as it is in memory, 510..513 already set by the door. */
+static walk_scene_t *scene_load(const uint8_t *party)
 {
     walk_scene_t *s = calloc(1, sizeof *s);
     uint8_t *mi = NULL, *now = NULL, *tab = NULL, *raw = NULL, *map = NULL, *gt = NULL, *m1 = NULL, *rp = NULL;
@@ -233,11 +235,12 @@ walk_scene_t *walk_scene_load(void)
         return NULL;
     g_oob = 0;
 
-    mi = assets_read("MAN_INFO.NOW", &mi_len);
+    if (!party)
+        mi = assets_read("MAN_INFO.NOW", &mi_len);
     now = assets_read("__1.NOW", &now_len);
     tab = assets_read("TAB.TAB", &tab_len);
     rp = assets_read("RPG.LCP", &rp_len);
-    if (!mi || !now || !tab || !rp || rp_len < 0x7ADD + 5 * 256) {
+    if ((!party && !mi) || !now || !tab || !rp || rp_len < 0x7ADD + 5 * 256) {
         fprintf(stderr, "walk: MAN_INFO.NOW, __1.NOW, TAB.TAB or RPG.LCP is missing or too short\n");
         goto fail;
     }
@@ -246,8 +249,12 @@ walk_scene_t *walk_scene_load(void)
 
     /* The party table: the file, then bytes 500..503 copied to 510..513 (0x10b17). */
     uint8_t *tb = s->tab_b;
-    memcpy(tb, mi, mi_len < WS_TAB_B ? mi_len : WS_TAB_B);
-    memcpy(tb + 510, tb + 500, 4);
+    if (party) {
+        memcpy(tb, party, WS_TAB_B);
+    } else {
+        memcpy(tb, mi, mi_len < WS_TAB_B ? mi_len : WS_TAB_B);
+        memcpy(tb + 510, tb + 500, 4);
+    }
     s->scene = tb[510];
 
     /* The scene's state block and the copy of each villager's byte 8. */
@@ -398,6 +405,16 @@ fail:
     free(m1);
     walk_scene_free(s);
     return NULL;
+}
+
+walk_scene_t *walk_scene_load(void)
+{
+    return scene_load(NULL);
+}
+
+walk_scene_t *walk_scene_load_party(const uint8_t *party)
+{
+    return scene_load(party);
 }
 
 int walk_scene_dump(const walk_scene_t *s, const char *path)

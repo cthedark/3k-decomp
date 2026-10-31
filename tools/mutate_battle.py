@@ -733,8 +733,8 @@ m("walk.c", "keys14: save count", "enum { WALK_SAVE_ASK_COUNT = 0xE8 };", "enum 
 m("walk.c", "keys14: dimmed palette", "    if (w->using || w->sys)", "    if (w->using)")
 m("walk.c", "keys14: slots past 10", "    if (slot < 0xB) {", "    if (slot < 0x20) {")
 m("walk.c", "keys14: villagers' byte 8 not put back", "            ta[WS_VILLAGER_SIZE * i + 8] = ta[WS_STATE + i];", "            (void)i;")
-m("walk.c", "keys14: state at the next scene", "(size_t)WS_STATE * tb[510], ta, WS_STATE)", "(size_t)WS_STATE * (tb[510] + 1u), ta, WS_STATE)")
-m("walk.c", "keys14: state not written", "    if (assets_write_at(\"__1.now\"", "    if (0 && assets_write_at(\"__1.now\"")
+m("walk.c", "keys14: state at the next scene", "        if (assets_write_at(\"__1.now\", (size_t)WS_STATE * tb[510], ta, WS_STATE)", "        if (assets_write_at(\"__1.now\", (size_t)WS_STATE * (tb[510] + 1u), ta, WS_STATE)")
+m("walk.c", "keys14: state not written", "        if (assets_write_at(\"__1.now\"", "        if (0 && assets_write_at(\"__1.now\"")
 m("walk.c", "keys14: parts split elsewhere", "size_t a = n < 0xFCEE ? n : 0xFCEE", "size_t a = n < 0xFC00 ? n : 0xFC00")
 m("walk.c", "keys14: no slow penalty after", "        if (s->speed_class < 2) {\n            unsigned k = 2u - (unsigned)s->speed_class;",
   "        if (s->speed_class < 0) {\n            unsigned k = 2u - (unsigned)s->speed_class;")
@@ -950,6 +950,33 @@ m("walkscene.c", "edge: no oval in the segment", "        return s->dark_mask &&
 m("walkscene.c", "edge: next head zero", "        return seg_next[off - 0xFB86];", "        return 0;")
 m("walkscene.c", "edge: no map buffer", "    return s->view_head ? s->view_head[off - 0xFBA6] : 0;", "    return 0;")
 m("walkscene.c", "edge: raw block not kept", "    s->view_head = s->raw_head;", "    s->view_head = NULL;")
+
+# doors (kind 1, step 38); RUNS="door_". Dropped: taking a door with byte 0xe set like the others (no start reaches one: they are not
+# built, and the one a start can reach, scene 23's, differs either way).
+m("walk.c", "door: not taken", "    if (kind == 1 && rec[0xE] == 0) {\n        door(w, si);", "    if (0) {\n        door(w, si);")
+m("walk.c", "door: byte 8 not put back", "    for (int i = 0; i < WS_VILLAGERS; i++)\n        ta[WS_VILLAGER_SIZE * i + 8] = ta[WS_STATE + i];\n    walk_sfx_play(w, SFX_EF, 0x4086);",
+  "    walk_sfx_play(w, SFX_EF, 0x4086);")
+m("walk.c", "door: no sound", "    walk_sfx_play(w, SFX_EF, 0x4086);   /*", "    (void)0;   /*")
+m("walk.c", "door: the picture door's sound", "    walk_sfx_play(w, SFX_EF, 0x4086);   /*", "    walk_sfx_play(w, SFX_EF, 0x5571);   /*")
+m("walk.c", "door: no zoom out", "    if (w->scr)\n        zoom_out(w, w->scr);", "")
+m("walk.c", "door: zoom out 12 steps", "    for (unsigned k = 0; k < 13; k++) {\n        unsigned cw = WALK_ZOOM_W - 14 * k", "    for (unsigned k = 0; k < 12; k++) {\n        unsigned cw = WALK_ZOOM_W - 14 * k")
+m("walk.c", "door: zoom out shrinks by 12 across", "unsigned cw = WALK_ZOOM_W - 14 * k,", "unsigned cw = WALK_ZOOM_W - 12 * k,")
+m("walk.c", "door: zoom out corner stays", "ch = WALK_ZOOM_H - 12 * k, off = 0x487 * k;", "ch = WALK_ZOOM_H - 12 * k, off = 0;")
+m("walk.c", "door: zoom out not shown", "            memcpy(scr->pix + (16 + r) * SCREEN_W + 64, w->zoom_grab + r * WALK_ZOOM_W, WALK_ZOOM_W);\n        if (w->zoom_show)",
+  "            (void)r;\n        if (w->zoom_show)")
+m("walk.c", "door: state not written", "    if (assets_write_at(\"__1.now\", (size_t)WS_STATE * tb[510], ta, WS_STATE) != 0)\n        note_unbuilt(w, \"__1.NOW that cannot be written\", tb[510]);\n    memcpy(tb + 510, rec + 3, 4);",
+  "    memcpy(tb + 510, rec + 3, 4);")
+m("walk.c", "door: state written at the new scene", "    if (assets_write_at(\"__1.now\", (size_t)WS_STATE * tb[510], ta, WS_STATE) != 0)\n        note_unbuilt(w, \"__1.NOW that cannot be written\", tb[510]);\n    memcpy(tb + 510, rec + 3, 4);",
+  "    memcpy(tb + 510, rec + 3, 4);\n    assets_write_at(\"__1.now\", (size_t)WS_STATE * tb[510], ta, WS_STATE);")
+m("walk.c", "door: place not taken", "    memcpy(tb + 510, rec + 3, 4);", "    memcpy(tb + 510, rec + 3, 2);")
+m("walk.c", "door: y not halved", "    memcpy(tb + 510, rec + 3, 4);", "    memcpy(tb + 510, rec + 3, 4);\n    tb[513] = (uint8_t)(tb[513] + 1);")
+m("walk.c", "door: shots fly on", "    w->scene_changes++;\n    memset(w->fx, 0xFA, sizeof w->fx);\n    for (int i = 0; i < WALK_SHOTS; i++)\n        w->fx[4 * i + 2] = 4;\n    for (int j = 0;",
+  "    w->scene_changes++;\n    for (int j = 0;")
+m("walk.c", "door: shake not reset", "    w->v48 = n->header[3];   /* 0x11233 */", "")
+m("walk.c", "door: no zoom in", "    for (int k = 0; k < WALK_ZOOM_STEPS; k++) {\n        walk_zoom_step(w, scr, k);\n        if (w->zoom_show)\n            w->zoom_show(w->zoom_ctx, scr);\n    }\n    return 0;",
+  "    return 0;")
+m("walkscene.c", "door: place copied from 500 again", "    if (party) {\n        memcpy(tb, party, WS_TAB_B);\n    } else {",
+  "    if (party) {\n        memcpy(tb, party, WS_TAB_B);\n        memcpy(tb + 510, tb + 500, 4);\n    } else {")
 
 
 def main():

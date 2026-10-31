@@ -938,7 +938,7 @@ static void show_zoom_step(void *ctx, screen_t *scr)
 {
     uint32_t *due = ctx;
     platform_present(scr);
-    if (!*due)
+    if (!*due || (int32_t)(platform_ticks_ms() - *due) > 100)   /* the first step of a zoom (the start's, or a door's later) */
         *due = platform_ticks_ms();
     *due += 1000u / TK_WALK_PASS_HZ;
     while ((int32_t)(platform_ticks_ms() - *due) < 0 && platform_poll())
@@ -1023,6 +1023,7 @@ static int play_walk(screen_t *scr)
         return -1;
     }
     const walk_scene_t *sc = walk_scene(w);
+    unsigned scene_changes = walk_scene_changes(w);
     const uint32_t start = platform_ticks_ms();
     uint32_t next = start;
     int event_reported = 0;
@@ -1091,6 +1092,13 @@ static int play_walk(screen_t *scr)
         feed_mouse(w);
         unsigned world_fm = *walk_fm(w);
         got = walk_pass(w, scr, ticks, platform_port60());
+        if (walk_scene_changes(w) != scene_changes) {   /* a door: the new scene's song from its start, with the music on (0x1132e) */
+            scene_changes = walk_scene_changes(w);
+            sc = walk_scene(w);
+            printf("walk: scene %d\n", sc->scene);
+            song_stop(song);
+            song = *walk_fm(w) == 0x81 ? song_start_at("walk", sc->song_pos, sc->song_len) : NULL;
+        }
         if (*walk_fm(w) != world_fm) {   /* key 1 or the music button: 0x165d:0x126 stops, 0x165d:0x3c plays the scene's song from its start */
             song_stop(song);
             song = *walk_fm(w) == 0x81 ? song_start_at("walk", sc->song_pos, sc->song_len) : NULL;

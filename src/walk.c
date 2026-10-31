@@ -82,6 +82,9 @@ struct walk {
     uint8_t *buf;                       /* the world buffer, a little longer than WALK_W * WALK_H (see walk_draw_specks) */
     uint8_t *dbuf;                      /* [bp-0x20]: what the doublings write (walk_double, walk_double_dark), WALK_W wide */
     uint8_t zoom_grab[WALK_ZOOM_W * WALK_ZOOM_H];   /* [bp-0xba]: the start's view, grabbed for the zoom */
+    void (*zoom_show)(void *ctx, screen_t *scr);    /* walk_begin_shown's: called after each zoom step (a door's too) */
+    void *zoom_ctx;
+    unsigned scene_changes;                         /* doors gone through (walk_scene_changes) */
     /* [bp-0x62]: 5 shots (x, y, direction, zigzag phase; one per party member number), then [bp-0xcc]: 10 sparks
      * (frame, x, y, direction). All 0xfa at the start (0x102fe). */
     uint8_t fx[WALK_FX_BYTES];
@@ -802,11 +805,17 @@ int walk_roof(uint8_t *omap, uint8_t *alt, const uint8_t *rec, int enter)
  * not built; then the record loop runs again on the live state. */
 static void records_again(walk_t *w, unsigned which);
 
+static void door(walk_t *w, unsigned si);
+
 static void hit_record(walk_t *w, unsigned si)
 {
     walk_scene_t *s = w->scene;
     const uint8_t *rec = s->tab_a + 1000 + si;
     unsigned kind = rec[2], d = s->tab_b[2];
+    if (kind == 1 && rec[0xE] == 0) {
+        door(w, si);
+        return;
+    }
     if (kind == 3) {
         if (d == 0 && rec[3] == 0 && w->alt[0] == 0) {
             if (walk_roof(s->omap, w->alt, rec, 1) != 0)
@@ -823,7 +832,9 @@ static void hit_record(walk_t *w, unsigned si)
             s->weather -= 3;
             walk_sfx_play(w, SFX_EF, 0x127D);   /* 0x17c2a */
         }
-    } else if (kind == 0 || kind == 1 || kind == 4 || kind == 5 || kind == 7 || kind == 8 || kind == 0xE ||
+    } else if (kind == 1) {
+        note_unbuilt(w, "a door with its own picture (kind 1, byte 0xe set)", si / WS_RECORD_SIZE);
+    } else if (kind == 0 || kind == 4 || kind == 5 || kind == 7 || kind == 8 || kind == 0xE ||
                (kind >= 0x11 && kind <= 0x14)) {
         char what[48];
         snprintf(what, sizeof what, "scene record kind 0x%x", kind);
@@ -853,6 +864,73 @@ static void records_again(walk_t *w, unsigned which)
         for (int r = 0; r < WALK_ZOOM_H; r++)
             memcpy(w->scr->pix + 0x1440 + r * SCREEN_W, w->zoom_grab + r * WALK_ZOOM_W, WALK_ZOOM_W);
     }
+}
+
+/* (0x199b4) A door's zoom out: the window (192 x 168 at (64, 16)) grabbed with its header into the buffer [bp-0x8c], then 13 steps:
+ * its middle w x h (192 x 168 shrinking by 14 x 12, the corner 0x487 k on) scaled to the window in the map buffer and shown, a
+ * retrace wait before each. The steps are the start's zoom in backwards. */
+static void zoom_out(walk_t *w, screen_t *scr)
+{
+    static uint8_t grab[WALK_ZOOM_W * WALK_ZOOM_H], crop[WALK_ZOOM_W * WALK_ZOOM_H + 1];
+    for (int r = 0; r < WALK_ZOOM_H; r++)
+        memcpy(grab + r * WALK_ZOOM_W, scr->pix + (16 + r) * SCREEN_W + 64, WALK_ZOOM_W);
+    for (unsigned k = 0; k < 13; k++) {
+        unsigned cw = WALK_ZOOM_W - 14 * k, ch = WALK_ZOOM_H - 12 * k, off = 0x487 * k;
+        for (unsigned r = 0; r < ch; r++)
+            memcpy(crop + r * cw, grab + off + r * WALK_ZOOM_W, cw);
+        crop[cw * ch] = 0;
+        walk_zoom_scale(w->zoom_grab, crop, cw, ch);
+        for (int r = 0; r < WALK_ZOOM_H; r++)
+            memcpy(scr->pix + (16 + r) * SCREEN_W + 64, w->zoom_grab + r * WALK_ZOOM_W, WALK_ZOOM_W);
+        if (w->zoom_show)
+            w->zoom_show(w->zoom_ctx, scr);
+    }
+}
+
+/* 0x10bf9 .. 0x11ce6 after a door: the loader on the party table in memory, then the zoom in. */
+static int scene_enter(walk_t *w, screen_t *scr)
+{
+    walk_scene_t *n = walk_scene_load_party(w->scene->tab_b);
+    if (!n)
+        return -1;
+    walk_scene_free(w->scene);
+    w->scene = n;
+    w->scene_changes++;
+    memset(w->fx, 0xFA, sizeof w->fx);
+    for (int i = 0; i < WALK_SHOTS; i++)
+        w->fx[4 * i + 2] = 4;
+    for (int j = 0; j < WALK_SPARKS; j++)
+        w->fx[4 * WALK_SHOTS + 4 * j] = 9;
+    w->v48 = n->header[3];   /* 0x11233 */
+    for (int k = 0; k < WALK_ZOOM_STEPS; k++) {
+        walk_zoom_step(w, scr, k);
+        if (w->zoom_show)
+            w->zoom_show(w->zoom_ctx, scr);
+    }
+    return 0;
+}
+
+/* Kind 1, a door (0x1768a .. 0x17b0b, byte 0xe 0): the first 100 words of [bp-0x8c] set to 10000, 10050, .. (not kept here: the
+ * zoom out's grab covers them, and the DAC does not change); each villager's byte 8 put back from its copy; the sound at SND_EF
+ * 0x4086; the zoom out; the scene's 1750 bytes written into
+ * __1.NOW at 1750 x the scene (party byte 510); party bytes 510 .. 513 = the record's bytes 3 .. 6 (the new scene, its byte 511, x and
+ * y / 2); [bp-0x74] set, so 0x18b82 goes on to the loader (0x10bf9) for the new scene. */
+static void door(walk_t *w, unsigned si)
+{
+    walk_scene_t *s = w->scene;
+    uint8_t *ta = s->tab_a, *tb = s->tab_b;
+    const uint8_t *rec = ta + 1000 + si;
+    for (int i = 0; i < WS_VILLAGERS; i++)
+        ta[WS_VILLAGER_SIZE * i + 8] = ta[WS_STATE + i];
+    walk_sfx_play(w, SFX_EF, 0x4086);   /* [bp-0x96] = 0x4086 (0x17709); 0x5571 after a door with its own picture */
+    if (w->scr)
+        zoom_out(w, w->scr);
+    if (assets_write_at("__1.now", (size_t)WS_STATE * tb[510], ta, WS_STATE) != 0)
+        note_unbuilt(w, "__1.NOW that cannot be written", tb[510]);
+    memcpy(tb + 510, rec + 3, 4);
+    w->vbe = 1;
+    if (!w->scr || scene_enter(w, w->scr) != 0)
+        note_unbuilt(w, "a door to a scene that does not load", si / WS_RECORD_SIZE);
 }
 
 unsigned walk_shake_offset(unsigned v48, unsigned r)
@@ -3825,6 +3903,8 @@ int walk_begin_shown(walk_t *w, screen_t *scr, uint32_t seed, uint32_t ticks, vo
     walk_sound_buttons(w, scr);
     if (walk_reset(w, seed) != 0)
         return -1;
+    w->zoom_show = show;
+    w->zoom_ctx = ctx;
     walk_palette_load(w, scr);
     for (int k = 0; k < WALK_ZOOM_STEPS; k++) {   /* 0x11c25 .. 0x11ce6: the view comes in before the first pass */
         walk_zoom_step(w, scr, k);
@@ -4025,6 +4105,17 @@ void walk_set_show(walk_t *w, void (*show)(void *ctx, screen_t *scr), void *ctx)
 {
     w->show = show;
     w->show_ctx = ctx;
+}
+
+unsigned walk_scene_changes(const walk_t *w)
+{
+    return w->scene_changes;
+}
+
+void walk_set_zoom_show(walk_t *w, void (*show)(void *ctx, screen_t *scr), void *ctx)
+{
+    w->zoom_show = show;
+    w->zoom_ctx = ctx;
 }
 
 battle_t *walk_cast(const walk_t *w)

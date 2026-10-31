@@ -720,6 +720,28 @@ run sys_mouse_over_save 1 106 30 60 --key 1:0x81 --mouse 0:150:149:0 --key 10:0x
 run sys_mouse_over_leave 1 106 30 60 --key 1:0x81 --mouse 0:150:149:0 --key 10:0x05 --key 12:0x85 --key 20:0x4d --key 22:0xcd \
     --key 30:0x1c --key 32:0x9c
 for seed in 1 2 3; do run "sys_walk$seed" 0 36 22 2500 $($PY tools/walk_keys.py sys $seed 2500); done
+# doors (kind 1 records, step 38): through scene 0's south door to scene 1, and from scenes 1 (both ways), 6 and the dark 13; scene 0 to
+# 1 and back (the state the first door wrote into __1.NOW read again), with music, the Sound Blaster, slow machines and the mouse;
+# three random walks from beside the south door. The zoom out and the zoom in after it are compared step by step.
+run door_s0s1 0 62 49 150 --key 1:0x50 --key 60:0xd0
+run door_s1s0 1 42 49 150 --key 1:0x4d --key 60:0xcd
+run door_s1s2 1 60 66 150 --key 1:0x4d --key 60:0xcd
+run door_s6s0 6 76 42 150 --key 1:0x50 --key 60:0xd0
+run door_s13s1 13 26 17 150 --key 1:0x4d --key 60:0xcd
+# the shake's floor (map header byte 3) is 1 in scene 9 and 0 in 12; scene 42 (also 1) to 10 (a battle follows); scene 43 into 9
+run door_s9s12 9 94 14 150 --key 1:0x50 --key 60:0xd0
+run door_s42s10 42 62 77 150 --key 1:0x50 --key 60:0xd0
+run door_s43s9 43 46 57 150 --key 1:0x50 --key 60:0xd0
+# a shot still flying when the door is taken
+run door_shot 0 62 49 150 --key 1:0x50 --key 15:0x39 --key 16:0xb9 --key 17:0x50 --key 60:0xd0
+TRIP="--key 1:0x50 --key 20:0xd0 --key 30:0x48 --key 34:0xc8 --key 40:0x4b --key 60:0xcb"
+run door_trip 0 62 49 250 $TRIP
+run door_trip_opl 0 62 49 200 $TRIP --opl
+run door_trip_sb 0 62 49 200 $TRIP --sb
+DOPTS="--speed 0"; run door_trip_slow0 0 62 49 200 $TRIP
+DOPTS="--speed 1"; run door_trip_slow1 0 62 49 200 $TRIP; DOPTS=""
+run door_trip_mouse 0 62 49 200 $TRIP --mouse 0:150:60:0
+for seed in 1 2 3; do run "door_walk$seed" 0 62 49 1500 $($PY tools/walk_keys.py fuzz $seed 1500); done
 DOPTS=""
 DOPTS=""
 # the world's start zoom (step 23; tools/zoom_check.py): its 13 steps in scenes 0, 1, 34 and four dark scenes (6, 9, 23, 47), from the

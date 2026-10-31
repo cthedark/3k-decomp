@@ -139,6 +139,11 @@ void walk_palette_load(const walk_t *w, screen_t *scr);
 void walk_palette_step_dim(walk_t *w, screen_t *scr);
 /* With `show` set, F4's picker shows the steps of a helped member's face flash through it (battle_set_show). */
 void walk_set_show(walk_t *w, void (*show)(void *ctx, screen_t *scr), void *ctx);
+/* What is called after each step of a zoom: a door's zoom out and the new scene's zoom in (walk_begin_shown sets it to its own). */
+void walk_set_zoom_show(walk_t *w, void (*show)(void *ctx, screen_t *scr), void *ctx);
+/* How many doors have changed the scene: when it moves, walk_scene() is a new scene (the old pointer is freed) and, with the music
+ * on, the original starts the new scene's song from its start (the loader, 0x1132e). */
+unsigned walk_scene_changes(const walk_t *w);
 /* F4's picker and magic list while they run (a battle_t in its world mode, battle.h), else NULL. */
 struct battle;
 struct battle *walk_cast(const walk_t *w);
