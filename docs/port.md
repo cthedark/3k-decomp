@@ -855,7 +855,7 @@ shrinking stride for the first 18.75 minutes of each 60, dry for the next 18.75,
 **Limits of what is checked:** only scene 0, only its villagers' idle behaviour (they stay outside the window, so the *drawing* of walking
 villagers rests on step 2's frames, not on these passes), and only 1,500 passes at most per clock reading. The animation tables have 23 + 2 live
 entries (the 30 / 40 entry limits come from the code). The specks write past the end of the 224 x 200 buffer in the original (into whatever
-follows); the port gives the buffer 0x400 more bytes. Weather mode 2 draws nothing. `walk_draw_world` is gone: the pass draws the layers itself.
+follows); the port gives the buffer 0x400 more bytes. Weather mode 2 draws nothing (since 9s it snows). `walk_draw_world` is gone: the pass draws the layers itself.
 
 **A note from the mutation run:** the list of distinct words loops until it finds a new value. With a wrong rand multiplier (a deliberate
 bug) it never finishes; the run counted the hang as noticed. With the right generator it ends after 303 draws.
@@ -1421,4 +1421,22 @@ the price), Esc or the right button leave. A healer (type 3) restores one member
 - **The inn's night (also 2026-10-31):** the inn heals every member alive, raises his MP to 20 x his level, and shows the party asleep with
   Zzz's until a key or a button (`inn_begin`, `inn_round`; findings step 41); the music stops, and with the Sound Blaster its sound
   loops (`SFX_RPG`). Checked: 7 more `shop_night` starts, all identical; 28 mutations, all caught, two dropped with notes.
-- **Not built:** the record block's kinds 0, 7, 8, 0xe, 0x11 and 0x13.
+- **Not built:** the record block's kinds 0, 7, 8, 0xe, 0x11 and 0x13 (kind 8 since built, 9s).
+
+## Milestone 9s: boat rides (kind 8) and scene 3's snow (C), built 2026-10-31
+Walking onto a pier's record (kind 8, eight of them in scenes 1, 3 and 7) plays the boat ride: the party in the boat, rocking between
+two frames, sails away over turning water, shrinking and darkening, with the shore bobbing in front; then the new scene loads with the
+party at the record's place and the view zooms in, as after a door (`docs/findings.md` "WALK.SL step 42"). Scene 3, the first scene
+with weather mode 2, now snows instead of showing nothing.
+
+- **Code:** `src/walk.c` (`boat`, `boat_ride`, `boat_turn`, `boat_blit`, `boat_stretch`; `scene_leave`, now shared with `door`;
+  `walk_draw_snow`); `tools/battle_check.py` (the ride's steps, after its window copy at `0x1c21a`, compared with the door's).
+- **Checked:** `tools/check_battle.sh`, 10 `boat_` starts, all identical at every pass, the 84 ride steps and 13 zoom steps of each
+  included: scene 3's two piers, scene 1 to 3 and scene 7 to 1, five members aboard, a fallen one, the pointer over the window and over
+  the panel, the Sound Blaster, the music. `tools/mutate_battle.py`: 30 boat and 3 snow mutations, all caught, three dropped with
+  notes. ASan / UBSan clean on four starts; a real-time run under SDL's dummy drivers took scene 3's pier to scene 1.
+- **Choice:** the ride's steps go at the world's pass rate (`show_zoom_step` in `src/main.c`), about 2.4 s; the original waits for
+  nothing between them.
+- **Not reproduced:** the boat and shore pixels that fall past the world buffer's end (the original writes them up to 0x8925 bytes into
+  the picture, past its 168 rows; nothing shows them).
+- **Not built:** the record block's kinds 0, 7, 0xe, 0x11 and 0x13.

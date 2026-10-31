@@ -1081,6 +1081,43 @@ m("walk.c", "inn: sound not cut", "    if (w->sb == 0x81)\n        walk_sfx_stop
 m("walk.c", "inn: strip put back at the end", "    shop_end(w, scr, 0);\n}", "    shop_end(w, scr, 1);\n}")
 m("walk.c", "shop: no mouse leftover", "        w->shop_c = mb;\n", "")
 
+# the boat rides (step 42); RUNS="boat_"
+m("walk.c", "boat: not taken", "    if (kind == 8 && w->scr) {\n        boat(w, si);", "    if (kind == 88 && w->scr) {\n        boat(w, si);")
+m("walk.c", "boat: no ride", "    walk_mouse_hide(w, w->scr);\n    boat_ride(w, w->scr);", "    walk_mouse_hide(w, w->scr);")
+m("walk.c", "boat: shore not unpacked in place", "    walk_rle_unpack(shore, sizeof shore, mb, sizeof w->zoom_grab);", "    walk_rle_unpack(shore, sizeof shore, mb + 1, sizeof w->zoom_grab - 1);")
+m("walk.c", "boat: frames not cleared", "    memset(buf, 0, 0x3208);\n    buf[0]", "    buf[0]")
+m("walk.c", "boat: second frame is the first", "    memcpy(buf + 0x1908, big + 0x8F34, 0x1130);", "    memcpy(buf + 0x1908, big + 0x7E04, 0x1130);")
+m("walk.c", "boat: party a row lower", "    unsigned at = 0xC30;\n    for (unsigned o = 3;", "    unsigned at = 0xC80;\n    for (unsigned o = 3;")
+m("walk.c", "boat: party 15 apart", "        at += 0x10;\n    }\n    for (unsigned i = 0; i < 0xBE0; i++) {", "        at += 0xF;\n    }\n    for (unsigned i = 0; i < 0xBE0; i++) {")
+m("walk.c", "boat: no party", "        inn_blit(buf + 4, 0x1900, at, 0x50, spr, 0x10, 0x10);\n        inn_blit(buf + 0x1908, 0x1900, at, 0x50, spr, 0x10, 0x10);", "        (void)spr;")
+m("walk.c", "boat: fallen left ashore", "        if (party[o] >= 5)\n            continue;\n        const uint8_t *spr", "        if (party[o] >= 5 || w16(party, o + 5) == 0)\n            continue;\n        const uint8_t *spr")
+m("walk.c", "boat: party sprite frame 0", "party[o] * 0xC00u + 0x100;", "party[o] * 0xC00u;")
+m("walk.c", "boat: no fronts", "        if (big[0xA064 + i])\n            buf[0xD24 + i] = big[0xA064 + i];", "")
+m("walk.c", "boat: fronts not clear", "        if (big[0xAC44 + i])\n            buf[0x2628 + i]", "        if (1)\n            buf[0x2628 + i]")
+m("walk.c", "boat: no palette step", "    while (n) {\n        palette_cycle(w, scr);", "    while (n) {")
+m("walk.c", "boat: water still", "        boat_turn(big);\n        memcpy(buf + 0x32C8", "        memcpy(buf + 0x32C8")
+m("walk.c", "boat: turn 1 pixel", "        memmove(p, p + 2, bw - 2);\n        p[bw - 2] = a;\n        p[bw - 1] = b;", "        (void)b;\n        memmove(p, p + 1, bw - 1);\n        p[bw - 1] = a;")
+m("walk.c", "boat: stretch at 80", "        if (n > 0x50) {\n            boat_stretch", "        if (n >= 0x50) {\n            boat_stretch")
+# Dropped: the stretch's rows counted from 1 instead of 0 (no size from 82 to 168 crosses a row differently, work/b11/boatcheck.py).
+m("walk.c", "boat: shaded once less", "            for (unsigned t = 5 - n / 16; t; t--)", "            for (unsigned t = 4 - n / 16; t && t < 9; t--)")
+m("walk.c", "boat: not shaded", "                shade(w, big + 0x7E08, 0x1900);", "                (void)0;")
+m("walk.c", "boat: one frame", "        v8 = v8 + 0x1904 > 0x1904 ? 0 : v8 + 0x1904;", "        (void)v8;")
+m("walk.c", "boat: shore still", "        for (int k = 0; k < 3; k++)\n            boat_turn(mb);", "        for (int k = 0; k < 2; k++)\n            boat_turn(mb);")
+m("walk.c", "boat: no shore", "        boat_blit(buf, 0x32CC, v10, 0xC0, mb);", "        (void)v10;")
+m("walk.c", "boat: shore does not bob", "            v6 = v6 == 0x180 ? 0 : 0x180;\n    }", "            v6 = v6 == 0x180 ? 0x180 : 0x180;\n    }")
+m("walk.c", "boat: steps of 2 rows", "        va = (va + 0x181 + v6 - 0xC0) & 0xFFFF;", "        va = (va + 0x181 + v6 / 2 - 0x60) & 0xFFFF;")
+m("walk.c", "boat: boat from 0", "    unsigned v10 = 0x6840, v6 = 0x180, n = 0xA8, v8 = 0, va = 0xC;", "    unsigned v10 = 0x6840, v6 = 0x180, n = 0xA8, v8 = 0, va = 0;")
+m("walk.c", "boat: 83 steps", "        n -= 2;\n        va =", "        n = n > 4 ? n - 2 : 0;\n        va =")
+m("walk.c", "boat: steps not shown", "        put_pic(scr, 0x1440, buf + 0x32C8);   /* 0x27328 */\n        if (w->zoom_show)", "        if (w->zoom_show)")
+# Dropped: the boat and the shore clipped to the picture's 168 rows (what falls below is never shown; the loader redraws the buffer).
+# Dropped: the villagers' byte 8 not put back (it equals its copy in every start: no villager had changed it), and the state
+# written and the place taken, which are the door's scene_leave (its mutations cover both).
+m("walk.c", "boat: pointer kept", "    walk_mouse_hide(w, w->scr);\n    boat_ride", "    boat_ride")
+m("walk.c", "boat: pointer not reset", "    walk_mouse_reset(w, w->scr);\n    w->vbe = 8;", "    w->vbe = 8;")
+m("walk.c", "snow: not drawn", "        walk_draw_snow(w->buf, w->drops, stride);", "        (void)0;")
+m("walk.c", "snow: flakes at the full stride", "        unsigned p = drops[i] + (small ? stride >> 1 : stride);", "        unsigned p = drops[i] + stride;")
+m("walk.c", "snow: cross without its foot", "{0xE2, 0x12}, {0x1C1, 0x11}};", "{0xE2, 0x12}, {0xE2, 0x12}};")
+
 def main():
     if not (ROOT / "work/check_battle").exists():
         print("run tools/check_battle.sh first")

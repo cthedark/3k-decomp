@@ -753,6 +753,19 @@ DOPTS="--speed 0"; run door_trip_slow0 0 62 49 200 $TRIP
 DOPTS="--speed 1"; run door_trip_slow1 0 62 49 200 $TRIP; DOPTS=""
 run door_trip_mouse 0 62 49 200 $TRIP --mouse 0:150:60:0
 for seed in 1 2 3; do run "door_walk$seed" 0 62 49 1500 $($PY tools/walk_keys.py fuzz $seed 1500); done
+# boat rides (kind 8, step 42): scene 3's two piers to scene 1, scene 1 to 3 and scene 7 to 1 (the snow of scene 3 on the way); the
+# whole party aboard, a fallen member too; the mouse, the Sound Blaster and the music. The ride's 84 steps and the zoom in are compared
+# step by step.
+run boat_s3r0 3 184 66 200 --key 1:0x48 --key 60:0xc8
+run boat_s3r1 3 29 84 200 --key 1:0x4b --key 60:0xcb
+run boat_s1r7 1 24 16 200 --key 1:0x48 --key 60:0xc8
+run boat_s7r1 7 200 25 200 --key 1:0x48 --key 60:0xc8
+DOPTS="--join 1 --join 2 --join 3 --join 4"; run boat_party 3 184 66 200 --key 1:0x48 --key 60:0xc8
+DOPTS="--join 2 --join 4 --hp 2:0"; run boat_fallen 1 24 16 200 --key 1:0x48 --key 60:0xc8; DOPTS=""
+run boat_mouse 3 184 66 200 --key 1:0x48 --key 60:0xc8 --mouse 0:150:60:0
+run boat_mouse_panel 3 184 66 200 --key 1:0x48 --key 60:0xc8 --mouse 0:20:100:0 --mouse 120:30:110:0
+run boat_sb 3 29 84 200 --key 1:0x4b --key 60:0xcb --sb
+run boat_opl 7 200 25 200 --key 1:0x48 --key 60:0xc8 --opl
 # shops (kind 5, step 40): scene 0's food shop (type 0) entered from outside its door: purchases by the hero, the second member and the
 # fifth, too few coins, no room, Esc in the picker, the mouse, a 900-pass stay; scene 2's two type 2 shops; scene 2's healer (type 3:
 # the hero, a fallen member, too few coins, the second row) and its inn's opening (type 4; the night is not built)

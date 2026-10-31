@@ -3864,6 +3864,7 @@ READ from the code (`work/b11/rec.asm`, `0x172f0` .. `0x18b82`), not run or comp
   (waiting). Scene 43 has five of them.
 - **Kind 8, a boat ride (8: scenes 1, 3, 7):** the pointer off; `0x1be44` (it reads `BOAT.LCZ`); then as a door: the villagers' byte
   8 put back, the scene's state into `__1.NOW` (`ds:0x114`), party bytes 510 .. 513 = the record's bytes 3 .. 6, `[bp-0x74]` set.
+  Built and compared in step 42.
 - **Kind 0xe (1: scene 22):** if the party table's word at 0x122 is not 0: `0x24962` (it reads `RPG.LCP`, `MES_TXT.LCC` and
   `SHOP_PIC.LCC`; not read further), then the party and trail put at (byte 3, 2 x byte 4) and the roof flag `[bp-0x9e]` cleared.
 - **Kind 0x11, a scripted talk (2: scenes 22, 42), with kind 0x12 after it (1):** if flag (byte 3, bit byte 4) is set and byte 5 is not
@@ -3968,3 +3969,50 @@ the member a picker gave; before either, 0xbc (SEEN at scene 2's inn without a m
 cap, one above it), too few coins. `tools/mutate_battle.py`: 28 inn mutations, all caught (two after the MP start was added); two
 dropped with notes. ASan / UBSan clean on four starts; a real-time night under SDL's dummy drivers. `tools/sb_stub.py` now also finds
 sounds in `RPG.LCP`, and `src/sfx.c` reads it (`SFX_RPG`).
+
+## WALK.SL step 42: the boat rides (kind 8, `0x17ff4`, `0x1be44` .. `0x1c283`) and the snow, 2026-10-31
+
+READ from the code (`work/b11/k8.asm`, `work/b11/boat.asm`, `work/b11/boath.asm`), built and CONFIRMED by the comparison.
+
+**Kind 8** (`0x17ff4` .. `0x1816f`): the pointer off (`0x1732:8`, with a mouse driver); `0x1be44` with the world buffer `[bp-0x8c]`, the
+map buffer `[bp-0xba]`, the 64 KB buffer `[bp-0x20]`, the palette `[bp-0xac]`, bank 2, the party table and the shading table; then the
+villagers' byte 8 put back, the scene's 1750 bytes into `__1.NOW`, party bytes 510 .. 513 = the record's bytes 3 .. 6, `[bp-0x74]` set
+(the loader and the zoom in follow, as after a door); the pointer's place 0 with the corner kept (`0x1723:0xc`). No sound, no zoom out.
+
+**The ride** (`0x1be44`):
+- `BOAT.LCZ` (0x43b7 bytes, `ds:0x171`) read into the map buffer and unpacked (`0x25eeb`) three times: from 0 into `[bp-0x20]` the water,
+  192 x 168 with its header; from 0x1b04 into the map buffer itself the shore, 192 x 29 (0x15c4 bytes out, so the third block at
+  0x28ec is not reached); from 0x28ec into `[bp-0x20]` + 0x7e04, 0x3a20 bytes with no header: two 80 x 55 frames of the boat, then two
+  80 x 38 fronts;
+- the world buffer's first 0x3208 bytes cleared (`0x273f8`); two 80 x 80 pictures with headers at 0 and 0x1904; each frame's 0x898 words
+  into one (`0x27503`); for the party records at 3, 43, .. 163 whose number is below 5 (fallen ones too) the 16 x 16 sprite at bank 2 +
+  number x 0xc00 + 0x100 into both at row 39, 16 pixels a member (`0x26c04`, colour 0 clear); the fronts over rows 42 .. 79 of each
+  (`0x26d52`, colour 0 clear);
+- 84 steps, the size n from 168 down by 2 to 2: a Sound Blaster sound that has played out ended (`0x190e:0x6d`, `0x190e:0x49(0)`;
+  nothing shows); the palette step (`0x1c284`); the water's rows turned 2 pixels left (`0x2758d` mode 2: the first word goes to the
+  row's end) and its 0x3f02 words copied to the world buffer + 0x32c8; the frame `[bp-8]` (0 and 0x1904 in turn) stretched
+  (`0x26de8`, n above 80) or shrunk (`0x26f72`) to n x n into `[bp-0x20]` + 0x7e04, and when shrunk shaded 5 - n / 16 times
+  (`0x25dca`, 0x1900 bytes); it is put (`0x26ad2`, colour 0 clear, no clipping) at `[bp-0xa]` into the picture at + 0x32cc, 192 wide;
+  the shore turned 6 pixels (three calls) and put at `[bp-0x10]`; the picture shown at (64, 16) (`0x27328`, 0x1440);
+- the places: `[bp-0xa]` from 12 goes on by 0x181 + `[bp-6]` - 0xc0 (3 rows and 1 pixel, or 1 row and 1), `[bp-0x10]` from 0x6840 by
+  `[bp-6]` - 0xc0 (a row down or up); `[bp-6]` flips between 0x180 and 0 when `[bp-0x10]` is outside 0x6900 .. 0x72c0, so the shore
+  bobs between rows 140 and 154. The boat's first steps and the shore's low places write past the picture's 168 rows (up to 0x8925
+  bytes from its pixels); nothing shows those bytes and the loader redraws the buffer. The ride reads no key.
+
+**Weather mode 2 is snow** (`0x2c236` .. `0x2c28e`, the rain routine `0x2c1ae` with its mode argument 2). Scene 3 (the first pier) has
+mode 2, so the notes of steps 3 and 6 ("read and never seen", "probably snow") and the port's "nothing is drawn" were wrong: the oracle's first screen there
+shows it. On the rain's 75 places, with the rain's stride and clock: the first 40 are 2 x 2 flakes (0x14 0x14 over 0x16 0x16) moving
+by half the stride, the other 35 crosses (0x10 at +1; 0x11 0x11 0x12 at +0xe0; 0x11 at +0x1c1) moving by the full stride; the same
+wrap at 0xa100. CONFIRMED by the boat starts of scene 3 (before it the first pass differed in 210 pixels).
+
+**Starts:** `work/b11/boatfind.py` (`doorfind.py` for kind 8) found straight walks onto scene 3's two piers; scene 1's record 7 and
+scene 7's record 1 were reached by starting below them (`work/b11/boatnear.py` maps the walkable places); scene 1's records 4, 8 and 9
+and scene 7's record 0 were not reached by a single held arrow.
+
+**Checked:** `tools/check_battle.sh`, 10 `boat_` starts, all identical at every pass with the 84 + 13 steps compared one by one
+(`tools/battle_check.py` adds the ride's step at `0x1c21a`): scene 3 to 1 from both piers, 1 to 3, 7 to 1, five members aboard, a fallen
+member (he rides), the pointer over the window and over the panel (moved after the ride), the Sound Blaster, the music.
+`tools/mutate_battle.py`: 30 boat and 3 snow mutations, all caught (the two pointer ones after the panel start was added); dropped with
+notes: the stretch's rows counted from 1 (no size crosses a row differently), clipping to the picture (never shown), the villagers'
+byte 8 (equal to its copy in every start). The state write and the place copy are now `scene_leave`, shared with the door, whose
+mutations cover them. ASan / UBSan clean on four starts; a real-time ride under SDL's dummy drivers ended in scene 1.

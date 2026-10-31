@@ -439,6 +439,24 @@ void walk_draw_rain(uint8_t *buf, uint16_t drops[WALK_RAIN_DROPS], unsigned stri
     }
 }
 
+/* 0x2c236 .. 0x2c28e, weather mode 2: snow on the rain's places and steps. The first 40 are 2 x 2 flakes (colours 0x14 over 0x16) at half
+ * the stride, the other 35 crosses (0x10 on top, 0x11 0x11 0x12 across, 0x11 below) at the full stride. */
+static void walk_draw_snow(uint8_t *buf, uint16_t drops[WALK_RAIN_DROPS], unsigned stride)
+{
+    static const struct { uint16_t off; uint8_t c; } flake[4] = {{0, 0x14}, {1, 0x14}, {0xE0, 0x16}, {0xE1, 0x16}},
+        cross[5] = {{1, 0x10}, {0xE0, 0x11}, {0xE1, 0x11}, {0xE2, 0x12}, {0x1C1, 0x11}};
+    for (int i = 0; i < WALK_RAIN_DROPS; i++) {
+        int small = i < 40;
+        for (unsigned k = 0; k < (small ? 4u : 5u); k++) {
+            unsigned p = drops[i] + (small ? flake[k].off : cross[k].off);
+            if (p < (unsigned)(WALK_W * WALK_H))
+                buf[p] = small ? flake[k].c : cross[k].c;
+        }
+        unsigned p = drops[i] + (small ? stride >> 1 : stride);
+        drops[i] = (uint16_t)(p >= 0xA100 ? p - 0xA100 : p);
+    }
+}
+
 /* ---- the world in motion ---- */
 
 unsigned walk_rain_stride(int weather, uint32_t ticks)
@@ -824,6 +842,7 @@ static void records_again(walk_t *w, unsigned which);
 
 static void door(walk_t *w, unsigned si);
 static void shop_open(walk_t *w, screen_t *scr, unsigned si);
+static void boat(walk_t *w, unsigned si);
 
 void walk_record_kind4(uint8_t *party, const uint8_t *rec)
 {
@@ -844,6 +863,10 @@ static void hit_record(walk_t *w, unsigned si)
     unsigned kind = rec[2], d = s->tab_b[2];
     if (kind == 1) {
         door(w, si);
+        return;
+    }
+    if (kind == 8 && w->scr) {
+        boat(w, si);
         return;
     }
     if (kind == 5 && w->scr) {   /* a shop (0x17d6c): its loop runs until it is left, then the record loop */
@@ -1016,10 +1039,20 @@ static void door_picture(walk_t *w)
     }
 }
 
+/* The end of a door or a boat: the scene's 1750 bytes written into __1.NOW at 1750 x the scene (party byte 510), then party bytes
+ * 510 .. 513 = the record's bytes 3 .. 6. */
+static void scene_leave(walk_t *w, const uint8_t *rec)
+{
+    uint8_t *ta = w->scene->tab_a, *tb = w->scene->tab_b;
+    if (assets_write_at("__1.now", (size_t)WS_STATE * tb[510], ta, WS_STATE) != 0)
+        note_unbuilt(w, "__1.NOW that cannot be written", tb[510]);
+    memcpy(tb + 510, rec + 3, 4);
+}
+
 static void door(walk_t *w, unsigned si)
 {
     walk_scene_t *s = w->scene;
-    uint8_t *ta = s->tab_a, *tb = s->tab_b;
+    uint8_t *ta = s->tab_a;
     const uint8_t *rec = ta + 1000 + si;
     for (int i = 0; i < WS_VILLAGERS; i++)
         ta[WS_VILLAGER_SIZE * i + 8] = ta[WS_STATE + i];
@@ -1031,9 +1064,7 @@ static void door(walk_t *w, unsigned si)
     }
     if (w->scr)
         zoom_out(w, w->scr);
-    if (assets_write_at("__1.now", (size_t)WS_STATE * tb[510], ta, WS_STATE) != 0)
-        note_unbuilt(w, "__1.NOW that cannot be written", tb[510]);
-    memcpy(tb + 510, rec + 3, 4);
+    scene_leave(w, rec);
     w->vbe = 1;
     if (!w->scr || scene_enter(w, w->scr) != 0)
         note_unbuilt(w, "a door to a scene that does not load", si / WS_RECORD_SIZE);
@@ -3770,6 +3801,140 @@ unsigned walk_mouse_key(unsigned x, unsigned y, unsigned last)
     return dir;
 }
 
+/* ---- the boat ride, kind 8 (0x17ff4 .. 0x1813f, 0x1be44 .. 0x1c283) ---- */
+
+/* 0x2758d with mode 2: each row of a picture with its header turned 2 pixels to the left (the first two go to the row's end) */
+static void boat_turn(uint8_t *pic)
+{
+    unsigned bw = w16(pic, 0), bh = w16(pic, 2);
+    for (unsigned r = 0; r < bh; r++) {
+        uint8_t *p = pic + 4 + (size_t)r * bw, a = p[0], b = p[1];
+        memmove(p, p + 2, bw - 2);
+        p[bw - 2] = a;
+        p[bw - 1] = b;
+    }
+}
+
+/* 0x26ad2: a picture with its header, colour 0 clear, at `at` in the world buffer's picture whose pixels start at `base`, `stride` wide.
+ * There is no clipping: the boat's first steps and the shore's lowest places go past the picture's 168 rows (up to 0x8925 bytes on);
+ * the port drops what would fall past the world buffer. */
+static void boat_blit(uint8_t *buf, unsigned base, unsigned at, unsigned stride, const uint8_t *pic)
+{
+    unsigned bw = w16(pic, 0), bh = w16(pic, 2);
+    for (unsigned r = 0; r < bh; r++)
+        for (unsigned c = 0; c < bw; c++) {
+            size_t o = base + (((size_t)at + (size_t)r * stride + c) & 0xFFFF);
+            uint8_t v = pic[4 + (size_t)r * bw + c];
+            if (v && o < WALK_BUF_LEN)
+                buf[o] = v;
+        }
+}
+
+/* 0x26de8: an 80 x 80 picture with its header stretched to n x n, the header written */
+static void boat_stretch(const uint8_t *src, uint8_t *dst, unsigned n)
+{
+    unsigned sw = w16(src, 0), sh = w16(src, 2), ys = (unsigned)((0xFFFFul * sh / n) & 0xFFFF), row = 0, yacc = 0;
+    dst[0] = (uint8_t)n, dst[1] = (uint8_t)(n >> 8), dst[2] = (uint8_t)n, dst[3] = (uint8_t)(n >> 8);
+    for (unsigned r = 0; r < n; r++) {
+        battle_stretch_row(src + 4 + row, sw, dst + 4 + (size_t)r * n, n);
+        yacc += ys;
+        if (yacc > 0xFFFF) {
+            yacc &= 0xFFFF;
+            row += sw;
+        }
+    }
+}
+
+/* 0x1be44: the boat ride. BOAT.LCZ (0x43b7 bytes) read into the map buffer [bp-0xba] and unpacked (0x25eeb) three times: the water, a
+ * 192 x 168 picture, into [bp-0x20]; the shore, 192 x 29, from 0x1b04 into the map buffer itself; from 0x28ec into [bp-0x20] + 0x7e04 the
+ * boat's two frames (80 x 55 each) and their fronts (80 x 38, colour 0 clear). The frames go into two 80 x 80 pictures with headers at
+ * the world buffer [bp-0x8c] and + 0x1904 (0x3208 bytes cleared first), each member numbered below 5 standing in both (bank 2, number x
+ * 0xc00 + 0x100, 16 x 16 at row 39, 16 apart, dead ones too), then the fronts over them from row 42. Then 84 steps: the palette step
+ * (0x1c284); the water turned 2 pixels and copied to the world buffer + 0x32c8; the boat's frame (each in turn) sized to n x n (168
+ * down by 2: stretched while above 80, else shrunk and shaded 5 - n / 16 times) and put at [bp-0xa] (12 on, 0x241 or 0xc1 a step);
+ * the shore turned 6 pixels and put at [bp-0x10] (0x6840, a row down or up a step, turning back outside 0x6900 .. 0x72c0); the
+ * picture shown at (64, 16). Each step first ends a Sound Blaster sound that has played out (0x190e), which shows nothing. */
+static void boat_ride(walk_t *w, screen_t *scr)
+{
+    static uint8_t big[0x10000];   /* [bp-0x20], a 64 KB buffer in the original (the port's [bp-0x20] holds less) */
+    walk_scene_t *s = w->scene;
+    uint8_t *mb = w->zoom_grab, *buf = w->buf, *party = s->tab_b;
+    if (assets_read_at("BOAT.LCZ", 0, mb, 0x43B7) != 0) {
+        note_unbuilt(w, "BOAT.LCZ missing or short", 0);
+        return;
+    }
+    static uint8_t shore[0x43B7 - 0x1B04];
+    memcpy(shore, mb + 0x1B04, sizeof shore);
+    walk_rle_unpack(mb, 0x43B7, big, sizeof big);
+    walk_rle_unpack(shore, sizeof shore, mb, sizeof w->zoom_grab);
+    walk_rle_unpack(mb + 0x28EC, 0x43B7 - 0x28EC, big + 0x7E04, sizeof big - 0x7E04);
+    memset(buf, 0, 0x3208);
+    buf[0] = buf[2] = buf[0x1904] = buf[0x1906] = 0x50;
+    memcpy(buf + 4, big + 0x7E04, 0x1130);
+    memcpy(buf + 0x1908, big + 0x8F34, 0x1130);
+    unsigned at = 0xC30;
+    for (unsigned o = 3; o < 0xC8; o += WS_PARTY_SIZE) {
+        if (party[o] >= 5)
+            continue;
+        const uint8_t *spr = s->bank2 + party[o] * 0xC00u + 0x100;
+        inn_blit(buf + 4, 0x1900, at, 0x50, spr, 0x10, 0x10);
+        inn_blit(buf + 0x1908, 0x1900, at, 0x50, spr, 0x10, 0x10);
+        at += 0x10;
+    }
+    for (unsigned i = 0; i < 0xBE0; i++) {   /* 0x26d52 */
+        if (big[0xA064 + i])
+            buf[0xD24 + i] = big[0xA064 + i];
+        if (big[0xAC44 + i])
+            buf[0x2628 + i] = big[0xAC44 + i];
+    }
+    unsigned v10 = 0x6840, v6 = 0x180, n = 0xA8, v8 = 0, va = 0xC;
+    while (n) {
+        palette_cycle(w, scr);
+        boat_turn(big);
+        memcpy(buf + 0x32C8, big, 0x7E04);
+        if (n > 0x50) {
+            boat_stretch(buf + v8, big + 0x7E04, n);
+        } else {
+            uint8_t *d = big + 0x7E04;
+            d[0] = (uint8_t)n, d[1] = 0, d[2] = (uint8_t)n, d[3] = 0;
+            battle_shrink(buf + v8 + 4, 0x50, 0x50, d + 4, n, n);
+            for (unsigned t = 5 - n / 16; t; t--)
+                shade(w, big + 0x7E08, 0x1900);
+        }
+        boat_blit(buf, 0x32CC, va, 0xC0, big + 0x7E04);
+        for (int k = 0; k < 3; k++)
+            boat_turn(mb);
+        boat_blit(buf, 0x32CC, v10, 0xC0, mb);
+        put_pic(scr, 0x1440, buf + 0x32C8);   /* 0x27328 */
+        if (w->zoom_show)
+            w->zoom_show(w->zoom_ctx, scr);
+        v8 = v8 + 0x1904 > 0x1904 ? 0 : v8 + 0x1904;
+        n -= 2;
+        va = (va + 0x181 + v6 - 0xC0) & 0xFFFF;
+        v10 = (v10 + v6 - 0xC0) & 0xFFFF;
+        if (v10 < 0x6900 || v10 > 0x72C0)
+            v6 = v6 == 0x180 ? 0 : 0x180;
+    }
+}
+
+/* Kind 8 (0x17ff4 .. 0x1816f): the pointer off, the boat ride, then as a door without its sound or zoom out: each villager's byte 8
+ * put back, the scene's 1750 bytes into __1.NOW, party bytes 510 .. 513 = the record's bytes 3 .. 6, [bp-0x74] set (the loader and the
+ * zoom in); the pointer's place 0 with the corner kept (0x1723:0xc). */
+static void boat(walk_t *w, unsigned si)
+{
+    uint8_t *ta = w->scene->tab_a;
+    const uint8_t *rec = ta + 1000 + si;
+    walk_mouse_hide(w, w->scr);
+    boat_ride(w, w->scr);
+    for (int i = 0; i < WS_VILLAGERS; i++)   /* 0x18054 */
+        ta[WS_VILLAGER_SIZE * i + 8] = ta[WS_STATE + i];
+    scene_leave(w, rec);
+    walk_mouse_reset(w, w->scr);
+    w->vbe = 8;
+    if (scene_enter(w, w->scr) != 0)
+        note_unbuilt(w, "a boat to a scene that does not load", si / WS_RECORD_SIZE);
+}
+
 /* ---- keys 1 to 4 and A (0x143f7 .. 0x14d46) ---- */
 
 static void walk_counters(walk_t *w);
@@ -4255,8 +4420,10 @@ int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60)
     unsigned stride = walk_rain_stride(s->weather, ticks);
     if (rainy)   /* 0x1248d, 0x124d3: the clock, shifted down 10 when below 0x5000 */
         w->v96 = (ticks & 0xFFFF) < 0x5000 ? (ticks & 0xFFFF) >> 10 : ticks & 0xFFFF;
-    if (stride && s->weather == 1)   /* mode 2 is read from the code but never seen: nothing is drawn for it */
+    if (stride && s->weather == 1)
         walk_draw_rain(w->buf, w->drops, stride);
+    if (stride && s->weather == 2)   /* snow (scene 3) */
+        walk_draw_snow(w->buf, w->drops, stride);
     unsigned sh = shake(w);   /* 0x1259b: the shake moves where the buffer starts, for the pointer too */
     uint8_t *view = w->buf;
     if (s->header[5]) {   /* 0x125c6: a dark scene shows the doubled, darkened middle; the shake moved what is doubled */
