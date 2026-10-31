@@ -26,7 +26,8 @@ struct walk {
     msgbox_t box;
     int talking;                        /* 1 the message box waits (0x1b506), 2 the yes / no buttons (0x18c36), 3 the number (0x18fdc),
                                          * 4 a look's message box (F2), 5 F3's wait, 6 F3's message box, 7 F4 to F7's lists, 8 F7's
-                                         * prompt, 9 F8's map, 10 F9's order, 11 F10's data */
+                                         * prompt, 9 F8's map, 10 F9's order, 11 F10's data, 12 a shop, 13 its picker, 14 the
+                                         * inn's night, 15 a number lock's or a scripted talk's message box */
     uint8_t *talk_rec;
     unsigned talk_msg, talk_k;          /* the message shown, the entry used (its offset in the record) */
     uint8_t talk_under[SCREEN_W * 46];  /* [bp+6] + 0x9c40: the screen's rows 134 .. 179 under boxes that do not wait */
@@ -75,6 +76,9 @@ struct walk {
     uint8_t inn_scr[0x798];
     unsigned inn_n, inn_c, inn_nights;
     unsigned shop_c;                    /* the shop's [bp-0xc]: the latched buttons, or the member a picker gave; the night counts from it */
+    /* a number lock (kind 7) or a scripted talk (kind 0x11) while its number box or message boxes run: the kind, the record, the
+     * talk's next entry in the map buffer ([bp-0x96]) */
+    unsigned rec_kind, rec_si, rec_k;
     uint8_t yn_pic[3][47 * 20];         /* the buttons' place as it was, with "yes" pressed, with "no" pressed */
     unsigned yn_shown, yn_sel;          /* [bp-4], [bp-0xc]: 1 yes, 0 no (2: none shown yet) */
     uint8_t ask_art[0x284 + 94 * 16];   /* RPG.LCP 0x1643b decoded: ten 8 x 8 digits, then the 94 x 16 number box after a 4-byte header */
@@ -126,6 +130,8 @@ enum { WALK_USE_ASK_COUNT = 0x16 };
 /* Key 3's number box: its palette count's leftover (0xe8 in the save probed, docs/findings.md step 37; any value from 0x16 up acts the
  * same) */
 enum { WALK_SAVE_ASK_COUNT = 0xE8 };
+/* A number lock's (kind 7): 0xee in scene 4's lock (SEEN, docs/findings.md step 43; any value from 0x16 up acts the same) */
+enum { WALK_LOCK_ASK_COUNT = 0xEE };
 /* F8's map: the rows it keeps; the byte of its frame that says whether the first row widens ([bp-0xc], never set there: 0xc6, the low
  * byte of a segment number, in every start probed, docs/findings.md step 33) */
 enum { WALK_MAP_UNDER_H = 102, WALK_MAP_TOGGLE = 0xC6 };
@@ -843,6 +849,8 @@ static void records_again(walk_t *w, unsigned which);
 static void door(walk_t *w, unsigned si);
 static void shop_open(walk_t *w, screen_t *scr, unsigned si);
 static void boat(walk_t *w, unsigned si);
+static int lock_open(walk_t *w, screen_t *scr, unsigned si);
+static void rec_talk_open(walk_t *w, screen_t *scr, unsigned si);
 
 void walk_record_kind4(uint8_t *party, const uint8_t *rec)
 {
@@ -869,6 +877,12 @@ static void hit_record(walk_t *w, unsigned si)
         boat(w, si);
         return;
     }
+    if (kind == 7 && w->scr && lock_open(w, w->scr, si))   /* a number lock: the rest when its boxes are done (rec_end) */
+        return;
+    if (kind == 0x11 && w->scr) {   /* a scripted talk (0x18305) */
+        rec_talk_open(w, w->scr, si);
+        return;
+    }
     if (kind == 5 && w->scr) {   /* a shop (0x17d6c): its loop runs until it is left, then the record loop */
         shop_open(w, w->scr, si);
         return;
@@ -891,8 +905,7 @@ static void hit_record(walk_t *w, unsigned si)
             s->weather -= 3;
             walk_sfx_play(w, SFX_EF, 0x127D);   /* 0x17c2a */
         }
-    } else if (kind == 0 || kind == 7 || kind == 8 || kind == 0xE ||
-               (kind >= 0x11 && kind <= 0x14)) {
+    } else if (kind == 0 || (kind == 7 && !w->scr) || kind == 8 || kind == 0xE || kind == 0x11 || kind == 0x13 || kind == 0x14) {
         char what[48];
         snprintf(what, sizeof what, "scene record kind 0x%x", kind);
         note_unbuilt(w, what, si / WS_RECORD_SIZE);
@@ -1465,11 +1478,14 @@ static void inn_begin(walk_t *w, screen_t *scr);
 static void inn_round(walk_t *w, screen_t *scr, unsigned port60);
 static void save_given(walk_t *w, screen_t *scr, unsigned slot);
 static void leave_answer(walk_t *w, screen_t *scr, int yes);
+static void lock_given(walk_t *w, screen_t *scr, unsigned value);
+static void rec_box_round(walk_t *w, screen_t *scr, unsigned port60);
+static void rec_end(walk_t *w);
 
 /* The palette the yes / no buttons and the number step on: the dimmed copy in a talk, the palette itself in F7. */
 static void ask_step(walk_t *w, screen_t *scr)
 {
-    if (w->using || w->sys)
+    if (w->using || w->sys || w->rec_kind)   /* a number lock's box steps the palette itself ([bp-0xac]) */
         palette_cycle(w, scr);
     else
         palette_cycle_on(w, scr, w->dimpal);
@@ -1686,6 +1702,8 @@ static void ask_open(walk_t *w, screen_t *scr)
         note_unbuilt(w, "the number box's picture (RPG.LCP 0x1643b) missing or too short", 0);
         if (w->sys)
             save_given(w, scr, 0xFFFF);
+        else if (w->rec_kind)
+            rec_end(w);
         else if (w->using)
             use_done(w, scr);
         else
@@ -1701,7 +1719,7 @@ static void ask_open(walk_t *w, screen_t *scr)
     fill(scr, 0x46E, 8, 1, 9);
     fill(scr, 0xFAE, 8, 1, 9);
     talk_mouse_start(w, scr);
-    w->talk_count = w->sys ? WALK_SAVE_ASK_COUNT : w->using ? WALK_USE_ASK_COUNT : 0x16;
+    w->talk_count = w->sys ? WALK_SAVE_ASK_COUNT : w->rec_kind ? WALK_LOCK_ASK_COUNT : w->using ? WALK_USE_ASK_COUNT : 0x16;
     w->ask_latch = 1;
     w->talking = 3;
 }
@@ -1778,6 +1796,10 @@ static void ask_round(walk_t *w, screen_t *scr, unsigned port60)
         save_given(w, scr, w->ask_value);
         return;
     }
+    if (w->rec_kind == 7) {
+        lock_given(w, scr, w->ask_value);
+        return;
+    }
     if (w->using) {
         use_coins_given(w, scr, w->ask_value);
         return;
@@ -1845,6 +1867,10 @@ static void talk_round(walk_t *w, screen_t *scr, unsigned port60)
     }
     if (w->talking == 14) {
         inn_round(w, scr, port60);
+        return;
+    }
+    if (w->talking == 15) {
+        rec_box_round(w, scr, port60);
         return;
     }
     int mx, my;
@@ -2739,7 +2765,7 @@ unsigned walk_look_entry(const uint8_t *party, const uint8_t *r)
 
 int walk_kind(const walk_t *w)
 {
-    static const int kind[15] = {0, 4, 8, 9, 4, 10, 4, 0, 12, 13, 14, 15, 17, 6, 18};
+    static const int kind[16] = {0, 4, 8, 9, 4, 10, 4, 0, 12, 13, 14, 15, 17, 6, 18, 4};
     if (w->boss_box)
         return 4;
     if (w->left)
@@ -3933,6 +3959,118 @@ static void boat(walk_t *w, unsigned si)
     w->vbe = 8;
     if (scene_enter(w, w->scr) != 0)
         note_unbuilt(w, "a boat to a scene that does not load", si / WS_RECORD_SIZE);
+}
+
+/* ---- number locks (kind 7, 0x17e3d .. 0x17fe2) and scripted talks (kind 0x11, 0x18305 .. 0x18536) ---- */
+
+/* A message box of a record's (0x1afb0, the palette itself), waiting (talking 15) or not; 0 when drawn. */
+static int rec_box(walk_t *w, screen_t *scr, unsigned msg, uint8_t colour, int wait)
+{
+    int r = msgbox_open(&w->box, scr, w->font8, w->table, w->buf + 0x7305, msg, colour, wait);
+    if (r < 0) {
+        note_unbuilt(w, "a message that MES_TXT.LCC does not have", msg);
+        return -1;
+    }
+    if (r > 0)
+        note_unbuilt(w, "a character the message font does not have", msg);
+    if (wait)
+        w->talking = 15;
+    return 0;
+}
+
+/* The end of a lock or a talk: as for any record, [bp-0xbe] the kind and the record loop again (0x18b82). */
+static void rec_end(walk_t *w)
+{
+    w->talking = 0;
+    w->vbe = w->rec_kind;
+    w->rec_kind = 0;
+    records_again(w, w->rec_si / WS_RECORD_SIZE);
+}
+
+/* Kind 7: when the flag (byte 5, bit byte 6) is not set, message 9 (colour 0x68, not waiting), the pointer off, the number box
+ * (0x18fdc). 0 when the flag is set (nothing happens). */
+static int lock_open(walk_t *w, screen_t *scr, unsigned si)
+{
+    const uint8_t *rec = w->scene->tab_a + 1000 + si;
+    if (walk_flag_test(w->scene->tab_b, rec[5], rec[6]))
+        return 0;
+    w->rec_kind = 7;
+    w->rec_si = si;
+    rec_box(w, scr, 9, 0x68, 0);
+    walk_mouse_hide(w, scr);
+    ask_open(w, scr);
+    return 1;
+}
+
+/* The number given: the pointer's place 0 with the corner kept (0x1723:0xc); the word at byte 3 sets the flag and plays SND_EF.1's
+ * 0x1bf5, another number gives message 10 (colour 0x68, waiting). */
+static void lock_given(walk_t *w, screen_t *scr, unsigned value)
+{
+    const uint8_t *rec = w->scene->tab_a + 1000 + w->rec_si;
+    walk_mouse_reset(w, scr);
+    if (value == w16(rec, 3)) {
+        walk_flag_set(w->scene->tab_b, rec[5], rec[6]);
+        walk_sfx_play(w, SFX_EF, 0x1BF5);
+        rec_end(w);
+        return;
+    }
+    if (rec_box(w, scr, 10, 0x68, 1) != 0)
+        rec_end(w);
+}
+
+/* The talk's next entry from [bp-0x96]: the picture (0x1c5e2) when its byte is not 0, then the message (colour 0xa8, waiting) when
+ * its word is not 0; after the sixth, the pointer's place 0 with the corner kept and the end. */
+static void rec_talk_next(walk_t *w, screen_t *scr)
+{
+    const uint8_t *mb = w->zoom_grab;
+    while (w->rec_k < 0x12) {
+        unsigned k = w->rec_k;
+        w->rec_k += 3;
+        if (mb[k + 2])
+            look_picture(w, scr, mb[k + 2]);
+        unsigned msg = w16(mb, k);
+        if (msg && rec_box(w, scr, msg, 0xA8, 1) == 0)
+            return;
+    }
+    walk_mouse_reset(w, scr);
+    rec_end(w);
+}
+
+/* Kind 0x11: the pointer off; when the flag (byte 3, bit byte 4) is set and byte 5 is not 0: the flag (byte 0xd, bit byte 0xe) set,
+ * byte 5 = 0 (it plays once), the map buffer's first 0x14 bytes cleared (0x273f8), the record's bytes 6 .. 11 copied there and, when
+ * the next record is of kind 0x12, its bytes 3 .. 14 after them: six (message word, picture byte) entries. */
+static void rec_talk_open(walk_t *w, screen_t *scr, unsigned si)
+{
+    uint8_t *rec = w->scene->tab_a + 1000 + si, *mb = w->zoom_grab;
+    w->rec_kind = 0x11;
+    w->rec_si = si;
+    w->rec_k = 0x12;
+    walk_mouse_hide(w, scr);
+    if (walk_flag_test(w->scene->tab_b, rec[3], rec[4]) && rec[5]) {
+        walk_flag_set(w->scene->tab_b, rec[0xD], rec[0xE]);
+        rec[5] = 0;
+        memset(mb, 0, 0x14);
+        memcpy(mb, rec + 6, 6);
+        if (rec[0x11] == 0x12)
+            memcpy(mb + 6, rec + 0x12, 12);
+        w->rec_k = 0;
+    }
+    rec_talk_next(w, scr);
+}
+
+/* A round of a lock's or a talk's waiting box (0x1b506, the palette itself) */
+static void rec_box_round(walk_t *w, screen_t *scr, unsigned port60)
+{
+    int mx, my;
+    unsigned mb = 0;
+    int on = walk_mouse(w, &mx, &my, &mb);
+    if (!msgbox_round(&w->box, scr, port60, on, mb, take_box_step, w))
+        return;
+    w->talking = 0;
+    if (w->rec_kind == 0x11)
+        rec_talk_next(w, scr);
+    else
+        rec_end(w);
 }
 
 /* ---- keys 1 to 4 and A (0x143f7 .. 0x14d46) ---- */

@@ -3870,7 +3870,8 @@ READ from the code (`work/b11/rec.asm`, `0x172f0` .. `0x18b82`), not run or comp
 - **Kind 0x11, a scripted talk (2: scenes 22, 42), with kind 0x12 after it (1):** if flag (byte 3, bit byte 4) is set and byte 5 is not
   0: flag (byte 0xd, bit byte 0xe) set, byte 5 = 0, `0x1732:0xd8(map buffer, 0x14, 0)` (not read); bytes 6 .. 11, and when the next
   record is kind 0x12 its bytes 3 .. 14, are up to six (message word, sound byte) entries: for each, the sound (`0x1c5e2`) when not 0,
-  then the message box (colour 0xa8, waiting) when the word is not 0.
+  then the message box (colour 0xa8, waiting) when the word is not 0. Correction (step 43): the byte is a picture, `0x1c5e2` is F2's
+  `SPIC.LCZ` picture.
 - **Kind 0x13, the ending (2: scene 52):** if flag (byte 3, bit byte 4) is set: the Sound Blaster driver ended, the music stopped,
   the buffers freed and `execl("ending.sl")`.
 
@@ -4016,3 +4017,41 @@ member (he rides), the pointer over the window and over the panel (moved after t
 notes: the stretch's rows counted from 1 (no size crosses a row differently), clipping to the picture (never shown), the villagers'
 byte 8 (equal to its copy in every start). The state write and the place copy are now `scene_leave`, shared with the door, whose
 mutations cover them. ASan / UBSan clean on four starts; a real-time ride under SDL's dummy drivers ended in scene 1.
+
+## WALK.SL step 43: number locks (kind 7) and scripted talks (kinds 0x11, 0x12), 2026-10-31
+
+READ from the code (`work/b11/rec.asm`, `0x17e3d` .. `0x17fe2` and `0x18305` .. `0x18536`), built and CONFIRMED by the comparison.
+Both use helpers the port has: the message box `0x1afb0` (with its wait loop `0x1b506`), the number box `0x18fdc`, F2's picture
+`0x1c5e2` and the flags `0x2c158`. Both pass the palette itself (`[bp-0xac]`) to the boxes, not the talk's dimmed copy.
+
+**Kind 7, a number lock:** nothing happens while its flag (byte 5, bit byte 6) is set. Otherwise: message 9 (colour 0x68, not
+waiting; nothing puts the screen back after it); the pointer off (`0x1732:8`); the number box; the pointer's place 0 with its corner
+kept (`0x1723:0xc`); the number equal to the word at byte 3 sets the flag and plays `SND_EF.1` 0x1bf5, any other gives message 10
+(colour 0x68, waiting). Then, as for every record, the record loop runs again (`0x18b82`), which applies what the flag opens. The
+number box's palette count starts from a stack byte: 0xee at scene 4's lock (SEEN with `work/b11/probe_pic.py` at `0x191af`); any
+value from 0x16 up steps the palette at the first round. The answers in the shipped `__1.NOW`: scene 4 15388, scene 21 83, scene 30
+39517, scene 43 4, 9, 6, 7 and 3.
+
+**Kinds 0x11 and 0x12, a scripted talk:** the pointer off. When its flag (byte 3, bit byte 4) is set and byte 5 is not 0: the flag
+(byte 0xd, bit byte 0xe) set; byte 5 = 0 in the scene's records (so it plays once, and the scene's state written by a door keeps
+that); the map buffer's first 0x14 bytes cleared (`0x273f8`); the record's bytes 6 .. 11 copied there and, when the next record's
+kind is 0x12, that record's bytes 3 .. 14 after them. Each of the six 3-byte entries is a message word and a picture byte: the
+picture (`SPIC.LCZ`, framed at (109, 45), as F2's) when the byte is not 0, then the message (colour 0xa8, waiting) when the word is
+not 0. Then the pointer's place 0 with its corner kept, and the record loop again. A kind 0x12 record stepped on does nothing.
+Scene 42's talk (record 11; flag 0 bit 0, set from the start) is messages 0x22f with picture 12, then 0x230; scene 22's (record 13,
+with record 14 of kind 0x12; flag 7 bit 3) is 0xd7 with picture 1, 0xd8, 0xd9 with picture 11, 0xda, 0xdc with picture 10.
+**Correction to step 39:** the entries' byte is a picture, not a sound.
+
+**Starts:** `work/b11/lockfind.py` (the door finder for kinds 7 and 0x11) gave straight walks for every lock and scene 42's talk; scene
+22's talk is in rooms the Python walk model cannot judge (its tiles raise in `walk_idle.foot_ok`), and a start below it was found by
+trial. The flags for a start are set with `tools/walk_scene_data.py --byte 0:200+idx:value`.
+
+**Checked:** `tools/check_battle.sh`, 9 `lock_` and 7 `script_` starts, all identical at every pass: scene 4's lock given a wrong
+number, closing message 10 by key or the right button; scene 43's last lock given 3 by keys, with the Sound Blaster (its sound), by
+the mouse on the box's arrows and middle, with the pointer still on the panel, then stepped on again (no box); the lock with its flag
+already set; scene 42's talk by keys, by the right button, with the pointer still, stepped on again (byte 5 is 0: nothing); scene 22's
+five messages, without its flag, and saved after it (the flag at 0x8d is past the part of the party table the passes compare; the
+save's files are compared). `tools/mutate_battle.py`: 14 lock and 12 talk mutations, all caught (four only after the still-pointer,
+re-visit and save starts were added); four dropped with notes. Four older patterns that the shared number box changed were repointed.
+ASan / UBSan clean on four starts. A real-time run under SDL's dummy drivers walked scene 43 into its last lock's place with the keys
+of the starts and reported nothing unbuilt (nothing in its log shows that the box opened).

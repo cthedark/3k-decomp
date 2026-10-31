@@ -766,6 +766,33 @@ run boat_mouse 3 184 66 200 --key 1:0x48 --key 60:0xc8 --mouse 0:150:60:0
 run boat_mouse_panel 3 184 66 200 --key 1:0x48 --key 60:0xc8 --mouse 0:20:100:0 --mouse 120:30:110:0
 run boat_sb 3 29 84 200 --key 1:0x4b --key 60:0xcb --sb
 run boat_opl 7 200 25 200 --key 1:0x48 --key 60:0xc8 --opl
+# number locks (kind 7, step 43): scene 4's lock given a wrong number (message 10) by keys and by the mouse; scene 43's last lock given
+# its 3 by keys, with the Sound Blaster, by the mouse, then stepped on again; the lock with its flag already set
+run lock_wrong 4 122 33 120 --key 1:0x4d --key 16:0xcd --key 40:0x1c --key 42:0x9c --key 70:0x1c --key 72:0x9c
+run lock_wrong_mouse 4 122 33 120 --key 1:0x4d --key 16:0xcd --key 40:0x1c --key 42:0x9c --mouse 0:300:190:0 --mouse 70:300:150:2 \
+    --mouse 72:300:150:0
+LUP="--key 50:0x48 --key 52:0xc8 --key 54:0x48 --key 56:0xc8 --key 58:0x48 --key 60:0xc8 --key 70:0x1c --key 72:0x9c"
+run lock_right 43 186 41 200 --key 1:0x48 --key 15:0xc8 $LUP
+run lock_right_sb 43 186 41 200 --key 1:0x48 --key 15:0xc8 $LUP --sb
+run lock_right_mouse 43 186 41 200 --key 1:0x48 --key 15:0xc8 --mouse 0:300:190:0 --mouse 50:120:8:1 --mouse 52:120:8:0 \
+    --mouse 54:120:8:1 --mouse 56:120:8:0 --mouse 58:120:8:1 --mouse 60:120:8:0 --mouse 70:159:8:1 --mouse 72:159:8:0
+run lock_right_still 43 186 41 200 --key 1:0x48 --key 15:0xc8 $LUP --mouse 0:300:190:0
+run lock_wrong_still 4 122 33 120 --key 1:0x4d --key 16:0xcd --key 40:0x1c --key 42:0x9c --key 70:0x1c --key 72:0x9c --mouse 0:300:190:0
+run lock_again 43 186 41 200 $LUP --key 1:0x48 --key 15:0xc8 --key 80:0x50 --key 95:0xd0 --key 100:0x48 --key 118:0xc8
+DOPTS="--byte 0:335:0x80"; run lock_set 43 186 41 120 --key 1:0x48 --key 15:0xc8 $LUP; DOPTS=""
+# scripted talks (kinds 0x11 and 0x12, step 43): scene 42's two messages and picture, by keys and by the mouse, then stepped on again
+# (byte 5 is 0 now); scene 22's five messages (the kind 0x12 record after it) with two pictures, and without its flag
+SC="--key 50:0x1c --key 52:0x9c --key 80:0x1c --key 82:0x9c --key 110:0x1c --key 112:0x9c --key 140:0x1c --key 142:0x9c --key 170:0x1c --key 172:0x9c"
+run script_s42 42 132 25 200 --key 1:0x50 --key 16:0xd0 $SC
+run script_s42_mouse 42 132 25 200 --key 1:0x50 --key 16:0xd0 --mouse 0:300:190:0 --mouse 50:300:150:2 --mouse 52:300:150:0 \
+    --mouse 80:300:150:2 --mouse 82:300:150:0
+run script_s42_still 42 132 25 200 --key 1:0x50 --key 16:0xd0 $SC --mouse 0:300:190:0
+run script_s42_again 42 132 25 260 --key 1:0x50 --key 16:0xd0 $SC --key 90:0x50 --key 100:0xd0 --key 104:0x48 --key 116:0xc8
+DOPTS="--byte 0:207:8"; run script_s22 22 88 34 260 --key 1:0x48 --key 31:0xc8 $SC
+# saved after it (slot 1): the flag the talk sets (0x8d) is past the party table's part the passes compare
+run script_s22_save 22 88 34 260 --key 1:0x48 --key 31:0xc8 $SC --key 200:0x04 --key 202:0x84 --key 206:0x48 --key 208:0xc8 \
+    --key 212:0x1c --key 214:0x9c; DOPTS=""
+run script_s22_unset 22 88 34 120 --key 1:0x48 --key 31:0xc8 $SC
 # shops (kind 5, step 40): scene 0's food shop (type 0) entered from outside its door: purchases by the hero, the second member and the
 # fifth, too few coins, no room, Esc in the picker, the mouse, a 900-pass stay; scene 2's two type 2 shops; scene 2's healer (type 3:
 # the hero, a fallen member, too few coins, the second row) and its inn's opening (type 4; the night is not built)

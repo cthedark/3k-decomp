@@ -80,7 +80,7 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
     9c (2026-10-20): the dark scenes (map header byte 5: the view zoomed in, darkened, a lit oval round the hero; 24 scenes);
     9d: the world's start zoom (the view comes in from its middle in 13 steps before the first pass). Milestone 8h (2026-10-21): story
     enemies, keys 1 and 2 in the fight, the picker face's flash, the game-over screen's mouse; 8i (2026-10-22): the Sound Blaster's
-    sounds (`SND_EF.1`, `_1_.LOC`). The battle (milestone 8) is complete. Milestone 9e (2026-10-24): F2, looking at signs (`SPIC.LCZ`); 9f: F3, taking items and coins; 9g: F4, casting outside a battle; 9h: F5, the item list outside a battle; 9i: F6, the equipment screen; 9j (2026-10-26): F7, using items and coins; 9k: F8, the map; 9l (2026-10-27): F9, the party's order; 9m: F10, the party's data; 9n (2026-10-28): F7 at a sell counter; 9o: keys 1 to 4 and A (music, sounds, saving, leaving, sliding round corners); 9p (2026-10-30): loading a save from the menu's slot picker; 9q: doors to other scenes; 9r (2026-10-31): shops; 9s: boat rides and scene 3's snow.
+    sounds (`SND_EF.1`, `_1_.LOC`). The battle (milestone 8) is complete. Milestone 9e (2026-10-24): F2, looking at signs (`SPIC.LCZ`); 9f: F3, taking items and coins; 9g: F4, casting outside a battle; 9h: F5, the item list outside a battle; 9i: F6, the equipment screen; 9j (2026-10-26): F7, using items and coins; 9k: F8, the map; 9l (2026-10-27): F9, the party's order; 9m: F10, the party's data; 9n (2026-10-28): F7 at a sell counter; 9o: keys 1 to 4 and A (music, sounds, saving, leaving, sliding round corners); 9p (2026-10-30): loading a save from the menu's slot picker; 9q: doors to other scenes; 9r (2026-10-31): shops; 9s: boat rides and scene 3's snow; 9t: number locks and scripted talks.
   - The operator has confirmed by eye or ear: the title, intro pacing, voice and subtitle sync, the music balance, the menu and its opening,
     the credits' pace, the first screen of the world, the idle animation, and walking with collision (2026-10-17).
 - **Not built in the world** (`findings.md` "WALK.SL step 7"-"step 13", `port.md` 7c-8a): the scene record block at `0x172f0` (doors to other scenes, cut scenes; F7's sell counters are built) and the record kinds it names,
@@ -97,8 +97,8 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
 The earlier list (formats, chaining, `TAB.TAB`, `TV.EXE`, the speed class) is done or folded into the port; the save format (`SAVEnn.000/.001/.002`)
 is known for writing (`findings.md` step 37) and reading ("WALK0.SL: loading a save", `port.md` 9p). For the world, in the order the operator and Kiro agreed to work:
 1. The keys of `WALK.SL`'s main loop: the F-key actions, 1-4 and A (sliding) are built (`port.md` 9a to 9o), and Space (shots) (7f).
-2. The scene record block `0x172f0` .. `0x18b82` (a dispatch on the record's kind) and the kinds 0, 7, 0xe, 0x11 and 0x13 (step 39 says what each is); kind 5, the shops and the inn, is built
-   (`port.md` 9r), and kind 8, the boat rides (`port.md` 9s).
+2. The scene record block `0x172f0` .. `0x18b82` (a dispatch on the record's kind) and the kinds 0, 0xe and 0x13 (step 39 says what each is); kind 5, the shops and the inn, is built
+   (`port.md` 9r), kind 8, the boat rides (`port.md` 9s), and kinds 7, 0x11 and 0x12, the number locks and scripted talks (9t).
    Kind 1 is a door to another scene and kind 4 sets a flag, both built (`port.md` 9q); kind 0x14 is a sell counter, built for F7
    (`port.md` 9n).
 3. The battle that touching an enemy starts, in stages (`findings.md` steps 12-18): the first screen and idle passes, the command and target

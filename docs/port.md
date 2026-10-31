@@ -1439,4 +1439,17 @@ with weather mode 2, now snows instead of showing nothing.
   nothing between them.
 - **Not reproduced:** the boat and shore pixels that fall past the world buffer's end (the original writes them up to 0x8925 bytes into
   the picture, past its 168 rows; nothing shows them).
-- **Not built:** the record block's kinds 0, 7, 0xe, 0x11 and 0x13.
+- **Not built:** the record block's kinds 0, 7, 0xe, 0x11 and 0x13 (7 and 0x11 since built, 9t).
+
+## Milestone 9t: number locks (kind 7) and scripted talks (kinds 0x11, 0x12) (C), built 2026-10-31
+Stepping on a number lock whose flag is not set shows message 9 and the number box; the right number sets the flag (what it opens
+appears as the record loop runs again) with a sound, a wrong one gives message 10. Stepping on a scripted talk whose flag is set plays
+its messages once, with their pictures, and sets another flag (`docs/findings.md` "WALK.SL step 43").
+
+- **Code:** `src/walk.c` (`lock_open`, `lock_given`, `rec_talk_open`, `rec_talk_next`, `rec_box`, `rec_box_round`, `rec_end`; talking
+  state 15 is their waiting box, which `walk_kind` reports as a message box; `ask_open` and `ask_step` know a lock's number box).
+- **Checked:** `tools/check_battle.sh`, 9 `lock_` and 7 `script_` starts, all identical at every pass; `tools/mutate_battle.py`: 14
+  lock and 12 talk mutations, all caught, four dropped with notes; ASan / UBSan clean on four starts; a real-time run under SDL's dummy
+  drivers walked into scene 43's last lock with nothing reported unbuilt.
+- **Guess:** the lock's number box count is 0xee from the one lock probed (any value from 0x16 up acts the same).
+- **Not built:** the record block's kinds 0, 0xe and 0x13.
