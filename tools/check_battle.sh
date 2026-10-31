@@ -793,6 +793,17 @@ DOPTS="--byte 0:207:8"; run script_s22 22 88 34 260 --key 1:0x48 --key 31:0xc8 $
 run script_s22_save 22 88 34 260 --key 1:0x48 --key 31:0xc8 $SC --key 200:0x04 --key 202:0x84 --key 206:0x48 --key 208:0xc8 \
     --key 212:0x1c --key 214:0x9c; DOPTS=""
 run script_s22_unset 22 88 34 120 --key 1:0x48 --key 31:0xc8 $SC
+# warps (kind 0, step 44): scene 23's record 1 (no flag) with Down still held (one turning round) and let go on arrival (all 60), with
+# the mouse; its record 0 without and with its flag; scene 50 (a longer slide, both ways in x and y)
+run warp_s23_key 23 80 39 120 --key 1:0x50 --key 60:0xd0
+run warp_s23_free 23 80 39 160 --key 1:0x50 --key 12:0xd0
+run warp_s23_mouse 23 80 39 120 --key 1:0x50 --key 60:0xd0 --mouse 0:150:60:0
+run warp_s23_unset 23 94 39 120 --key 1:0x50 --key 60:0xd0
+DOPTS="--byte 0:240:2"; run warp_s23_set 23 94 39 120 --key 1:0x50 --key 60:0xd0; DOPTS=""
+run warp_s50 50 50 47 120 --key 1:0x50 --key 60:0xd0
+run warp_s50_back 50 190 50 120 --key 1:0x50 --key 60:0xd0
+# walking on after the warp (the party and the trail put at the arrival)
+run warp_s23_walk 23 80 39 160 --key 1:0x50 --key 40:0xd0 --key 60:0x4b --key 90:0xcb --key 100:0x48 --key 130:0xc8
 # shops (kind 5, step 40): scene 0's food shop (type 0) entered from outside its door: purchases by the hero, the second member and the
 # fifth, too few coins, no room, Esc in the picker, the mouse, a 900-pass stay; scene 2's two type 2 shops; scene 2's healer (type 3:
 # the hero, a fallen member, too few coins, the second row) and its inn's opening (type 4; the night is not built)

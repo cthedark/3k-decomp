@@ -3855,7 +3855,7 @@ READ from the code (`work/b11/rec.asm`, `0x172f0` .. `0x18b82`), not run or comp
 - **Kind 0, a warp (26: scenes 23 and 50):** if flag (byte 3, bit byte 4) is set: up to 60 steps of the party turning (`0x2489a`,
   one every second round), the world drawn (`0x19680`) and shown, a key down ends it; then the view slides one cell a round towards
   (byte 5, byte 6), the world drawn with the buffer's byte 0 = 0, until it is there; then all five party records and the 13 trail
-  entries are put at that place. Byte 6 is a full y here.
+  entries are put at that place. Byte 6 is a full y here. Built and compared in step 44 (the turning is one round in two).
 - **Kind 5, a shop (29):** the pointer off; the record's bytes 3 .. 8 copied to `[bp-0x80]`; `0x22c42` (it reads `SHOP_PIC.LCC`,
   `MES_TXT.LCC` and `OBJECT.LCC`: the bytes are GUESSED to be the six things for sale); the pointer on. The record finder returns
   0x320 (no record) for a kind 5 under odd coordinates, so the hero must stand exactly on it.
@@ -4055,3 +4055,27 @@ save's files are compared). `tools/mutate_battle.py`: 14 lock and 12 talk mutati
 re-visit and save starts were added); four dropped with notes. Four older patterns that the shared number box changed were repointed.
 ASan / UBSan clean on four starts. A real-time run under SDL's dummy drivers walked scene 43 into its last lock's place with the keys
 of the starts and reported nothing unbuilt (nothing in its log shows that the box opened).
+
+## WALK.SL step 44: warps (kind 0, `0x1732f` .. `0x17678`), 2026-10-31
+
+READ from the code (`work/b11/rec.asm`), built and CONFIRMED by the comparison. A kind 0 record (26 of them, in the dark scenes 23
+and 50; 13 have flag 0 bit 0, which is set from the start, the others a flag of their own) acts when its flag (byte 3, bit byte 4) is
+set; else nothing happens.
+
+- **The turning:** `[bp-0xc4]` from 0 to 59; each round a counter `[bp-0x10]` goes up and, past 1, back to 0 with the party turning
+  (`0x2489a`, the picture doors' `walk_spin`), so every second round; the world buffer's bytes 0 .. 3 = 1, the view's x (`[bp-0x8e]`),
+  y (`[bp-0xb6]`) and `[bp-4]` (the dark flag), the world drawn (`0x19680`, with its people) and the window copied (`0x2b9ec`); a make
+  code on the keyboard port (`0x1732:0x198`) ends the rounds. So with the arrow still held there is one round. `[bp-0x10]` starts at 0
+  in every start compared (it is a stack variable of the main loop; INFERRED, as for the picture doors).
+- **The slide:** the target is (byte 5, byte 6), both in the view's units (byte 6 a full y). Each round, unless the view is there: the
+  buffer's byte 0 = 0 (no villagers, no party), the world drawn and shown, then x one step towards the target and y one step towards
+  it (both in the same round).
+- **The arrival:** the five party records' x and y and the 13 trail entries (x, y, facing 1) put at the target. `[bp-0xbe]` is 0, so
+  the record loop does not run again after it.
+
+**Checked:** `tools/check_battle.sh`, 8 `warp_` starts, all identical at every pass, each round compared as a step (`tools/battle_check.py`
+counts the rounds after their window copies, `0x17441` and `0x17563`): scene 23's record 1 with the arrow still held and let go on
+arrival (all 60 turning rounds), with the mouse, walking on after it; its record 0 without and with its flag; scene 50's records 9 and
+13 (the slide both ways). Starts from `work/b11/warpfind.py`. `tools/mutate_battle.py`: 16 warp mutations, all caught; one dropped (the
+record loop run again: a warp sets no flag). The picture door's key pattern, which the warp's duplicated, was repointed. ASan / UBSan
+clean on three starts; a real-time run under SDL's dummy drivers walked onto scene 23's warp with nothing reported unbuilt.

@@ -94,7 +94,8 @@ def oracle(a, n, keys):
         if 1 <= emu.pass_count and emu.pass_count - 1 <= n:
             flash.append((emu.pass_count - 1, bytes(uc.mem_read(VGA, 64000))))
 
-    for top in (0x17A00, 0x19A8E, 0x19B75, 0x1C21A):   # and the boat ride's steps (0x1c21a, after its window copy)
+    # and the boat ride's steps (0x1c21a, after its window copy), a warp's turning and sliding rounds (0x17441, 0x17563)
+    for top in (0x17A00, 0x19A8E, 0x19B75, 0x1C21A, 0x17441, 0x17563):
         emu.uc.hook_add(UC_HOOK_CODE, zoom_cb, None, top, top)
 
     def far(uc, ss, bp, off):

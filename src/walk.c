@@ -849,6 +849,8 @@ static void records_again(walk_t *w, unsigned which);
 static void door(walk_t *w, unsigned si);
 static void shop_open(walk_t *w, screen_t *scr, unsigned si);
 static void boat(walk_t *w, unsigned si);
+static void warp(walk_t *w, unsigned si);
+static void frame_at(walk_t *w, unsigned x, unsigned y, int people);
 static int lock_open(walk_t *w, screen_t *scr, unsigned si);
 static void rec_talk_open(walk_t *w, screen_t *scr, unsigned si);
 
@@ -875,6 +877,11 @@ static void hit_record(walk_t *w, unsigned si)
     }
     if (kind == 8 && w->scr) {
         boat(w, si);
+        return;
+    }
+    if (kind == 0 && w->scr) {
+        warp(w, si);
+        w->vbe = 0;
         return;
     }
     if (kind == 7 && w->scr && lock_open(w, w->scr, si))   /* a number lock: the rest when its boxes are done (rec_end) */
@@ -905,7 +912,7 @@ static void hit_record(walk_t *w, unsigned si)
             s->weather -= 3;
             walk_sfx_play(w, SFX_EF, 0x127D);   /* 0x17c2a */
         }
-    } else if (kind == 0 || (kind == 7 && !w->scr) || kind == 8 || kind == 0xE || kind == 0x11 || kind == 0x13 || kind == 0x14) {
+    } else if ((kind == 0 && !w->scr) || (kind == 7 && !w->scr) || kind == 8 || kind == 0xE || kind == 0x11 || kind == 0x13 || kind == 0x14) {
         char what[48];
         snprintf(what, sizeof what, "scene record kind 0x%x", kind);
         note_unbuilt(w, what, si / WS_RECORD_SIZE);
@@ -1060,6 +1067,60 @@ static void scene_leave(walk_t *w, const uint8_t *rec)
     if (assets_write_at("__1.now", (size_t)WS_STATE * tb[510], ta, WS_STATE) != 0)
         note_unbuilt(w, "__1.NOW that cannot be written", tb[510]);
     memcpy(tb + 510, rec + 3, 4);
+}
+
+/* Kind 0, a warp (0x1732f .. 0x17678), when its flag (byte 3, bit byte 4) is set: up to 60 rounds of the party turning (0x2489a,
+ * every second round on the round counter [bp-0x10]), the world drawn as the F-keys draw it (0x19680) at the view's place and the
+ * window copied to the screen (0x2b9ec); a make code on the keyboard port ends them (0x1732:0x198). Then the view slides a step a
+ * round in x and in y towards (byte 5, byte 6), the world drawn without its people (the buffer's byte 0 = 0), until it is there (no
+ * round when it already is); then the five party records and the 13 trail entries are put at that place (the trail facing 1). The
+ * record loop does not run again ([bp-0xbe] is 0). */
+static void warp(walk_t *w, unsigned si)
+{
+    walk_scene_t *s = w->scene;
+    uint8_t *party = s->tab_b;
+    const uint8_t *rec = s->tab_a + 1000 + si;
+    if (!walk_flag_test(party, rec[3], rec[4]))
+        return;
+    unsigned x = party[0], y = party[1], v10 = 0;   /* [bp-0x8e], [bp-0xb6]; [bp-0x10] 0 here (GUESS, as door_picture's) */
+    for (unsigned c4 = 0; c4 < 0x3C; c4++) {
+        v10 = (v10 + 1) & 0xFF;
+        if (v10 > 1) {
+            v10 = 0;
+            walk_spin(party);
+        }
+        frame_at(w, x, y, 1);
+        walk_copy_window(w->scr, w->buf);
+        if (w->zoom_show)
+            w->zoom_show(w->zoom_ctx, w->scr);
+        unsigned key = (w->live_port ? w->live_port() : w->port60) & 0xFF;
+        if (key < 0x7F)
+            break;
+    }
+    unsigned tx = rec[5], ty = rec[6];
+    while (x != tx || y != ty) {
+        frame_at(w, x, y, 0);
+        walk_copy_window(w->scr, w->buf);
+        if (w->zoom_show)
+            w->zoom_show(w->zoom_ctx, w->scr);
+        if (x > tx)
+            x--;
+        if (x < tx)
+            x++;
+        if (y > ty)
+            y--;
+        if (y < ty)
+            y++;
+    }
+    for (unsigned o = 0; o < 0xC8; o += WS_PARTY_SIZE) {
+        party[o] = (uint8_t)x;
+        party[o + 1] = (uint8_t)y;
+    }
+    for (unsigned k = 0; k < 13; k++) {
+        s->trail[3 * k] = (uint8_t)x;
+        s->trail[3 * k + 1] = (uint8_t)y;
+        s->trail[3 * k + 2] = 1;
+    }
 }
 
 static void door(walk_t *w, unsigned si)
@@ -1346,14 +1407,20 @@ static void respawn(walk_t *w, uint8_t *rec, unsigned hx, unsigned hy)
  * with every villager and party member (the party standing, frame 1) and the objects; nothing moves, no rain, no shots, no pointer. */
 static void fkey_frame(walk_t *w)
 {
+    frame_at(w, w->scene->tab_b[0], w->scene->tab_b[1], 1);
+}
+
+/* The same with the view at (x, y); byte 0 = 0 (people 0) leaves out every villager and party member (a warp's slide). */
+static void frame_at(walk_t *w, unsigned x, unsigned y, int people)
+{
     walk_scene_t *s = w->scene;
-    unsigned x = s->tab_b[0], y = s->tab_b[1];
-    w->buf[0] = 1;
+    w->buf[0] = (uint8_t)people;
     w->buf[1] = (uint8_t)x;
     w->buf[2] = (uint8_t)y;
     w->buf[3] = s->header[5];
     walk_draw_ground(w->buf, s, x, y);
-    walk_draw_entities(w->buf, s, x, y, 1);
+    if (people)
+        walk_draw_entities(w->buf, s, x, y, 1);
     walk_draw_objects(w->buf, s, x, y);
     if (s->header[5]) {   /* 0x19985: doubled (not darkened) into the scratch buffer, and its first 0x5080 words back over the world */
         walk_double(w->dbuf, w->buf, w->table);

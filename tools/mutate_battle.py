@@ -987,7 +987,7 @@ m("walk.c", "door: turning 0 -> 1", "static const uint8_t next[4] = {3, 2, 0, 1}
 # Dropped: turning ten records instead of five. The picture turns the party 0 or 60 times (a key ends it at once, or it runs to
 # the end), and four turns are no turn, so records 5 to 9 (never drawn) end as they were.
 m("walk.c", "door: picture not shown", "            walk_copy_window(w->scr, w->buf);\n            if (w->zoom_show)", "            if (w->zoom_show)")
-m("walk.c", "door: picture ignores keys", "        if (key < 0x7F)\n            break;\n    }", "    }")
+m("walk.c", "door: picture ignores keys", "        if (key < 0x7F)\n            break;\n    }\n}", "    }\n}")
 m("walk.c", "door: picture's ball rows not doubled", "    memcpy(mb + 0x400, w->dbuf, 0x100);\n", "")
 m("walk.c", "door: picture's second half", "    memcpy(mb + 0x700, w->dbuf + 0x100, 0x100);", "    memcpy(mb + 0x700, w->dbuf, 0x100);")
 m("walk.c", "door: picture's rows copied once", "    for (unsigned k = 1; k <= 4; k++)\n        memcpy(mb + 0xC00 * k, mb, 0xC00);", "    memcpy(mb + 0xC00, mb, 0xC00);")
@@ -1114,6 +1114,25 @@ m("walk.c", "boat: steps not shown", "        put_pic(scr, 0x1440, buf + 0x32C8)
 # written and the place taken, which are the door's scene_leave (its mutations cover both).
 m("walk.c", "boat: pointer kept", "    walk_mouse_hide(w, w->scr);\n    boat_ride", "    boat_ride")
 m("walk.c", "boat: pointer not reset", "    walk_mouse_reset(w, w->scr);\n    w->vbe = 8;", "    w->vbe = 8;")
+# warps (step 44); RUNS="warp_"
+m("walk.c", "warp: not taken", "    if (kind == 0 && w->scr) {\n        warp(w, si);", "    if (kind == 100 && w->scr) {\n        warp(w, si);")
+m("walk.c", "warp: flag ignored", "    if (!walk_flag_test(party, rec[3], rec[4]))\n        return;\n    unsigned x = party[0]", "    unsigned x = party[0]")
+# Dropped: the record loop run again after a warp (a warp sets no flag, so the loop applies again what it applied before).
+m("walk.c", "warp: turns every round", "        if (v10 > 1) {\n            v10 = 0;\n            walk_spin(party);", "        if (v10 > 0) {\n            v10 = 0;\n            walk_spin(party);")
+m("walk.c", "warp: turning from 1", "    unsigned x = party[0], y = party[1], v10 = 0;", "    unsigned x = party[0], y = party[1], v10 = 1;")
+m("walk.c", "warp: no turning", "            v10 = 0;\n            walk_spin(party);\n        }\n        frame_at(w, x, y, 1);", "            v10 = 0;\n        }\n        frame_at(w, x, y, 1);")
+m("walk.c", "warp: 59 turning rounds", "    for (unsigned c4 = 0; c4 < 0x3C; c4++) {", "    for (unsigned c4 = 0; c4 < 0x3B; c4++) {")
+m("walk.c", "warp: turning not shown", "        frame_at(w, x, y, 1);\n        walk_copy_window(w->scr, w->buf);", "        frame_at(w, x, y, 1);")
+m("walk.c", "warp: key does not end the turning", "        if (key < 0x7F)\n            break;\n    }\n    unsigned tx", "        (void)key;\n    }\n    unsigned tx")
+m("walk.c", "warp: slide with the people", "        frame_at(w, x, y, 0);", "        frame_at(w, x, y, 1);")
+m("walk.c", "warp: slide not shown", "        frame_at(w, x, y, 0);\n        walk_copy_window(w->scr, w->buf);", "        frame_at(w, x, y, 0);")
+m("walk.c", "warp: slide x first", "        if (y > ty)\n            y--;\n        if (y < ty)\n            y++;\n    }", "        else if (y > ty)\n            y--;\n        else if (y < ty)\n            y++;\n    }")
+m("walk.c", "warp: x stays", "        if (x > tx)\n            x--;\n        if (x < tx)\n            x++;", "        if (x > tx || x < tx)\n            x = tx;")
+m("walk.c", "warp: party not moved", "    for (unsigned o = 0; o < 0xC8; o += WS_PARTY_SIZE) {\n        party[o] = (uint8_t)x;\n        party[o + 1] = (uint8_t)y;\n    }", "")
+m("walk.c", "warp: only the hero moved", "    for (unsigned o = 0; o < 0xC8; o += WS_PARTY_SIZE) {\n        party[o] = (uint8_t)x;", "    for (unsigned o = 0; o < 1; o += WS_PARTY_SIZE) {\n        party[o] = (uint8_t)x;")
+m("walk.c", "warp: trail not moved", "        s->trail[3 * k] = (uint8_t)x;\n        s->trail[3 * k + 1] = (uint8_t)y;\n        s->trail[3 * k + 2] = 1;\n    }\n}\n\nstatic void door", "    }\n}\n\nstatic void door")
+m("walk.c", "warp: trail facing 0", "        s->trail[3 * k + 2] = 1;\n    }\n}\n\nstatic void door", "        s->trail[3 * k + 2] = 0;\n    }\n}\n\nstatic void door")
+
 # number locks and scripted talks (step 43); RUNS="lock_ script_"
 m("walk.c", "lock: not taken", "    if (kind == 7 && w->scr && lock_open(w, w->scr, si))", "    if (kind == 77 && w->scr && lock_open(w, w->scr, si))")
 m("walk.c", "lock: flag ignored", "    if (walk_flag_test(w->scene->tab_b, rec[5], rec[6]))\n        return 0;\n    w->rec_kind = 7;", "    w->rec_kind = 7;")

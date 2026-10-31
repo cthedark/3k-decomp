@@ -1452,4 +1452,16 @@ its messages once, with their pictures, and sets another flag (`docs/findings.md
   lock and 12 talk mutations, all caught, four dropped with notes; ASan / UBSan clean on four starts; a real-time run under SDL's dummy
   drivers walked into scene 43's last lock with nothing reported unbuilt.
 - **Guess:** the lock's number box count is 0xee from the one lock probed (any value from 0x16 up acts the same).
-- **Not built:** the record block's kinds 0, 0xe and 0x13.
+- **Not built:** the record block's kinds 0, 0xe and 0x13 (0 since built, 9u).
+
+## Milestone 9u: warps (kind 0) (C), built 2026-10-31
+Stepping on a warp in scenes 23 and 50 (when its flag is set) turns the party on the spot until a key is pressed (at most 60 rounds),
+slides the view to the warp's target without the people, and puts the whole party there (`docs/findings.md` "WALK.SL step 44").
+
+- **Code:** `src/walk.c` (`warp`; `frame_at`, the F-keys' world drawing at any view place, with or without its people, which
+  `fkey_frame` now calls); `tools/battle_check.py` (the warp's rounds, `0x17441` and `0x17563`, compared as steps).
+- **Checked:** `tools/check_battle.sh`, 8 `warp_` starts, all identical at every pass and round; `tools/mutate_battle.py`: 16 warp
+  mutations, all caught, one dropped with a note; ASan / UBSan clean on three starts; a real-time run under SDL's dummy drivers.
+- **Guess:** the turning's round counter starts at 0 (a stack variable; 0 in every start compared).
+- **Choice:** the rounds go at the world's pass rate (`show_zoom_step`), as a door's picture; the original waits for nothing.
+- **Not built:** the record block's kinds 0xe and 0x13.
