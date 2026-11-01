@@ -4195,3 +4195,33 @@ blue sitting on the grass (not caught by the 150-tick sheet: a short scene, or t
 unpacker, `0x152:0xdd`), `0x16b`, `0x19c` (FM music), `0x1e7`, `0x21d`, `0x22c`, `0x247` (blits), `0x2fc` (the voice, CT-VOICE);
 its own near helpers start at `0x11400`. The intro's port (`STORY2.SL`, `src/intro*.c`, `src/slide.c`) and `CAST.SL`'s
 (`src/credits.c`) likely share several of these; that is to be checked routine by routine.
+
+## ENDING.SL step 2: the first scene (`0x101f1` .. `0x10600`), 2026-11-01
+
+READ from the code (`work/e1/ending.asm`, the helpers in `work/e1/helpers.asm`), built in C (`src/ending.c`) and CONFIRMED by the
+comparison: `tools/ending_check.py` records the original's screen and palette at each arrival at the loop top `0x1042d` and at the
+loop's end `0x10603` (389 records: 388 passes and the end), and `tests/ending_dump.c` writes the port's.
+
+**Set-up:** `muc.all` 0x49a2 bytes at 0x27137 (the intro's song, started by `0x19c:0x40` only when an FM card was found); `ani.lcp`'s
+first 0x600 bytes (two palettes); mode 0x13; the DAC's 256 entries from the first palette (`0x22c:0x14e`). Each `.LCZ` is read whole
+into the file buffer `[bp-0x12]` (at most 0xffdc bytes) and unpacked (`0x115fd`, the usual run-length code): `ending12.lcz`, the
+clouds, 320 x 200 with a header, into `[bp-0x22]`; `ending1.lcz` in three blocks, at 0 five 41 x 44 pictures of her face with headers
+(0x710 bytes each) into `[bp-0xe]`, at 0x1925 and 0x40d1 two 320 x 147 pictures of her without a header into `[bp-0x36]` and
+`[bp-0x46]`; `ending1t.lcz`, four 236 x 15 subtitle lines (0xdd4 bytes each, no header), into `[bp-0x1e]`.
+
+**A pass (`0x1042d`):** the clouds' rows turned a pixel to the left (`0x1252d` mode 1; WALK.SL's mode 2 turns two); the current face
+picture (opaque, `0x11e7c`) into both pictures of her at offset 0xbcf, (143, 9); with a Sound Blaster a sound that ended started again
+(`0x19c:0x102`, not built); the clouds copied into the file buffer, which is the frame; a counter `[bp-0x48]` past 4 back to 0 turns
+`[bp-0x1a]`, so her two pictures take turns every fifth pass; the first `[bp-0x24]` bytes of the one shown (colour 0 clear, `0x12146`)
+at `[bp-0x28]` in the frame. Both start at one row (0x140 bytes at 0xfa00, the bottom row), and after the first 51 passes (`di`) one
+row more each pass, from one row higher, until all 147 rows show (from row 53); she rises out of the bottom. Once she is up
+(`[bp-0x2a]`): every sixth pass (`[bp-0x3e]`) the next face picture; after the fourth (0x1c40) the first again, and after two rounds
+(`[bp-4]`) the next subtitle line, drawn each pass at (42, 184) (`0x11ff8`, colour 0 clear); after the fourth line the loop ends at
+once, before the frame is shown. Else the frame (0x7d00 words) is copied to the screen. Nothing in the loop waits or reads a key.
+
+**Stack leftovers (SEEN at the first loop top):** `[bp-0x48]` is 0xa, the handle `ending1t.lcz` was read through; `[bp-0x3e]` is 0. The
+fifth face picture is never shown. The palette does not change during the scene.
+
+**Checked:** all 389 records identical. `tools/mutate_ending.py`: 18 mutations, all caught. ASan / UBSan clean on the whole scene.
+`build/3k --scene ending` plays it in real time (`TK_ENDING_PASS_HZ`, 35 passes a second, a choice) with the intro's song, then stops;
+a run under SDL's dummy drivers reached the end of the scene.

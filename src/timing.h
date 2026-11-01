@@ -106,6 +106,11 @@
  * a villager's step every few passes, the hero changing frame every 6th pass) was the machine's. 35 is taken from the
  * menu and the intro. A choice, not a measurement; the operator found the idle world right by eye (2026-10-17). */
 #define TK_WALK_PASS_HZ 35
+
+/* ENDING.SL's loops (the first scene's 0x1042d: 388 passes, each turning a 320 x 200 picture a pixel and copying 64 KB twice) wait
+ * for nothing either. 35 as for the other unpaced loops: the first scene lasts 11 s and each subtitle line 1.4 s. (The emulator, at
+ * its arbitrary 250,000 instructions a tick, runs the scene at about 14 passes a second.) A choice, not a measurement. */
+#define TK_ENDING_PASS_HZ 35
 /* The BIOS clock the world reads (rain strength, the dark specks, the villagers' direction choice) runs at
  * 1193182 / 65536 = 18.2065 ticks per second. */
 #define TK_BIOS_TICKS_PER_SEC_NUM 1193182ull

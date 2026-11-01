@@ -1497,3 +1497,16 @@ the sounds stop and the walk returns (`walk_ended`; `play_walk` gives 4). `ENDIN
 Stepping on a kind 0x14 record runs F7's sale on whatever the map buffer holds, as the original does (`hit_record` calls `use_sell`;
 `docs/findings.md` "WALK.SL step 47"). No shipped counter can be stepped on, so this is read from the code and pinned by
 `tests/test_walk.c`, not compared. Every kind of the record block is now built.
+
+## Milestone 10a: ENDING.SL, the first scene (C), built 2026-11-01
+`build/3k --scene ending` (and the game, after the ending's record in scene 52) plays ENDING.SL's first scene: clouds drifting over a
+lilac sky, the villain rising out of the bottom, then her face moving through four subtitle lines, with the intro's song
+(`docs/findings.md` "ENDING.SL step 2"). After it the run stops and says the rest is not built.
+
+- **Code:** `src/ending.c`, `src/ending.h` (`ending_new`, `ending_step`); `src/main.c` (`play_ending`); `tests/ending_dump.c`;
+  `tools/ending_check.py` (the original's records at its loop tops, compared with the port's); `tools/mutate_ending.py`.
+- **Checked:** all 389 records (388 passes and the loop's end) identical in screen and palette; 18 mutations, all caught; ASan / UBSan
+  clean; a real-time run under SDL's dummy drivers.
+- **Choice:** 35 passes a second (`TK_ENDING_PASS_HZ`), as for the other loops that wait for nothing: 11 s for the scene, 1.4 s a
+  subtitle line. Not yet judged by eye or ear.
+- **Not built:** the Sound Blaster's restart in each pass (no voice plays in this scene in the runs compared); scenes 2 to 7.

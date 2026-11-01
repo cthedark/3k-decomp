@@ -21,6 +21,7 @@
 #include "assets.h"
 #include "audio.h"
 #include "credits.h"
+#include "ending.h"
 #include "intro0.h"
 #include "intro1.h"
 #include "intro2.h"
@@ -1141,6 +1142,41 @@ static int play_walk(screen_t *scr)
     return result;
 }
 
+/* ENDING.SL (ending.h) in real time, with the intro's song (ENDING.SL 0x102d5 starts the same block when there is an FM card). Its
+ * loops wait for nothing, so they run at TK_ENDING_PASS_HZ. Only the first scene is built: after it the run stops and says so.
+ * Returns 0, or 1 when the window was closed. */
+static int play_ending(screen_t *scr)
+{
+    ending_t *e = ending_new(scr);
+    if (!e) {
+        fprintf(stderr, "ending: the data files cannot be read\n");
+        return 0;
+    }
+    music_t *song = song_start("ending");
+    platform_present(scr);
+    uint32_t next = platform_ticks_ms();
+    int loop = ENDING_SCENE1, quit = 0;
+    while (loop == ENDING_SCENE1) {
+        if (!platform_poll()) {
+            quit = 1;
+            break;
+        }
+        uint32_t now = platform_ticks_ms();
+        if ((int32_t)(now - next) < 0) {
+            platform_sleep_ms(1);
+            continue;
+        }
+        next = next_due(next, now, TK_ENDING_PASS_HZ);
+        loop = ending_step(e, scr);
+        platform_present(scr);
+    }
+    if (!quit)
+        printf("ending: the first scene is over; the rest of ENDING.SL is not built yet\n");
+    song_stop(song);
+    ending_free(e);
+    return quit;
+}
+
 /* MARK.EXE's game-over screen (gameover.h) over what WALK.SL left on `scr`, with its song, until Space or Enter, or a mouse button. The original's loop
  * is unpaced; it runs at the world's pace here (a choice, not measured). Returns 0 after the key, 1 when the window was closed. */
 static int play_gameover(screen_t *scr)
@@ -1331,9 +1367,9 @@ static int run_game(screen_t *scr, int scale, int faithful)
                         again = 1;
                         break;
                     }
-                    if (q == 4) {   /* the game's end: ENDING.SL, not built */
-                        printf("game: the end (ENDING.SL is not built yet), stopping\n");
-                        rc = 0;
+                    if (q == 4) {   /* the game's end: ENDING.SL, then (when it is all built) DOS */
+                        printf("game: the end (ENDING.SL)\n");
+                        rc = play_ending(scr);
                         break;
                     }
                     rc = q < 0 ? 1 : 0;
@@ -1568,7 +1604,7 @@ int main(int argc, char **argv)
             dump1_file[ndump1++] = c2 + 1;
         } else {
             fprintf(stderr,
-                    "usage: %s [--data DIR] [--scale N] [--scene title|gmain|intro0|intro1|intro2|intro3|intro4|intro5|intro6|intro|game|menu|credits|walk] [--ppm FILE]\n"
+                    "usage: %s [--data DIR] [--scale N] [--scene title|gmain|intro0|intro1|intro2|intro3|intro4|intro5|intro6|intro|game|menu|credits|walk|ending] [--ppm FILE]\n"
                     "          [--step-dump N:FILE]... [--press-pass N]... [--tick-div N]\n"
                     "          [--dump anim|sub|out|end|final:N:FILE]... [--faithful-keys] [--rand-state HEX]\n"
                     "          [--no-audio] [--no-music] [--music-gain PERCENT] [--slide0-once]\n",
@@ -1623,6 +1659,14 @@ int main(int argc, char **argv)
         shutdown_platform();
         return rc < 0 ? 1 : 0;
     }
+    if (!strcmp(scene, "ending")) {
+        if (init_platform(scale) != 0)
+            return 1;
+        int rc = play_ending(&screen);
+        shutdown_platform();
+        (void)rc;
+        return 0;
+    }
     if (!strcmp(scene, "walk")) {
         if (ndump > 0 || ppm)
             return run_walk_stepped(&screen, ndump, dump_pass, ppm, dump_file);
@@ -1640,8 +1684,9 @@ int main(int argc, char **argv)
             printf("walk: left\n");
             rc = 1;
         }
-        if (rc == 4) {   /* the game's end: the original starts ENDING.SL, which is not built */
+        if (rc == 4) {   /* the game's end: ENDING.SL */
             printf("walk: ended\n");
+            play_ending(&screen);
             rc = 1;
         }
         printf("walk: %s\n", rc == 1 ? "closed" : "could not start");
