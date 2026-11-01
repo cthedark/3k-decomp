@@ -699,3 +699,52 @@ int menu_load_save(int slot)
     return rc;
 }
 
+/* ---- the new game's files (0x10fe4 .. 0x11194) ------------------------------------------------ */
+
+#define NEW_RAW_MAX 0x4E20      /* read at most this much of __1.AL1 and __1.AL2 */
+#define NEW_NOW1_LEN 0xB892     /* __1.NOW: this much of the unpacked __1.AL1 ... */
+#define NEW_NOW2_LEN 0xB1BC     /* ... then this much of the unpacked __1.AL2 */
+#define NEW_MAN_LEN 0x1F8       /* MAN_INFO.ALL is read, and MAN_INFO.NOW written, at this length */
+
+/* Read up to `max` bytes of a file into the start of `buf` (the rest stays as it was). 0 if it opened. */
+static int read_into(const char *name, uint8_t *buf, size_t max)
+{
+    size_t n = 0;
+    uint8_t *d = read_upto(name, max, &n);
+    if (!d)
+        return -1;
+    memcpy(buf, d, n);
+    free(d);
+    return 0;
+}
+
+int menu_new_game(void)
+{
+    /* The original's four 64 KB buffers: two for the packed files, two for their unpacked forms. Its unpacker (0x1bc:0xd7) has no
+     * input length (it reads to the header's end), so it is given whole buffers here: past a short file it reads what the buffer
+     * held before, zeros in the port. */
+    uint8_t *raw1 = calloc(1, 0x10000), *raw2 = calloc(1, 0x10000), *un1 = calloc(1, 0x10000), *un2 = calloc(1, 0x10000);
+    uint8_t *now = malloc(NEW_NOW1_LEN + NEW_NOW2_LEN);
+    int rc = -1;
+    if (raw1 && raw2 && un1 && un2 && now && read_into("__1.al1", raw1, NEW_RAW_MAX) == 0 &&
+        read_into("__1.al2", raw2, NEW_RAW_MAX) == 0) {
+        walk_rle_unpack(raw1, 0x10000, un1, 0x10000);
+        walk_rle_unpack(raw2, 0x10000, un2, 0x10000);
+        /* fixed lengths, whatever the unpacking gave */
+        memcpy(now, un1, NEW_NOW1_LEN);
+        memcpy(now + NEW_NOW1_LEN, un2, NEW_NOW2_LEN);
+        /* MAN_INFO.ALL goes over the start of the unpacked __1.AL1 and unpacks over the unpacked __1.AL2 */
+        if (assets_write("__1.now", now, NEW_NOW1_LEN + NEW_NOW2_LEN) == 0 && read_into("man_info.all", un1, NEW_MAN_LEN) == 0) {
+            walk_rle_unpack(un1, 0x10000, un2, 0x10000);
+            if (assets_write("man_info.now", un2, NEW_MAN_LEN) == 0)
+                rc = 0;
+        }
+    }
+    free(raw1);
+    free(raw2);
+    free(un1);
+    free(un2);
+    free(now);
+    return rc;
+}
+

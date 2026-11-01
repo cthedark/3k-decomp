@@ -282,6 +282,8 @@ still be read without a log line.
   are initial-state templates and `.NOW` is the current working state. Sizes do
   not simply add up (`__1.AL1` 12,121 + `__1.AL2` 14,423 = 26,544, but the
   shipped `__1.NOW` is 92,750 bytes), so the relationship is unknown.
+  (Resolved 2026-11-01, "WALK0.SL: the new game's files": they are packed, and
+  unpack to 0xb892 + 0xb1bc = 92,750 bytes.)
 - After the session only `__1.NOW` differed from the original; `MAN_INFO.NOW`
   was recreated byte-identical. No `SAVEnn` files were written (the operator
   did not save).
@@ -2169,7 +2171,7 @@ Built from the verified pieces of steps 1-4 (details and checks in `docs/port.md
   so the port writes their Big5 codes (`AC 4F`, `A7 5F`); where the original gets them is still not found.
 - A hex slip of mine (0xe90a - 0x9470 is 0x549a, not 0x5496) was found by a unit test failing on correct code; it concerns only the test.
 - The shipped `__1.NOW` and `MAN_INFO.NOW` are used as they are; the new-game step that writes them from `__1.AL1`, `__1.AL2` and
-  `MAN_INFO.ALL` is not ported.
+  `MAN_INFO.ALL` is not ported. (Built 2026-11-01, "WALK0.SL: the new game's files"; the shipped `__1.NOW` is not the new game's.)
 
 ## WALK.SL step 6: the idle main loop, frame 21 onward, 2026-10-17
 
@@ -4385,3 +4387,25 @@ text mode's 16 colours); `play_ending` shows it until a new key press, a mouse b
 
 **Checked:** all 14,863 records identical; `tools/mutate_ending.py`: 13 new mutations (96 in all), all caught; ASan / UBSan clean on
 the whole program; a real-time run under SDL's dummy drivers played it to "ending: THE END".
+
+## WALK0.SL: the new game's files (`0x10fe4` .. `0x11194`), 2026-11-01
+
+READ from the code (`work/e1/newgame.asm`), built in C (`menu_new_game`) and CONFIRMED by the comparison (`tools/check_load.sh`, the
+files the oracle writes before it opens `walk.sl`).
+
+**What item 0 does:** with the music on (`[0x298]:4`), the music stopped (`0x22d:0x124`, `0x22d:0x14c`). `__1.al1` opened and its
+first 0x4e20 bytes read into `[bp-0x2a]`, `__1.al2` likewise into `[bp-0x3a]` (`0x295:0x4d`, the read; `0x295:0x2e`, close). Each
+unpacked (`0x1bc:0xd7`, the same packing as the saves: marker byte, end word, literals and (marker, count, byte) runs) into
+`[bp-0x10]` and `[bp-0x1a]`. `__1.now` created (`0x295:0xd3`) and written with the first 0xb892 bytes of the one and the first 0xb1bc
+of the other, fixed lengths, not the unpacker's. `man_info.all` read (at most 0x1f8 bytes) over the start of `[bp-0x10]`, unpacked into
+`[bp-0x1a]`, and `man_info.now` written with 0x1f8 bytes. Then the same `WALK0.SL` check as after a load, and `walk.sl` started.
+
+**The data:** `__1.AL1` (12,121 bytes) unpacks to exactly 0xb892, `__1.AL2` (14,423) to exactly 0xb1bc, `MAN_INFO.ALL` (91) to exactly
+504; so the fixed lengths and the buffer reuse change nothing for the shipped files. MEASURED (`work/e1/newgame.py`, `newgame2.py`).
+
+**The shipped state files:** `MAN_INFO.NOW` is byte for byte what a new game writes (scene 0). `__1.NOW` is not: it differs in the
+blocks of scenes 0 (62 bytes), 1 (107), 7 (86) and 27 (23), so it is a played game's (as "State files: what the game writes" guessed).
+The port's new game started from it until now (`docs/port.md` milestone 7a said otherwise; corrected).
+
+**Checked:** the oracle's `MAN_INFO.NOW` and `__1.NOW` identical to the port's; 150 world passes from them identical;
+`tools/mutate_load.py`: 7 new mutations, all caught.

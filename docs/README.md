@@ -83,9 +83,8 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
     sounds (`SND_EF.1`, `_1_.LOC`). The battle (milestone 8) is complete. Milestone 9e (2026-10-24): F2, looking at signs (`SPIC.LCZ`); 9f: F3, taking items and coins; 9g: F4, casting outside a battle; 9h: F5, the item list outside a battle; 9i: F6, the equipment screen; 9j (2026-10-26): F7, using items and coins; 9k: F8, the map; 9l (2026-10-27): F9, the party's order; 9m: F10, the party's data; 9n (2026-10-28): F7 at a sell counter; 9o: keys 1 to 4 and A (music, sounds, saving, leaving, sliding round corners); 9p (2026-10-30): loading a save from the menu's slot picker; 9q: doors to other scenes; 9r (2026-10-31): shops; 9s: boat rides and scene 3's snow; 9t: number locks and scripted talks; 9u: warps; 9v: the card game; 9w: the ending's record (ENDING.SL itself is not built); 9x: a sell counter stepped on; 10a to 10g: ENDING.SL, whole.
   - The operator has confirmed by eye or ear: the title, intro pacing, voice and subtitle sync, the music balance, the menu and its opening,
     the credits' pace, the first screen of the world, the idle animation, and walking with collision (2026-10-17).
-- **Not built in the world** (`findings.md` "WALK.SL step 7"-"step 13", `port.md` 7c-8a): the
-  new-game step that writes the `.NOW` files. A reached unbuilt case is printed on stderr
-  (`walk: not built: ...`, `battle: not built: ...`).
+- **Not built in the world:** a reached unbuilt case is printed on stderr (`walk: not built: ...`, `battle: not built: ...`). The
+  new-game step that writes the `.NOW` files, listed here until now, is built (`port.md` 10h).
 - Not done: no code analysed in the overlays; no function renamed or
   reconstructed; subtitle and picture formats unknown.
 - Operator note: the operator's keyboard has no function keys. Use the mouse on
@@ -105,7 +104,7 @@ is known for writing (`findings.md` step 37) and reading ("WALK0.SL: loading a s
    choice with the keys, the attack and the monsters' turn, what follows a win or a loss, the other three commands (flee, magic, items)
    and the mouse are built (`port.md` 8a-8f; the world's mouse buttons 8g), then story enemies, keys 1 and 2 and the sounds (8h, 8i): the
    battle is complete. Next: the actions of the F-keys (F1 talk, F2 look, F3 take, F4 cast, F5 items, F6 equipment, F7 use, F8 map, F9 order and F10 data are built, `port.md` 9a, 9b and 9e to 9m; F7 sells at counters, 9n), keys 1 to 4 and A (9o).
-4. New game (writing `__1.NOW` / `MAN_INFO.NOW` from `__1.AL1`, `__1.AL2`, `MAN_INFO.ALL`); loading a save from the slot picker is built (`port.md` 9p).
+4. New game (writing `__1.NOW` / `MAN_INFO.NOW` from `__1.AL1`, `__1.AL2`, `MAN_INFO.ALL`) is built (`port.md` 10h), and loading a save from the slot picker (9p).
 
 How to pick up the world work: `tools/check_walk.sh` checks everything built so far (about 21 minutes; `SHOTS=0` about 3); `tools/walk_idle_trace.py --key` records
 the original's passes with any key script, `tools/walk_idle.py check` / `cross` compare the Python model / the C port with them, and

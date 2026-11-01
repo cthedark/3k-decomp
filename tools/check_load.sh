@@ -3,7 +3,9 @@
 # the original runs in the oracle emulator (tools/dosemu.py) until it starts WALK.SL, and the MAN_INFO.NOW and __1.NOW it wrote must
 # be byte for byte the port's (build/3k_headless --scene menu --write-dir). Cases: every shipped save (slots 0, 1, 3, 4, 7, 9 and 10),
 # and saves the port's key 3 wrote (tools/battle_check.py on two of check_battle.sh's starts: slot 5 in scene 1, slot 0 in the dark
-# scene 13), which the original must then load as the port does.
+# scene 13), which the original must then load as the port does. Also the menu's item 0, the new game (src/menu.c menu_new_game,
+# WALK0.SL 0x10fe4 .. 0x11194): the MAN_INFO.NOW and __1.NOW it writes from MAN_INFO.ALL, __1.AL1 and __1.AL2 (NEWGAME_ONLY=1: only
+# that), and the world from them.
 # Exit status 0 when everything is identical.
 set -u
 cd "$(dirname "$0")/.." || exit 2
@@ -61,6 +63,45 @@ load() {   # NAME SLOT DATA [SAVEDIR]: pick SLOT (Right SLOT times, then Enter) 
     echo "$name: identical ($(wc -c < "$pw/__1.NOW" | tr -d ' ') bytes of __1.NOW)"
 }
 
+newgame() {   # the menu's item 0 (Enter at pass 12, no Down): __1.AL1, __1.AL2 and MAN_INFO.ALL into __1.NOW and MAN_INFO.NOW
+    name=newgame
+    total=$((total + 1))
+    src="$OUT/src_$name"
+    mkdir -p "$src"
+    cp original_bin/* "$src"/ || exit 2
+    rm -f "$src/MAN_INFO.NOW" "$src/__1.NOW"
+    rm -f "$OUT/emu_$name/MAN_INFO.NOW" "$OUT/emu_$name/__1.NOW"
+    perl -e 'alarm 250; exec @ARGV' -- "$PY" tools/dosemu.py "$EXE" --data "$src" --work "$OUT/emu_$name" --ticks 80 \
+        --instr-per-tick 500000 --loop-top 0x10b91,0x11304 --tick-div 3 --log-files \
+        --key-pass 4:0x9c --key-pass 12:0x1c --key-pass 16:0x9c > "$OUT/oracle_$name.log" 2>&1
+    pw="$OUT/port_$name"
+    mkdir -p "$pw"
+    rm -f "$pw/MAN_INFO.NOW" "$pw/__1.NOW"
+    "$MENU" --scene menu --data "$src" --write-dir "$pw" --menu-key 4:0x9c --menu-key 12:0x1c \
+        --step-dump 400:"$OUT/d4.raw" > "$OUT/port_$name.log" 2>&1
+    if ! grep -q "open walk.sl" "$OUT/oracle_$name.log"; then
+        echo "$name: the original did not reach WALK.SL"; fail=$((fail + 1)); return
+    fi
+    if ! grep -q "wrote the new game's files" "$OUT/port_$name.log"; then
+        echo "$name: the port did not write the new game's files"; fail=$((fail + 1)); return
+    fi
+    for f in MAN_INFO.NOW __1.NOW; do
+        if [ ! -f "$OUT/emu_$name/$f" ]; then
+            echo "$name: the original did not write $f"; fail=$((fail + 1)); return
+        fi
+        if ! cmp -s "$OUT/emu_$name/$f" "$pw/$f"; then
+            echo "$name: $f DIFFERENT"; fail=$((fail + 1)); return
+        fi
+    done
+    echo "$name: identical ($(wc -c < "$pw/__1.NOW" | tr -d ' ') bytes of __1.NOW)"
+}
+newgame
+if [ "${NEWGAME_ONLY:-0}" = 1 ]; then   # tools/mutate_load.py's new-game mutations: only this comparison
+    echo "load check: $((total - fail)) of $total comparisons identical to the original"
+    [ "$fail" -eq 0 ]
+    exit
+fi
+
 for s in 0 1 3 4 7 9 10; do load "shipped$s" $s original_bin; done
 
 # saves the port wrote (key 3 in the world), with the start data of check_battle.sh's sys_save5 and sys_save_dark
@@ -92,6 +133,16 @@ for s in 0 3 7; do
         *) echo "world_slot$s: DIFFERENT"; echo "$res" | head -4; fail=$((fail + 1)) ;;
     esac
 done
+# and from what the new game wrote
+total=$((total + 1))
+d="$OUT/data_newgame"
+mkdir -p "$d"
+cp original_bin/* "$d"/ && cp "$OUT/port_newgame"/*.NOW "$d"/ || exit 2
+res=$($PY tools/battle_check.py "$d" 150 --keep "$OUT/k_newgame" --cache "$OUT/newgame.rec" 2>/dev/null | grep -v '^pass [0-9]*: wrote')
+case "$res" in
+    *identical*) echo "world_newgame: $(echo "$res" | tail -1)" ;;
+    *) echo "world_newgame: DIFFERENT"; echo "$res" | head -4; fail=$((fail + 1)) ;;
+esac
 
 fi
 

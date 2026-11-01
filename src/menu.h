@@ -106,6 +106,12 @@ int menu_picker_slot(const menu_t *m);   /* the selected cell, 0..10 */
  * WALK0.SL, so that is not reproduced. */
 int menu_load_save(int slot);
 
+/* (0x10fe4 .. 0x11194) The new game's files, before WALK.SL starts: __1.AL1 and __1.AL2 (at most 0x4e20 bytes each) unpacked, and
+ * __1.NOW written as the first 0xb892 bytes of the one then the first 0xb1bc of the other; MAN_INFO.ALL (at most 504 bytes) unpacked
+ * into MAN_INFO.NOW (504 bytes). The files go into the write directory. Returns 0, or -1 if a file is missing or cannot be written.
+ * The original also stops the music first (when it is on) and then makes the same WALK0.SL check as menu_load_save. */
+int menu_new_game(void);
+
 /* Reset the keyboard latch, as when the menu starts: no break code seen yet. */
 void menu_input_reset(menu_t *m);
 

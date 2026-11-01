@@ -68,7 +68,8 @@ static int g_menu_nmice;
  * --picker-dump N:FILE writes the screen after N picker passes, --picker-slots MASK says which saves
  * exist (default: look for SAVE00.000 .. SAVE10.000 in the data directory). */
 /* --write-dir DIR: where the files the game writes go (saves, MAN_INFO.NOW, __1.NOW; the data directory without it). With it, a pick
- * in the stepped menu also loads the slot there (menu_load_save), as the original does before starting WALK.SL. */
+ * in the stepped menu also loads the slot there (menu_load_save), and confirming item 0 writes the new game's files there
+ * (menu_new_game), as the original does before starting WALK.SL. */
 static const char *g_write_dir = NULL;
 static struct { int pass; unsigned code; } g_pick_keys[MAX_SCRIPT];
 static int g_pick_nkeys;
@@ -302,6 +303,9 @@ static int run_menu_stepped(screen_t *scr, int ndump, const int *dump_pass, char
                     }
                     printf("transition: %d steps\n", MENU_CONFIRM_STEPS);
                 }
+                if (r == MENU_NEW_GAME && g_write_dir)
+                    printf(menu_new_game() == 0 ? "wrote the new game's files into %s\n" : "could not write the new game's files into %s\n",
+                           g_write_dir);
                 if (r == MENU_LOAD && g_pick_count > 0) {
                     unsigned mask = g_pick_mask >= 0 ? (unsigned)g_pick_mask : saves_present();
                     menu_picker_begin(m, mask);
@@ -1407,6 +1411,13 @@ static int run_game(screen_t *scr, int scale, int faithful)
                         break;
                     }
                     printf("game: slot %d loaded\n", slot);
+                }
+                if (c == MENU_NEW_GAME) {   /* __1.AL1, __1.AL2 and MAN_INFO.ALL into __1.NOW and MAN_INFO.NOW, then WALK.SL */
+                    if (menu_new_game() != 0) {
+                        printf("game: the new game's files could not be written, stopping\n");
+                        rc = 1;
+                        break;
+                    }
                 }
                 if (c == MENU_NEW_GAME || (c == MENU_LOAD && slot != MENU_NONE)) {   /* WALK.SL */
                     printf(c == MENU_NEW_GAME ? "game: new game (WALK.SL)\n" : "game: WALK.SL\n");

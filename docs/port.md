@@ -785,9 +785,11 @@ clock, no input and no SDL, like `menu.c` and `credits.c`.
 - **What it was (superseded by 7b, where the world moves, and 7e, where the song plays):** the game. Nothing moves, nothing is played (WALK.SL's own song is located by the loader but not started),
   no input is read, and there is no hand-over of the menu's last frame (the port uses the menu's first frame; outside the window the
   two are the same picture, which the check confirms: the first screen built over the menu's pass 3 and over its first frame is identical).
-- **New game:** the original writes `__1.NOW` and `MAN_INFO.NOW` from `__1.AL1`, `__1.AL2` and `MAN_INFO.ALL` first. The port does not;
-  it reads the two state files as they are in the data directory (the shipped ones are the state a new game writes, `findings.md` "WALK.SL").
-  Pointing it at a played game's state files shows that game's scene instead. **Load** is not wired (the saves are not read).
+- **New game:** the original writes `__1.NOW` and `MAN_INFO.NOW` from `__1.AL1`, `__1.AL2` and `MAN_INFO.ALL` first. The port did
+  not then; `--scene walk` still reads the two state files as they are in the data directory. Correction (2026-11-01): the shipped
+  `__1.NOW` is not what a new game writes (it differs in scenes 0, 1, 7 and 27); the shipped `MAN_INFO.NOW` is. `--scene game` writes
+  them since milestone 10h. Pointing `--scene walk` at a played game's state files shows that game's scene instead. **Load** is not
+  wired (the saves are not read; built in 9p).
 - **Out-of-range data:** the original reads whatever memory follows; the port reads zeros for a tile or sprite number outside the data
   (the buffers are padded), drops pixels outside the world buffer, and refuses to load a state in which a record writes outside its map
   (nothing shipped does any of these).
@@ -1379,8 +1381,7 @@ them, and the saves key 3 writes, somewhere else.
   slot 1's files in the data copy.
 - **Not reproduced:** the original's check of its own `WALK0.SL` against the copy in `ANI.LCP` at 0x600 after a load (the port has no
   `WALK0.SL`); a save whose files are cut short (the original's unpacker reads on into its buffer, the port's stops).
-- **Not built:** new game's files (`__1.AL1`, `__1.AL2`, `MAN_INFO.ALL` into the `.NOW` files): the port's new game starts from the
-  `.NOW` files as they are.
+- **Not built (then):** new game's files (`__1.AL1`, `__1.AL2`, `MAN_INFO.ALL` into the `.NOW` files); built in milestone 10h.
 
 ## Milestone 9q: doors to other scenes (C), built 2026-10-30
 Walking onto a door (a kind 1 record) now takes the party to the scene it names: the view zooms out, the old scene's state is
@@ -1575,3 +1576,18 @@ from the menu to its end.
 - **Checked:** all 14,863 records of the whole program identical; 96 mutations, all caught; ASan / UBSan clean; a real-time run.
 - **Choices:** the text screen drawn in 4 x 8 cells; the wait on it (the original returns to DOS and leaves it there).
 - **Not compared:** the voice and the repeating sound (no Sound Blaster in the emulator); the music.
+
+## Milestone 10h: the new game's files (C), built 2026-11-01
+The menu's "new game" now writes the state files before the world starts, as WALK0.SL does: `__1.AL1` and `__1.AL2` unpacked, and
+`__1.NOW` written as the first 0xb892 bytes of the one and the first 0xb1bc bytes of the other; `MAN_INFO.ALL` unpacked into
+`MAN_INFO.NOW` (504 bytes) (`docs/findings.md` "WALK0.SL: the new game's files"). Until now the port's new game started from the
+shipped `__1.NOW`, which is a played game's state in four scenes. The files go where a load's go: the data directory, or
+`--write-dir`.
+
+- **Code:** `src/menu.c` `menu_new_game`; `src/main.c` (`run_game` calls it before WALK.SL; the stepped menu with `--write-dir` calls
+  it when item 0 is confirmed).
+- **Checked:** `tools/check_load.sh`: the new game's `MAN_INFO.NOW` and `__1.NOW` are byte for byte the ones the original writes in
+  the oracle, and 150 world passes from them (scene 0) are identical. `NEWGAME_ONLY=1` runs only the files' comparison.
+  `tools/mutate_load.py`: 7 new mutations (16 in all), all caught (`ONLY=new` runs just these); two dropped with a note.
+- **Not reproduced:** the `WALK0.SL` check against `ANI.LCP`, as after a load. The original's music stop before the reads
+  (`0x22d:0x124`, `0x22d:0x14c`, when the music is on) has its counterpart in `play_menu`, which stops the menu's song as it returns.
