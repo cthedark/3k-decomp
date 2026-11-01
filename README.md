@@ -31,8 +31,8 @@ can be modified, recompiled, and run on modern hardware.
 - Redistributing the original game or its assets (see [Legal](#legal-and-scope)).
 - Bypassing any copy protection, licensing check, or anti-tamper mechanism. If
   one turns up, it is out of scope.
-- Improving the game (new features, balance changes, translation) before the
-  faithful port works. Those come after.
+- Improving the game (new features, balance changes) before the faithful port
+  works. (Translation came after it: English and Korean, `localization/`.)
 
 ## Target
 
@@ -42,7 +42,7 @@ can be modified, recompiled, and run on modern hardware.
 | Developer / publisher | 第三波 (Third Wave), catalog no. 6G046 |
 | Year | 1993 (release date also given as 1993-06-23) |
 | Genre | RPG, 3D isometric view; real-time shooting combined with team turn-based combat |
-| Language | Native Chinese |
+| Language | Native Chinese (the port adds English and Korean, see [Playing](#building-and-playing)) |
 | Platform | DOS |
 | Credits (programming) | 李超群 |
 | Reference | [Chinese DOS Game Database, cdg-0202](https://cdosgame.simagame.me/games/cdg-0202/) |
@@ -150,32 +150,55 @@ keep it that way:
   derived from a copyrighted program may still be a derivative work.
 - No work on circumventing copy protection or license checks.
 
-## Repository layout (planned)
+## Repository layout
 
 ```
-original_bin/   original game files, read-only, not for redistribution
+original_bin/   original game files, read-only, not for redistribution (git-ignored)
 README.md       this file
-docs/           findings: file formats, memory maps, function notes
-tools/          standalone data-format tools and scripts
-src/            reconstructed game source
+docs/           findings: file formats, code notes, the port's milestones (start with docs/README.md)
+src/            the reconstructed game, C99 (plus one C++ file for the FM chip)
+tests/          unit tests, the headless platform, dump programs for the checks
+tools/          data-format tools, the oracle emulator (dosemu.py), check and mutation scripts
+localization/   the English and Korean translations, their source tables and fonts (localization/README.md)
+third_party/    ymfm (OPL2 emulation)
+work/           scratch output of the tools (git-ignored)
 ```
 
-Only `original_bin/` and this README exist so far.
+## Building and playing
+
+    make                                  # build/3k (C99, C++14 for ymfm, SDL2 via sdl2-config)
+    make test                             # unit tests and the translations' check
+    build/3k --data original_bin --scene game
+
+`--scene game` runs the whole game: title, intro, menu, new game or a saved one, the world and its battles, the ending.
+The game writes its saves and state files into the data directory, as the original does; play on a copy of `original_bin/`,
+or pass `--write-dir DIR`. More options: `docs/port.md`, "Build and run".
+
+**Language.** Chinese (the original) is the default. For English or Korean put a `3k.ini` in the directory the game is
+started from:
+
+    [game]
+    language=en          ; zh, en or ko
+    localization=localization
+
+`--lang zh|en|ko` overrides it and `--config FILE` reads another file. Everything on screen is translated except the title
+logo and the credits; the voice-over stays Mandarin. How the translations are stored, the naming rules, the fonts and the
+checks: `localization/README.md`.
 
 ## Status
 
-Phases 1-2 in progress. The project documents live in `docs/`; start with
-`docs/README.md`, which holds the reading order, the current state, and the
-next steps.
-
-Done: five PKLITE programs unpacked, `MARK.EXE` and `TV.EXE` loaded in Ghidra,
-program set mapped at a high level (see `docs/findings.md`).
-
-Not done: the original has not been run in DOSBox-X, no data format is decoded,
-and no code has been reconstructed.
+The game is ported from start to finish (`docs/port.md`, "Current state"): every program of the original runs as part of
+one native program, each compared pass by pass with the original's code run in an emulator (`tools/dosemu.py`). English and
+Korean translations of all on-screen text are built in (`localization/README.md`). Not yet done: one play-through of the
+whole story in the port, and comparing the Sound Blaster sounds by ear. The reading order and the next steps are in
+`docs/README.md`.
 
 ## Third-party code
 - `third_party/ymfm/`: Yamaha FM chip emulation by Aaron Giles,
   [ymfm](https://github.com/aaronsgiles/ymfm), BSD 3-Clause (licence text in that directory), used
   unmodified for the OPL2 music. The pinned commit is in `third_party/ymfm/PINNED.txt`.
+- `localization/fonts/tk_hangul16.tkf`: Hangul bitmaps converted from
+  [Neo Dunggeunmo](https://github.com/neodgm/neodgm) by Eunbin Jeong, SIL Open Font License 1.1 (text beside it), renamed
+  as the OFL requires; `localization/fonts/tk_narrow6.tkf`: from the X11 misc-fixed 6x13 font by Markus Kuhn, public domain.
+  See `localization/fonts/README.md`.
 
