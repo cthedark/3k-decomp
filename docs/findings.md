@@ -4152,3 +4152,46 @@ The port ends the walk there (`walk_ended`): `src/main.c` stops the song and the
 records with their flag, with the music and the Sound Blaster, and without the flag. `tools/mutate_battle.py`: 3 mutations, all
 caught; one dropped (the world going on after the end, which nothing compares). A real-time run under SDL's dummy drivers walked onto
 the record and the port stopped with "walk: the game's end".
+
+## WALK.SL step 47: a sell counter stepped on (kind 0x14), 2026-11-01
+
+READ from the code (`work/b11/rec.asm`, `0x1863c` .. `0x18b7d`) and built, not compared: no start can reach it. Stepping on a kind 0x14
+record runs the same code as F7's sale (step 36), on whatever the map buffer `[bp-0xba]` holds (the item's name, its byte 0x11 and its
+price word 0x12 come from it) and with F7's member and item as F7 last left them; at its end F7's button is turned (`0x8c3:0x378a`
+at 0x9884) though it was never pressed, and `[bp-0xbe]` = 1.
+
+**Unreachable in the shipped data (SEEN):** each of the five counters (scenes 0, 2, 21, 33, 41) stops the hero one step short from all
+four sides (`work/b11/sell1.sh`, `sell2.sh`: below at y + 2, above at y - 2, beside at x - 4 and x + 4), and a hero placed on a
+counter's cell cannot move (`work/b11/sell3.sh`: Right and Down leave him at the counter's place). The record finder only runs after a
+step, so the sale cannot start that way either.
+
+**Checked:** `tests/test_walk.c` puts a kind 0x14 record under scene 0's door and checks that the sale's box opens and no kind is
+reported; `tools/mutate_battle.py` "sellstep: not taken" is caught by it. The 23 `pawn_` starts stay identical.
+
+## ENDING.SL step 1: what it is and how it is laid out (survey), 2026-11-01
+
+SEEN in the emulator (`tools/dosemu.py work/unpacked/ENDING.SL.unpacked.exe --log-files`, no sound card: `work/e1/run.log`; a
+snapshot every 150 ticks, `work/e1/sheet.sh`, `work/e1/sheet.png`) and READ in outline from its `main` (`0x10000` .. `0x113ff`,
+`work/e1/ending.asm`, `work/e1/loops.py` for its loops and file opens). Nothing is built yet.
+
+**The run:** 4,869 BIOS ticks (about 4 min 27 s) without a sound card, then `exit(0)` to DOS (not MARK.EXE). It reads, in order:
+`muc.all` (the music, offset 0x7137), `ani.lcp` (0x600 bytes: palettes), `ending12.lcz`, `ending1.lcz`, `ending1t.lcz` (tick 3 .. 5),
+`ending2.lcz` and `_1_.loc` (the voice, tick 511), `ending3.lcz` (675), `ending4.lcz` (957, again at 1007), `ending4t.lcz` (1008),
+`ending5.lcz` (1042), `cast2.lcz` (1291). Seven 0xdc00-byte buffers and one 0x5420-byte buffer are allocated first ("Memory is not
+enough !" when one fails).
+
+**The loops of `main`** (by address): `0x1042d` .. `0x10600` after `ending12/1/1t.lcz`; `0x106d1` .. `0x108cd` after `ending2.lcz`
+and `_1_.loc`; `0x10968` .. `0x10b69` after `ending3.lcz`; two from `0x10cd1` to `0x10e9d` after `ending4.lcz`; three from `0x10fd6` to
+`0x110c5` after `ending4.lcz` and `ending4t.lcz`; six from `0x1112f` to `0x11215` after `ending5.lcz`; `0x112c1` .. `0x11381` after
+`cast2.lcz`.
+
+**What is on the screen** (snapshots; which loop draws which is not yet tied down): ticks 50 .. 500, clouds drifting over a lilac sky,
+the villain (a blonde woman in a red cape) rising from the bottom, then her speech with subtitles; tick 650, the heroes' faces in
+boxes over black; tick 800, a dark red sky full of sparks with her figure on both sides; tick 950, a sunset over the sea with
+silhouettes; from about tick 1100 to the end, the credits rising slowly over the silhouettes; at tick 3000 of the first run, a girl in
+blue sitting on the grass (not caught by the 150-tick sheet: a short scene, or the runs differ; to be checked).
+
+**Helpers:** `main` calls the C runtime (`0x265:*`, `0x204:*` for files), and library routines in segments `0x14d`, `0x152` (an
+unpacker, `0x152:0xdd`), `0x16b`, `0x19c` (FM music), `0x1e7`, `0x21d`, `0x22c`, `0x247` (blits), `0x2fc` (the voice, CT-VOICE);
+its own near helpers start at `0x11400`. The intro's port (`STORY2.SL`, `src/intro*.c`, `src/slide.c`) and `CAST.SL`'s
+(`src/credits.c`) likely share several of these; that is to be checked routine by routine.

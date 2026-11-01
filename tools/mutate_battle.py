@@ -1114,6 +1114,9 @@ m("walk.c", "boat: steps not shown", "        put_pic(scr, 0x1440, buf + 0x32C8)
 # written and the place taken, which are the door's scene_leave (its mutations cover both).
 m("walk.c", "boat: pointer kept", "    walk_mouse_hide(w, w->scr);\n    boat_ride", "    boat_ride")
 m("walk.c", "boat: pointer not reset", "    walk_mouse_reset(w, w->scr);\n    w->vbe = 8;", "    w->vbe = 8;")
+# a sell counter stepped on (step 47): no start can reach one; tests/test_walk.c checks that the sale opens
+m("walk.c", "sellstep: not taken", "    if (kind == 0x14 && w->scr) {\n        w->using = 1;", "    if (kind == 0x114 && w->scr) {\n        w->using = 1;")
+
 # the ending (step 46); RUNS="end_"
 m("walk.c", "end: not taken", "    if (kind == 0x13 && w->scr) {", "    if (kind == 0x113 && w->scr) {")
 m("walk.c", "end: flag ignored", "        if (walk_flag_test(s->tab_b, rec[3], rec[4])) {\n            w->ended = 1;", "        if (1) {\n            w->ended = 1;")

@@ -1490,4 +1490,10 @@ the sounds stop and the walk returns (`walk_ended`; `play_walk` gives 4). `ENDIN
   is now a sell counter stepped on, kind 0x14).
 - **Checked:** `tools/check_battle.sh`, 4 `end_` starts, all identical; `tools/mutate_battle.py`: 3 mutations, all caught, one dropped
   with a note; a real-time run under SDL's dummy drivers.
-- **Not built:** `ENDING.SL`; of the record block only kind 0x14 stepped on (sell counters are built for F7, `port.md` 9n) is left.
+- **Not built:** `ENDING.SL`; of the record block only kind 0x14 stepped on (sell counters are built for F7, `port.md` 9n) is left
+  (since built, 9x).
+
+## Milestone 9x: a sell counter stepped on (kind 0x14) (C), built 2026-11-01
+Stepping on a kind 0x14 record runs F7's sale on whatever the map buffer holds, as the original does (`hit_record` calls `use_sell`;
+`docs/findings.md` "WALK.SL step 47"). No shipped counter can be stepped on, so this is read from the code and pinned by
+`tests/test_walk.c`, not compared. Every kind of the record block is now built.

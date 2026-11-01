@@ -862,6 +862,7 @@ static void shop_open(walk_t *w, screen_t *scr, unsigned si);
 static void boat(walk_t *w, unsigned si);
 static void warp(walk_t *w, unsigned si);
 static void cards_open(walk_t *w, screen_t *scr, unsigned si);
+static void use_sell(walk_t *w, screen_t *scr);
 static void frame_at(walk_t *w, unsigned x, unsigned y, int people);
 static int lock_open(walk_t *w, screen_t *scr, unsigned si);
 static void rec_talk_open(walk_t *w, screen_t *scr, unsigned si);
@@ -902,6 +903,15 @@ static void hit_record(walk_t *w, unsigned si)
         records_again(w, si / WS_RECORD_SIZE);
         return;
     }
+    /* Kind 0x14 stepped on (0x1864b): the sale of F7's item path, on whatever the map buffer holds (its name, byte 0x11, its price)
+     * and F7's member and item as F7 last left them; at its end F7's button is turned and [bp-0xbe] = 1, as after F7. No shipped
+     * counter can be stepped on (each blocks the hero on all four sides, and a hero placed on one cannot move), so this is read, not
+     * compared (docs/findings.md step 47). */
+    if (kind == 0x14 && w->scr) {
+        w->using = 1;   /* the boxes step the palette itself ([bp-0xac]), as in F7 */
+        use_sell(w, w->scr);
+        return;
+    }
     if (kind == 0xE && w->scr) {   /* the card game: its loops run until it ends (cg_done) */
         cards_open(w, w->scr, si);
         return;
@@ -939,8 +949,7 @@ static void hit_record(walk_t *w, unsigned si)
             s->weather -= 3;
             walk_sfx_play(w, SFX_EF, 0x127D);   /* 0x17c2a */
         }
-    } else if ((kind == 0 && !w->scr) || (kind == 7 && !w->scr) || kind == 8 || kind == 0xE || kind == 0x11 || kind == 0x13 ||
-               kind == 0x14) {
+    } else if (!w->scr && (kind == 0 || kind == 7 || kind == 8 || kind == 0xE || kind == 0x11 || kind == 0x13 || kind == 0x14)) {
         char what[48];
         snprintf(what, sizeof what, "scene record kind 0x%x", kind);
         note_unbuilt(w, what, si / WS_RECORD_SIZE);
