@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "assets.h"
+#include "l10n.h"
 #include "lcz.h"
 
 enum {
@@ -1234,10 +1235,28 @@ static void text_pic(battle_t *b, const uint8_t *s, unsigned n, uint8_t colour, 
         note(b, "a character the font does not have");
 }
 
+/* The translated modes' colouring of a battle_text_pic character: colour + 1 in the first `split` pixels of the cell, colour + 2
+ * in the next as many (0x25 for 8 wide, 0x50 for 16, as the original; 0x1c for 6, the same rows) */
+static uint8_t text_cell(void *ctx, unsigned gw, unsigned index)
+{
+    uint8_t colour = *(const uint8_t *)ctx;
+    unsigned split = gw == 16 ? 0x50 : gw == 8 ? 0x25 : 0x1C;
+    return index < 2 * split ? (uint8_t)(colour + 1 + index / split) : colour;
+}
+
 int battle_text_pic(const uint8_t *font8, const uint8_t *s, unsigned n, uint8_t colour, uint8_t *px, unsigned *last_gw)
 {
     unsigned w = 8 * n, x = 0;
     int missing = 0;
+    const char *t = l10n_big5(s, n);
+    if (t) {   /* a translation in the same 8 n x 14 picture: the narrow font when the normal one does not fit */
+        size_t len = strlen(t);
+        int font = l10n_width(t, len, L10N_FONT_NORMAL) <= w ? L10N_FONT_NORMAL : L10N_FONT_NARROW;
+        memset(px, 0, (size_t)w * 14);
+        int r = l10n_draw(t, len, font, px, w, 0, text_cell, &colour, NULL);
+        *last_gw = font == L10N_FONT_NARROW ? 6 : 8;
+        return r != 0;
+    }
     memset(px, 0, (size_t)w * 14);
     for (unsigned i = 0; i < n; i++) {
         uint8_t g[16 * 15];

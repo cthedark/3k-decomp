@@ -15,6 +15,13 @@ typedef struct {
     unsigned last;                  /* what 0x1afb0 returns: the text's last byte before '#' (0x7f: another message follows) */
     unsigned hi8;                   /* [bp-8]: the low byte of the text's file offset's high word (a talk's yes / no loop starts its
                                      * palette count with it, from the same stack bytes) */
+    /* the translated modes only (localization/README.md): the rest of a translation that needs more than one box, shown by
+     * msgbox_round in place of closing; and what drawing it again needs */
+    const char *more;
+    const uint8_t *table;
+    uint8_t *tail, tail0[4];
+    uint8_t colour;
+    unsigned pages;                 /* boxes of the translation shown so far */
 } msgbox_t;
 
 /* Message `msg` of MES_TXT.LCC (0x78 bytes at (msg - 1) * 0x80 + 6, up to '#') in `colour` over the darkened bottom of the screen;
@@ -23,7 +30,10 @@ typedef struct {
  * darkened). With `wait` the box is the screen's rows 134 .. 179 and msgbox_round waits on it; without, it is only as big as the text
  * needs (320 x 16 narrowed by the centring, 320 x 31 or 320 x 46, one row above the text) and stays, the caller puts the screen back.
  * Returns 0, -1 when the text cannot be read (nothing drawn), 1 when
- * the text was drawn with a character the font does not have (drawn blank). */
+ * the text was drawn with a character the font does not have (drawn blank).
+ * In a translated mode a message with a translation is drawn from it instead, wrapped at words into rows of 320 pixels, three rows
+ * to a box; with `wait`, the further boxes follow one by one in msgbox_round (a key or the right button turns to the next), and
+ * without, only the first three rows are shown. What the game reads from the box (`last`, `hi8`) still comes from the original. */
 int msgbox_open(msgbox_t *m, screen_t *scr, const uint8_t *font8, const uint8_t table[256], uint8_t tail[4], unsigned msg,
                 uint8_t colour, int wait);
 

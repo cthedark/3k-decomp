@@ -6,6 +6,7 @@
 
 #include "assets.h"
 #include "battle.h"
+#include "l10n.h"
 #include "msgbox.h"
 #include "sfx.h"
 
@@ -5251,11 +5252,29 @@ size_t walk_glyph_offset(unsigned hi, unsigned lo)
     return 0x3B20 + 30 * ((size_t)(hi - 0xA4) * 157 + (lo <= 0x7E ? lo - 0x40 : lo - 0x62));
 }
 
+/* The label's row colours (0x89 rows 0-4, 0x8a rows 5-9, 0x88 below), for a translated label */
+static uint8_t label_cell(void *ctx, unsigned gw, unsigned index)
+{
+    (void)ctx;
+    unsigned y = index / gw;
+    return y < 5 ? 0x89 : y < 10 ? 0x8A : 0x88;
+}
+
 int walk_label_sprite(const uint8_t *big5, int chars, uint8_t *out)
 {
     int w = 16 * chars;
     memset(out, 0, (size_t)w * 14);
-    for (int k = 0; k < chars; k++) {
+    const char *t = l10n_big5(big5, (size_t)(2 * chars));
+    if (t) {   /* a translation, centred in the same w x 14 (the narrow font when the normal one does not fit) */
+        size_t len = strlen(t);
+        unsigned tw = l10n_width(t, len, L10N_FONT_NORMAL);
+        int font = tw <= (unsigned)w ? L10N_FONT_NORMAL : L10N_FONT_NARROW;
+        if (font == L10N_FONT_NARROW)
+            tw = l10n_width(t, len, font);
+        if (l10n_draw(t, len, font, out, (unsigned)w, tw < (unsigned)w ? ((unsigned)w - tw) / 2 : 0, label_cell, NULL, NULL) != 0)
+            return -1;
+    }
+    for (int k = 0; !t && k < chars; k++) {
         uint8_t g[28];
         size_t off = walk_glyph_offset(big5[2 * k], big5[2 * k + 1]);
         if (off == (size_t)-1 || assets_read_at("NUMBER.LCZ", off, g, sizeof g) != 0)

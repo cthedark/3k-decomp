@@ -1,0 +1,4 @@
+# 한국어: 프로그램 안의 문자열 (localization/source/code.tsv). 예 / 아니오 칸은 16 x 14: O / X.
+id	text
+code.yes	O
+code.no	X

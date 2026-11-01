@@ -1619,3 +1619,24 @@ shipped `__1.NOW`, which is a played game's state in four scenes. The files go w
   `tools/mutate_load.py`: 7 new mutations (16 in all), all caught (`ONLY=new` runs just these); two dropped with a note.
 - **Not reproduced:** the `WALK0.SL` check against `ANI.LCP`, as after a load. The original's music stop before the reads
   (`0x22d:0x124`, `0x22d:0x14c`, when the music is on) has its counterpart in `play_menu`, which stops the menu's song as it returns.
+
+## Milestone 11a: the language mode (C), built 2026-11-01
+The game can be played with its on-screen text in English or Korean (`localization/README.md`): `language=en` or `ko` in `3k.ini`
+(or `--lang`). Chinese stays the default and the only language the checks compare; the headless build reads no `3k.ini` unless told
+to. A text with no translation is drawn as the original draws it.
+
+- **Code:** `src/settings.c` (the settings file); `src/l10n.c` (the tables, the fonts, UTF-8, wrapping, drawing with the caller's
+  colouring); the hooks: `msgbox_open` / `msgbox_round` (translated messages wrapped into boxes of three 320-pixel rows, further
+  boxes on the next key or right click; `shade_box` now shared with the original path), `battle_text_pic` (names and short lines,
+  by the original's bytes; the narrow font when needed), `walk_label_sprite` (the buttons), `menu.c` `translate_labels` (the
+  menu's items, the font doubled in the original lettering's two colours); `main.c` (`--config`, `--lang`); `platform_headless`.
+- **Fonts:** `localization/fonts/` (`tools/l10n_fonts.py`): Hangul from Neo Dunggeunmo (OFL 1.1, renamed as the OFL asks), a 6-pixel
+  ASCII font from X11 misc-fixed 6x13 (public domain); ASCII at normal width is the game's own 8 x 15 font.
+- **Checked:** `build/l10n_check` (in `make test`, both languages): ids, glyphs, room. The Chinese path: `make test`, `check_menu.sh`
+  640 of 640, `check_battle.sh` on the starts that draw text (talk, shop, data, equip, items, magic, cast, take, sell, pawn, cards,
+  sys, ask, lock, script, s1, gameover) all identical, `check_load.sh` (new game) identical. Every mutation pattern of
+  `tools/mutate_battle.py` still matches once (the original box code is unchanged apart from `shade_box` being moved out); its
+  `ONLY=message` set, 31 of 31 caught, and the six `msgbox.c` mutations named "box: ...", all caught. ASan / UBSan
+  clean on the menu, a talk with two boxes and the world's first screen in both languages.
+- **Not yet:** most of the translations (a sample: buttons, yes / no, names, menu, scene 0's talks); the picture texts other than
+  the menu (intro and ending subtitles, shouts, title line, game over); the shop's greeting strip, placed by the Chinese length.

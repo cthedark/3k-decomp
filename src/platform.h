@@ -16,6 +16,8 @@ void platform_audio_enable(int on);
 const audio_sink *platform_audio(void);
 
 int platform_init(const char *title, int scale);
+/* 1 in the headless build (tests/platform_null.c), which the checks run: it reads no settings file unless told to (main.c). */
+int platform_headless(void);
 void platform_shutdown(void);
 
 /* Show the screen (palette applied). */

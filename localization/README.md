@@ -62,9 +62,36 @@ scripts and symbols, one with "Shin Ting" in Latin letters; their captions are m
 - Korean is about as long as the Chinese in characters, and Hangul is full width like Chinese: most text fits as it is.
 - Button labels are 32 x 14: two Hangul syllables (대화, 보기) fit exactly; English needs four letters (Talk, Look).
 
+## Playing in English or Korean
+Put a `3k.ini` in the directory the game is started from:
+
+    [game]
+    language=en          ; zh (the original, the default), en or ko
+    localization=localization
+
+`build/3k --config FILE` reads another file; `--lang zh|en|ko` overrides the file's language. The headless build (the checks)
+reads no `3k.ini` unless `--config` or `--lang` is given, so the comparisons always see the Chinese original. Anything without a
+translation is drawn in Chinese. `TK_TRACE_MESSAGES=1` prints the number of every message box shown, to find a text's id while
+playing.
+
+## The language mode (step 2, built 2026-11-01)
+- `src/settings.c`: the settings file. `src/l10n.c`: loads `source/`, `<lang>/` and `fonts/`; looks a text up by id or by the
+  original's bytes; decodes UTF-8; wraps; draws with a colouring function so each place keeps its original colours.
+- Where it draws: `msgbox_open` (by message number: wrapped at words into rows of 320 pixels, three rows a box, further boxes on the
+  next key or right click when the box waits; a box that does not wait shows its first three rows); `battle_text_pic` (by the
+  original's bytes: names, list rows, short lines; the narrow font when the normal one does not fit); `walk_label_sprite` (the
+  buttons, centred); the menu's items (`menu.0` .. `menu.3`: the font doubled in the original lettering's two colours).
+- Not yet: the picture texts other than the menu (subtitles, shouts, title line, game over), and the shop's greeting strip, whose
+  place the original works out from the Chinese length.
+- The game's own font draws `'` as a low comma, so apostrophes use its `` ` `` (a high quote); `@ { | } ~` are other marks in it
+  (a circle, corner brackets) and the check rejects them.
+- `build/l10n_check DATA LANG` (in `make test` for both languages): every id is a source id, every character is in the fonts, every
+  text fits its room (labels 32 pixels, yes / no 16, names their bytes x 8 or the narrow font, items and spells also at most 16
+  characters, menu items 120, subtitles their picture's width). It also counts the message boxes.
+- `glossary.tsv`: the names and terms used so far.
+- Sample translated (both languages): the buttons, yes / no, the members' names, the menu, messages 1-3 (shops), 10-12 and 13-46
+  (scene 0's villagers, the legend and the father's letter).
+
 ## Next
-2. The language mode in the port: the settings file, UTF-8 tables, the Hangul font, word wrap and pages, the picture texts; a
-   sample (menu, buttons, the first scene's talks) in both languages; tests that every translation fits and every character is in
-   its font.
-3. The translations: a glossary of names first, then everything above.
-4. The pictures: the subtitles, shouts, menu, title line and game over.
+3. The translations: the rest of the messages (by scene, with the glossary), the items and spells, the card game's lines.
+4. The pictures: the subtitles, shouts, title line and game over; the shop's greeting strip.

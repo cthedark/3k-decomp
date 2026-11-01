@@ -29,7 +29,7 @@ BUILD := build
 YMFM_DIR := third_party/ymfm
 OPL_OBJ  := $(BUILD)/opl/ymfm_opl.o $(BUILD)/opl/ymfm_adpcm.o $(BUILD)/opl/ymfm_pcm.o $(BUILD)/opl/opl.o
 
-CORE_SRC := src/lcz.c src/assets.c src/screen.c src/gfx.c src/title.c src/tkrand.c src/intro0.c src/intro1.c src/intro2.c src/intro3.c src/intro4.c src/intro5.c src/intro6.c src/subs.c src/slide.c src/voc.c src/voice.c src/audio.c src/cmf.c src/music.c src/menu.c src/credits.c src/walkscene.c src/walk.c src/battle.c src/msgbox.c src/gameover.c src/sfx.c src/ending.c
+CORE_SRC := src/lcz.c src/assets.c src/screen.c src/gfx.c src/title.c src/tkrand.c src/intro0.c src/intro1.c src/intro2.c src/intro3.c src/intro4.c src/intro5.c src/intro6.c src/subs.c src/slide.c src/voc.c src/voice.c src/audio.c src/cmf.c src/music.c src/menu.c src/credits.c src/walkscene.c src/walk.c src/battle.c src/msgbox.c src/gameover.c src/sfx.c src/ending.c src/l10n.c src/settings.c
 GAME_SRC := $(CORE_SRC) src/platform_sdl.c src/main.c
 
 all: $(BUILD)/3k
@@ -76,16 +76,20 @@ $(BUILD)/test_credits: $(CORE_SRC) tests/test_credits.c src/*.h $(OPL_OBJ) | $(B
 $(BUILD)/test_walk: $(CORE_SRC) tests/test_walk.c src/*.h $(OPL_OBJ) | $(BUILD)
 	$(CC) $(CFLAGS) -Isrc $(CORE_SRC) tests/test_walk.c $(OPL_OBJ) -o $@ $(CXXLIB)
 
-$(BUILD)/test_battle: src/battle.c src/msgbox.c src/walk.c src/walkscene.c src/assets.c src/lcz.c src/screen.c tests/test_battle.c src/*.h | $(BUILD)
-	$(CC) $(CFLAGS) -Isrc src/battle.c src/msgbox.c src/walk.c src/walkscene.c src/assets.c src/lcz.c src/screen.c tests/test_battle.c -o $@
+$(BUILD)/test_battle: src/battle.c src/msgbox.c src/walk.c src/walkscene.c src/l10n.c src/assets.c src/lcz.c src/screen.c tests/test_battle.c src/*.h | $(BUILD)
+	$(CC) $(CFLAGS) -Isrc src/battle.c src/msgbox.c src/walk.c src/walkscene.c src/l10n.c src/assets.c src/lcz.c src/screen.c tests/test_battle.c -o $@
 
 # The WALK.SL port's state and first screen as files, for comparing with the original and the Python model
 # (tools/check_walk.sh). Needs only the loader and the drawing, so it builds fast.
-$(BUILD)/walk_dump: src/walk.c src/battle.c src/msgbox.c src/gameover.c src/sfx.c src/voc.c src/walkscene.c src/assets.c src/lcz.c src/screen.c tests/walk_dump.c src/*.h | $(BUILD)
-	$(CC) $(CFLAGS) -Isrc src/walk.c src/battle.c src/msgbox.c src/gameover.c src/sfx.c src/voc.c src/walkscene.c src/assets.c src/lcz.c src/screen.c tests/walk_dump.c -o $@
+$(BUILD)/walk_dump: src/walk.c src/battle.c src/msgbox.c src/gameover.c src/sfx.c src/voc.c src/walkscene.c src/l10n.c src/assets.c src/lcz.c src/screen.c tests/walk_dump.c src/*.h | $(BUILD)
+	$(CC) $(CFLAGS) -Isrc src/walk.c src/battle.c src/msgbox.c src/gameover.c src/sfx.c src/voc.c src/walkscene.c src/l10n.c src/assets.c src/lcz.c src/screen.c tests/walk_dump.c -o $@
 
 $(BUILD)/ending_dump: src/ending.c src/assets.c src/lcz.c src/screen.c tests/ending_dump.c src/*.h | $(BUILD)
 	$(CC) $(CFLAGS) -Isrc src/ending.c src/assets.c src/lcz.c src/screen.c tests/ending_dump.c -o $@
+
+# The translations' check: ids, glyphs and room (localization/README.md).
+$(BUILD)/l10n_check: src/l10n.c src/assets.c tests/l10n_check.c src/*.h | $(BUILD)
+	$(CC) $(CFLAGS) -Isrc src/l10n.c src/assets.c tests/l10n_check.c -o $@
 
 $(BUILD)/test_gfx: $(CORE_SRC) tests/test_gfx.c src/*.h $(OPL_OBJ) | $(BUILD)
 	$(CC) $(CFLAGS) -Isrc $(CORE_SRC) tests/test_gfx.c $(OPL_OBJ) -o $@ $(CXXLIB)
@@ -101,7 +105,7 @@ $(BUILD)/3k_headless: $(CORE_SRC) tests/platform_null.c src/main.c src/*.h $(OPL
 # spins fails with a signal instead of hanging the build, as test_music once did.
 LIMIT := perl -e 'alarm 300; exec @ARGV' --
 
-test: $(BUILD)/test_core $(BUILD)/test_gfx $(BUILD)/test_audio $(BUILD)/test_cmf $(BUILD)/test_music $(BUILD)/test_menu $(BUILD)/test_credits $(BUILD)/test_walk $(BUILD)/test_battle
+test: $(BUILD)/test_core $(BUILD)/test_gfx $(BUILD)/test_audio $(BUILD)/test_cmf $(BUILD)/test_music $(BUILD)/test_menu $(BUILD)/test_credits $(BUILD)/test_walk $(BUILD)/test_battle $(BUILD)/l10n_check
 	$(LIMIT) $(BUILD)/test_core original_bin
 	$(LIMIT) $(BUILD)/test_gfx
 	$(LIMIT) $(BUILD)/test_audio original_bin
@@ -111,6 +115,8 @@ test: $(BUILD)/test_core $(BUILD)/test_gfx $(BUILD)/test_audio $(BUILD)/test_cmf
 	$(LIMIT) $(BUILD)/test_credits original_bin
 	$(LIMIT) $(BUILD)/test_walk original_bin
 	$(LIMIT) $(BUILD)/test_battle
+	$(LIMIT) $(BUILD)/l10n_check original_bin en
+	$(LIMIT) $(BUILD)/l10n_check original_bin ko
 
 $(BUILD):
 	mkdir -p $(BUILD)

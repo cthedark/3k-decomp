@@ -118,6 +118,11 @@ const audio_sink *platform_audio(void) { return g_adev ? &g_sink : NULL; }
 
 static void test_input_load(void);
 
+int platform_headless(void)
+{
+    return 0;
+}
+
 int platform_init(const char *title, int scale)
 {
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {

@@ -1,0 +1,43 @@
+# English: messages (localization/source/messages.tsv). A box holds 3 rows of 40 letters; a longer text goes on in further boxes.
+# A record whose Chinese ends in {7f} is followed by the next one in the same talk: the split between them may move. \n breaks a row.
+id	text
+msg.0001	Welcome! Care to buy something to eat?
+msg.0002	Come, come, young one! Buy some weapons! Mine are the finest!
+msg.0003	Welcome, welcome! Buy some armor to protect yourself!
+msg.0010	Sorry! That number is not right!
+msg.0011	Too much! You can't carry any more!
+msg.0012	Maiyin Corridor
+msg.0013	This month has been terrible: the earth shook, thunder and rain without end. They say beastmen from Mount Wuta were seen in town, and someone was even attacked.
+msg.0014	Legend says the sun god Saiou loves to ride the wind to the far north, and each time he decks his wind chariot with ten thousand purple-heart flowers. That is why the purple lights of the north are called the "purple solar wind".
+msg.0015	Sangdesi, don't wander out of the village. If you must go, take a weapon to defend yourself. They say many beastmen have gathered outside the village, and they hurt people.
+msg.0016	I hear the legendary mage-priests all have undying souls, so even when they die they can come back to life.
+msg.0017	Sangdesi, your father is truly great! If King Maiya had not called on him, no one would have known he was a knight of the Wall Knights, the strongest order in the world!
+msg.0018	Sangdesi, your father must have left some fine weapons at home. Why not go home and look?
+msg.0019	Legend tells of a book called the Heaven's Notes, full of prophecies. They say whoever gets it gains tremendous power.
+msg.0020	Huh! What are you carrying that worn-out badge for? It won't keep the beastmen off.
+msg.0021	Your father is the Wall Knight who saved the Bangpei Empire! Our king asked him to search for the lost Princess Daini. Didn't you know?
+msg.0022	Some say that in the siege of the Bangpei Empire twenty years ago, King Sigao and Queen Ailun fought on, twenty against a hundred thousand, and then were luckily carried off by a thick fog.
+msg.0023	Your father left in a hurry. He asked me to tell you he left some things in the cellar at home. I think you'd better go and look.
+msg.0024	I hear that past the Maiyin Corridor, if you keep going north, you will find Mount Qichong.
+msg.0025	Don't go near the beastmen outside the village; they're terrifying! Some look like crabs, some have three heads, and there are green monsters sticky all over. You can drive them off with exorcism shots.
+msg.0026	The old folks say the Demonstar Charm can call up the seven great mages who died. Use four Demonstar Charms, and Nadi, the most terrible of them, the Archmage, will rise again.
+msg.0027	Uncle Siteli is telling stories at his house again. Want to listen? He lives in the second house from the village gate.
+msg.0028	I don't know what's got into Uncle Siteli; he keeps telling the same story. I've no wish to hear it again.
+msg.0029	All quiet in the village lately.
+msg.0030	In a moment I'm going east of the village to pick tata fruit for Uncle Siteli. Want to come?!
+msg.0031	I hear Dazhou went through many hardships before he found the entrance to the underworld.
+msg.0032	You will surely succeed!
+msg.0033	They say Mount Qichong has a seven-colored bird that got wisdom and magic from Mount Mata, so many people want to try their luck at Mount Mata. Sigh... without strength you can't take a single step.
+msg.0034	Dazhou was swallowed by a fire dragon on his way to Wugeer, the underground kingdom. Sigh! The entrance to the underworld is a mystery again.
+msg.0035	So glad to see you!
+msg.0036	If you want to hear a story, you should know the rules here!
+msg.0037	Come in!
+msg.0038	Long ago on the planet Hongqi, the lands were joined as one, the seas flowed around them, and its civilization was the finest in the Great Red Galaxy. But in the year 1682 of the Ya Era, a strange thing happened in the Bangpei Empire: at the
+msg.0039	first-birthday feast of the young prince Hudu, a horn grew from his forehead before hundreds of guests. To hide the rumor that the queen might have lain with a beastman, the once-kind King Kaluoan I
+msg.0040	had every guest in the hall put to death. Afterwards Nadi, the Archmage who served the king, led the ten strongest mages and the beastmen of Mount Wuta and, in the name of
+msg.0041	vengeance, marched against the king. On the fifth day the king and queen took their own lives together, but that did not stop Nadi; her cruelty only grew. Not content with slaughtering people, she used sorcery and
+msg.0042	super-science to overturn the world. In the end Nadi was sealed away by five godlike warriors. The tale of the horn was told and retold until it became an unsolved mystery.
+msg.0043	A painting signed Sangdesi. A line beside it reads: "Painted by Sangdesi, age nine."
+msg.0044	Sangdesi: If you are reading this letter, something must have happened. Whatever happens, listen to your father: put your own safety first in everything, and never go
+msg.0045	wandering about looking for me. There are fifty gold coins in the chest; use them to buy food until I return. Finally, I must tell you that I am really a Wall Knight. The Wall Knights were the
+msg.0046	strongest guard of the Bangpei Empire's last king, every one a brave warrior. So trust me: before long I will settle this and come home safely.\n                       - Your father, Sangruike

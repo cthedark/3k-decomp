@@ -43,6 +43,8 @@
 #include "gameover.h"
 #include "sfx.h"
 #include "walk.h"
+#include "l10n.h"
+#include "settings.h"
 
 #define MAX_DUMPS 512
 
@@ -1471,6 +1473,8 @@ int main(int argc, char **argv)
     dump_kind dump1_kind[MAX_DUMPS];
     int dump1_pass[MAX_DUMPS];
     char *dump1_file[MAX_DUMPS];
+    /* --config FILE: the settings file (default 3k.ini in the current directory, if there); --lang zh|en|ko over its language */
+    const char *config = NULL, *lang = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--data") && i + 1 < argc)
@@ -1481,6 +1485,10 @@ int main(int argc, char **argv)
             ppm = argv[++i];
         else if (!strcmp(argv[i], "--scene") && i + 1 < argc)
             scene = argv[++i];
+        else if (!strcmp(argv[i], "--config") && i + 1 < argc)
+            config = argv[++i];
+        else if (!strcmp(argv[i], "--lang") && i + 1 < argc)
+            lang = argv[++i];
         else if (!strcmp(argv[i], "--tick-div") && i + 1 < argc)
             tick_div = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--step-dump") && i + 1 < argc && ndump < MAX_DUMPS) {
@@ -1666,7 +1674,8 @@ int main(int argc, char **argv)
                     "usage: %s [--data DIR] [--scale N] [--scene title|gmain|intro0|intro1|intro2|intro3|intro4|intro5|intro6|intro|game|menu|credits|walk|ending] [--ppm FILE]\n"
                     "          [--step-dump N:FILE]... [--press-pass N]... [--tick-div N]\n"
                     "          [--dump anim|sub|out|end|final:N:FILE]... [--faithful-keys] [--rand-state HEX]\n"
-                    "          [--no-audio] [--no-music] [--music-gain PERCENT] [--slide0-once]\n",
+                    "          [--no-audio] [--no-music] [--music-gain PERCENT] [--slide0-once]\n"
+                    "          [--config FILE (default 3k.ini)] [--lang zh|en|ko]\n",
                     argv[0]);
             return 2;
         }
@@ -1675,6 +1684,24 @@ int main(int argc, char **argv)
         assets_set_dir(data_dir);
     if (scale < 1)
         scale = 1;
+    {   /* the language (localization/README.md): the settings file, then --lang */
+        settings_t st;
+        settings_default(&st);
+        /* the headless build (the checks) reads no 3k.ini of its own accord: the comparisons are of the Chinese original */
+        int sr = config || !platform_headless() ? settings_load(&st, config ? config : "3k.ini") : 1;
+        if (sr == 1 && config) {
+            fprintf(stderr, "cannot read %s\n", config);
+            return 2;
+        }
+        const char *name = lang ? lang : st.language;
+        int l = l10n_lang_of(name);
+        if (l < 0) {
+            fprintf(stderr, "language must be zh, en or ko, not %s\n", name);
+            return 2;
+        }
+        if (l != L10N_ZH && l10n_init((l10n_lang)l, st.localization) != 0)
+            fprintf(stderr, "playing in Chinese: the %s translation could not be loaded\n", name);
+    }
 
     static screen_t screen;
 

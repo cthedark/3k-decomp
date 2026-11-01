@@ -1,0 +1,21 @@
+# English: fixed fields (localization/source/fields.tsv). Labels fit 32 x 14 (4 letters, 5 in the narrow font); names 48 pixels.
+id	text
+label.00	Talk
+label.01	Look
+label.02	Take
+label.03	Cast
+label.04	Items
+label.05	Equip
+label.06	Use
+label.07	Map
+label.08	Order
+label.09	Data
+label.10	Music
+label.11	Sound
+label.12	Save
+label.13	Quit
+member.0	Sangdesi
+member.1	Yiouni
+member.2	Take
+member.3	Hetu
+member.4	Kaisalin

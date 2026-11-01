@@ -23,6 +23,7 @@ int platform_init(const char *title, int scale)
 }
 
 void platform_shutdown(void) {}
+int platform_headless(void) { return 1; }
 void platform_present(const screen_t *s) { (void)s; }
 int platform_poll(void) { return 0; }
 uint32_t platform_ticks_ms(void) { return 0; }

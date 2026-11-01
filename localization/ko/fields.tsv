@@ -1,0 +1,21 @@
+# 한국어: 고정 필드 (localization/source/fields.tsv). 버튼 이름은 32 x 14 (두 글자), 이름은 48 픽셀 (세 글자).
+id	text
+label.00	대화
+label.01	보기
+label.02	줍기
+label.03	마법
+label.04	물품
+label.05	장비
+label.06	사용
+label.07	지도
+label.08	위치
+label.09	정보
+label.10	음악
+label.11	효과
+label.12	저장
+label.13	종료
+member.0	상득사
+member.1	이구니
+member.2	탑극
+member.3	하도
+member.4	개살린

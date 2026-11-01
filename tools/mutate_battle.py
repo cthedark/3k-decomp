@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WORK = ROOT / "work" / "mut_battle"
-SOURCES = ["src/walk.c", "src/battle.c", "src/msgbox.c", "src/gameover.c", "src/sfx.c", "src/voc.c", "src/walkscene.c", "src/assets.c", "src/lcz.c", "src/screen.c"]
+SOURCES = ["src/walk.c", "src/battle.c", "src/msgbox.c", "src/gameover.c", "src/sfx.c", "src/voc.c", "src/walkscene.c", "src/l10n.c", "src/assets.c", "src/lcz.c", "src/screen.c"]
 
 M = []
 

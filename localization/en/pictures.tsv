@@ -1,0 +1,7 @@
+# English: text drawn as pictures (localization/source/pictures.tsv). Menu items: at most 120 pixels at the doubled narrow font
+# (10 letters at full width).
+id	text
+menu.0	New Game
+menu.1	Load Game
+menu.2	Credits
+menu.3	To DOS

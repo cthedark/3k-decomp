@@ -1,0 +1,6 @@
+# 한국어: 그림으로 그려진 글 (localization/source/pictures.tsv). 메뉴 항목은 두 배 크기로 120 픽셀 안 (넘으면 가로로 줄여 그림).
+id	text
+menu.0	새 게임
+menu.1	불러오기
+menu.2	제작진
+menu.3	DOS로

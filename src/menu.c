@@ -6,6 +6,7 @@
 
 #include "assets.h"
 #include "gfx.h"
+#include "l10n.h"
 #include "lcz.h"
 #include "walk.h"
 
@@ -174,6 +175,56 @@ void menu_resize(uint8_t *dst, const uint8_t *src, unsigned dw, unsigned dh)
 }
 
 /* ---- loading ------------------------------------------------------------------------------- */
+
+static uint8_t ink(void *ctx, unsigned gw, unsigned index)
+{
+    (void)ctx, (void)gw, (void)index;
+    return 1;
+}
+
+/* The translated modes: each item with a translation ("menu.0" .. "menu.3") drawn over its 122 x 30 label in the original
+ * lettering's colours (0x17 inside a one-pixel outline of 0x19), centred: the font twice as high (28 rows from row 1) and twice as
+ * wide, or less wide when that does not fit in 120 pixels. English uses the narrow font, Korean the normal one. */
+static void translate_labels(uint8_t *labels)
+{
+    for (int k = 0; k < MENU_ITEMS; k++) {
+        char id[8];
+        snprintf(id, sizeof id, "menu.%d", k);
+        const char *t = l10n_text(id);
+        if (!t)
+            continue;
+        int font = l10n_current() == L10N_EN ? L10N_FONT_NARROW : L10N_FONT_NORMAL;
+        size_t len = strlen(t);
+        unsigned w = l10n_width(t, len, font);
+        if (w == 0 || w > LABEL_W)
+            continue;
+        unsigned dw = 2 * w <= LABEL_W - 2 ? 2 * w : LABEL_W - 2;   /* the drawn width */
+        uint8_t mask[LABEL_W * 14];
+        memset(mask, 0, sizeof mask);
+        unsigned x0 = (LABEL_W - dw) / 2;
+        l10n_draw(t, len, font, mask, LABEL_W, 0, ink, NULL, NULL);
+        uint8_t *px = labels + 4 + (size_t)k * LABEL_W * LABEL_H;
+        memset(px, 0, (size_t)LABEL_W * LABEL_H);
+        for (unsigned r = 0; r < 28; r++)   /* the text scaled, nearest pixel */
+            for (unsigned x = 0; x < dw; x++)
+                if (mask[(r / 2) * LABEL_W + x * w / dw])
+                    px[(r + 1) * LABEL_W + x0 + x] = 0x17;
+        for (unsigned r = 0; r < LABEL_H; r++)   /* the outline: empty pixels next to the text */
+            for (unsigned x = 0; x < LABEL_W; x++) {
+                if (px[r * LABEL_W + x])
+                    continue;
+                int near = 0;
+                for (int dy = -1; dy <= 1 && !near; dy++)
+                    for (int dx = -1; dx <= 1; dx++) {
+                        int yy = (int)r + dy, xx = (int)x + dx;
+                        if (yy >= 0 && yy < LABEL_H && xx >= 0 && xx < LABEL_W && px[yy * LABEL_W + xx] == 0x17)
+                            near = 1;
+                    }
+                if (near)
+                    px[r * LABEL_W + x] = 0x19;
+            }
+    }
+}
 
 /* Decode the first LCZ chunk of the `len` bytes at `off` of a data file. Returns a malloc'ed
  * buffer of exactly `want` bytes, or NULL (with a message) if the chunk has another size. */
@@ -397,6 +448,7 @@ menu_t *menu_create(screen_t *scr)
     draw_cpu_label(m->base, atlas, 2148, speed_class);
     free(atlas);
 
+    translate_labels(m->labels);
     /* The arrow cursor follows the labels in the file; the original hands the raw bytes to its blit. */
     m->cursor = malloc(CURSOR_BYTES);
     if (!m->cursor || assets_read_at("RPG.LCP", CURSOR_AT, m->cursor, CURSOR_BYTES) != 0 ||

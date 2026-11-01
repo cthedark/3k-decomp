@@ -1,0 +1,4 @@
+# English: the programs' own strings (localization/source/code.tsv). yes / no are 16 x 14.
+id	text
+code.yes	Y
+code.no	N
