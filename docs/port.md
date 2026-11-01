@@ -1544,3 +1544,23 @@ turns blue (`docs/findings.md` "ENDING.SL step 5").
 - **Checked:** all 1,375 records of the four scenes identical; 61 mutations, all caught; ASan / UBSan clean; a real-time run under SDL's
   dummy drivers (59 s for the four scenes).
 - **Note:** at 7 ms a pass the flicker runs faster than most screens refresh, so on screen it looks steadier than each pass would.
+
+## Milestone 10e: ENDING.SL, the fifth scene (C), built 2026-11-01
+The woman in blue stays on the grass; her face moves through three pictures under one subtitle line, then her eyes through eight,
+twice, under a second line (`docs/findings.md` "ENDING.SL step 6").
+
+- **Code:** `src/ending.c` (`scene5_begin`, `scene5_face`, `scene5_eyes_begin`, `scene5_eyes`, `show_hdr`, `show_raw`); `src/main.c`
+  (`play_ending` paces in microseconds and runs several passes a frame when needed); `src/timing.h` (`TK_ENDING_SCENE1_US` ..
+  `TK_ENDING_SCENE5_EYES_US`); `tools/ending_check.py` (CRC records); `tests/ending_dump.c` (CRCs, `ENDING_FULL`).
+- **Checked:** all 12,836 records of the five scenes identical; ASan / UBSan clean; a real-time run under SDL's dummy drivers.
+- **Choice:** this scene's two periods (16 ms and 0.5 ms) are chosen for reading, not taken from the emulator (findings step 6).
+
+## Milestone 10f: ENDING.SL, the sunset (C), built 2026-11-01
+The sunset over the sea comes in over the woman in blue as stripes from the top and the bottom, then the palette fades to the second
+palette of `ANI.LCP` over 12.8 s (`docs/findings.md` "ENDING.SL step 7").
+
+- **Code:** `src/ending.c` (`scene6_begin`, `scene6_wipe`, `scene6_fade`; the palettes are kept in the ending's state);
+  `src/timing.h` (`TK_ENDING_SCENE6_WIPE_US`, `..._FADE_US`); `tools/ending_check.py` (three more record points).
+- **Checked:** all 13,001 records identical; 83 mutations in all, every one caught; ASan / UBSan clean; a real-time run.
+- **Not reproduced:** the original stops keeping its song going in this scene; the port's player loops on.
+- **Not built:** the credits (`cast2.lcz`, the last loop), then the exit to DOS.

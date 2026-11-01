@@ -3,7 +3,9 @@
 on it, and tools/ending_check.py must report a difference. A mutation it does not notice is printed as MISSED.
 
 Usage: work/venv/bin/python tools/mutate_ending.py     (after tools/ending_check.py has cached the original's run)
+       ONLY=s6: runs only the mutations whose name contains the text.
 """
+import os
 import shutil
 import subprocess
 import sys
@@ -11,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WORK = ROOT / 'work/mut_ending'
-CACHE = ROOT / 'work/ending_check/s4.rec'
+CACHE = ROOT / 'work/ending_check/s6.rec'
 M = []
 
 
@@ -91,14 +93,43 @@ m('s4: next not kept', '    memcpy(e->file, e->b22, 0xCE40);\n    if (e->rounds'
 m('s4: blocks one late', '        unpack(keep[e->rounds - 1], BUF, e->b22, BUF);', '        unpack(keep[e->rounds > 1 ? e->rounds - 2 : 0], BUF, e->b22, BUF);')
 m('s4: five pictures', '    if (e->rounds == 6)\n        return ENDING_SCENE4_END;', '    if (e->rounds == 5)\n        return ENDING_SCENE4_END;')
 
+# the fifth scene (step 6)
+m('s5: read from 0x3eaf9', '    memcpy(e->file, all + 0x3EAF8, m);', '    memcpy(e->file, all + 0x3EAF9, m);')
+m('s5: eyes from 0x5bb2', '        unpack(e->file + 0x5BB1, m - 0x5BB1, e->b36, BUF);', '        unpack(e->file + 0x5BB2, m - 0x5BB2, e->b36, BUF);')
+m('s5: grab a row lower', '        memcpy(g + 4 + r * 0xDC, scr->pix + 0xE632 + r * 320, 0xDC);', '        memcpy(g + 4 + r * 0xDC, scr->pix + 0xE772 + r * 320, 0xDC);')
+m('s5: subtitle opaque', '        if (e->b46[k * 0xCE4 + i])\n            e->be[4 + i]', '        if (1)\n            e->be[4 + i]')
+m('s5: subtitle not over the grab', '    memcpy(e->be, e->file, 0xCE8);\n', '')
+m('s5: subtitle a pixel right', '    show_hdr(scr, 0xE632, e->be);', '    show_hdr(scr, 0xE633, e->be);')
+m('s5: second line is the first', '    scene5_subtitle(e, scr, 1);', '    scene5_subtitle(e, scr, 0);')
+m('s5: face a row lower', '    show_raw(scr, 0x1469, e->b22 + e->face, 0x68, 0x5E);', '    show_raw(scr, 0x15A9, e->b22 + e->face, 0x68, 0x5E);')
+m('s5: face 80 passes', '    if (++e->wait > 0x50) {', '    if (++e->wait > 0x4F) {')
+m('s5: two face pictures', '        if (e->face == 0x7290)', '        if (e->face == 0x4C60)')
+m('s5: eyes 700 passes', '    if (++e->wait > 0x2BC) {', '    if (++e->wait > 0x2BB) {')
+m('s5: eyes a pixel left', '    show_raw(scr, 0x2ED0, e->b36 + e->face, 0x20, 0x1A);', '    show_raw(scr, 0x2ECF, e->b36 + e->face, 0x20, 0x1A);')
+m('s5: eyes once round', '            if (++e->rounds >= 2)', '            if (++e->rounds >= 1)')
+m('s5: eyes wait kept between rounds', '            e->face = 0;\n            if (++e->rounds >= 2)', '            e->face = 0;\n            e->wait = 5;\n            if (++e->rounds >= 2)')
+
+# the sixth scene (step 7)
+m('s6: wipe from row 1', '    e->count = 0;\n    e->at = 0xF8C0;', '    e->count = 0x140;\n    e->at = 0xF8C0;')
+m('s6: no wipe from the bottom', '    memcpy(scr->pix + e->at, e->b22 + e->at, 0x140);', '    (void)0;')
+m('s6: wipe a row a step', '    e->count += 0x280;\n    e->at -= 0x280;', '    e->count += 0x140;\n    e->at -= 0x140;')
+m('s6: 99 wipe steps', '    if (++e->wait < 0x64)', '    if (++e->wait < 0x63)')
+m('s6: fade to the first palette', '        if (e->pal[i] > e->pal[0x300 + i])\n            e->pal[i]--;', '        if (e->pal[i] > e->pal[i])\n            e->pal[i]--;')
+m('s6: fade only up', '        if (e->pal[i] > e->pal[0x300 + i])\n            e->pal[i]--;\n        else if', '        if (0)\n            e->pal[i]--;\n        else if')
+m('s6: fade two at a time', '        else if (e->pal[i] < e->pal[0x300 + i])\n            e->pal[i]++;', '        else if (e->pal[i] < e->pal[0x300 + i])\n            e->pal[i] = (uint8_t)(e->pal[i] + 2 > e->pal[0x300 + i] ? e->pal[0x300 + i] : e->pal[i] + 2);')
+m('s6: 63 fade steps', '    return ++e->wait < 0x40 ?', '    return ++e->wait < 0x3F ?')
+
 
 def main():
     if not CACHE.exists():
-        print('run tools/ending_check.py --n 3000 --cache work/ending_check/s4.rec first')
+        print('run tools/ending_check.py --n 20000 --cache work/ending_check/s6.rec first')
         return 2
     missed = bad = 0
     WORK.mkdir(parents=True, exist_ok=True)
+    only = os.environ.get('ONLY', '')
     for name, old, new in M:
+        if only not in name:
+            continue
         text = (ROOT / 'src/ending.c').read_text()
         if text.count(old) != 1:
             print(f'BAD PATTERN ({text.count(old)} matches): {name}')
@@ -117,14 +148,15 @@ def main():
             print(f'DOES NOT BUILD: {name}: {r.stderr.strip()[:200]}')
             bad += 1
             continue
-        r = subprocess.run([sys.executable, str(ROOT / 'tools/ending_check.py'), '--n', '3000', '--cache', str(CACHE),
+        r = subprocess.run([sys.executable, str(ROOT / 'tools/ending_check.py'), '--n', '20000', '--cache', str(CACHE),
                             '--port', str(exe), '--keep', str(WORK / 'keep')], capture_output=True, text=True, cwd=ROOT)
         if r.returncode == 0:
             print('MISSED: ' + name)
             missed += 1
         else:
             print('caught: ' + name)
-    print(f'{len(M) - missed - bad} of {len(M)} caught, {missed} missed, {bad} bad')
+    ran = sum(1 for name, _, _ in M if only in name)
+    print(f'{ran - missed - bad} of {ran} caught, {missed} missed, {bad} bad')
     return 1 if missed or bad else 0
 
 

@@ -1148,19 +1148,26 @@ static void ending_voice(void *ctx, unsigned off)
     sfx_play(ctx, SFX_LOC, off);
 }
 
-/* The period of ENDING.SL's next pass, by the loop it is in (a scene's set-up step goes at the pace of the scene it starts) */
-static uint32_t ending_period(int loop)
+/* The period of ENDING.SL's next pass in microseconds, by the loop it is in (a scene's set-up step goes at the pace of the scene it
+ * starts) */
+static uint32_t ending_period_us(int loop)
 {
     switch (loop) {
-    case ENDING_SCENE1: return TK_ENDING_SCENE1_MS;
-    case ENDING_SCENE1_END: case ENDING_SCENE2: return TK_ENDING_SCENE2_MS;
-    case ENDING_SCENE2_END: case ENDING_SCENE3: return TK_ENDING_SCENE3_MS;
-    default: return TK_ENDING_SCENE4_MS;
+    case ENDING_SCENE1: return TK_ENDING_SCENE1_US;
+    case ENDING_SCENE1_END: case ENDING_SCENE2: return TK_ENDING_SCENE2_US;
+    case ENDING_SCENE2_END: case ENDING_SCENE3: return TK_ENDING_SCENE3_US;
+    case ENDING_SCENE3_END: case ENDING_SCENE4_SHAKE: case ENDING_SCENE4_SHAKE_END: case ENDING_SCENE4_STROBE:
+        return TK_ENDING_SCENE4_US;
+    case ENDING_SCENE4_END: case ENDING_SCENE5_FACE: return TK_ENDING_SCENE5_FACE_US;
+    case ENDING_SCENE5_FACE_END: case ENDING_SCENE5_EYES: return TK_ENDING_SCENE5_EYES_US;
+    case ENDING_SCENE5_END: case ENDING_SCENE6_WIPE: return TK_ENDING_SCENE6_WIPE_US;
+    default: return TK_ENDING_SCENE6_FADE_US;
     }
 }
 
 /* ENDING.SL (ending.h) in real time, with the intro's song (ENDING.SL 0x102d5 starts the same block when there is an FM card). Its
- * loops wait for nothing; each scene runs at its own period (TK_ENDING_SCENE1_MS ..). With a sound device the voice lines play (a Sound Blaster). Only the first
+ * loops wait for nothing; each runs at its own period (TK_ENDING_SCENE1_US ..), several passes between two frames shown when the period
+ * is below a millisecond. With a sound device the voice lines play (a Sound Blaster). Only the first
  * scenes are built: after them the run stops and says so.
  * Returns 0, or 1 when the window was closed. */
 static int play_ending(screen_t *scr)
@@ -1175,23 +1182,24 @@ static int play_ending(screen_t *scr)
     if (bank)
         ending_set_voice(e, ending_voice, sfx_cut, sfx_busy, bank);
     platform_present(scr);
-    uint32_t next = platform_ticks_ms();
+    uint64_t next = (uint64_t)platform_ticks_ms() * 1000u;
     int loop = ENDING_SCENE1, quit = 0;
     while (loop) {
         if (!platform_poll()) {
             quit = 1;
             break;
         }
-        uint32_t now = platform_ticks_ms();
-        if ((int32_t)(now - next) < 0) {
+        uint64_t now = (uint64_t)platform_ticks_ms() * 1000u;
+        if (now < next) {
             platform_sleep_ms(1);
             continue;
         }
-        uint32_t period = ending_period(loop);   /* as next_due: at most one pass of lateness carried */
-        next += period;
-        if ((int32_t)(now - next) > (int32_t)period)
+        if (now - next > 100000u)   /* more than 0.1 s behind (a stall): the backlog is dropped */
             next = now;
-        loop = ending_step(e, scr);
+        for (int k = 0; k < 400 && loop && next <= now; k++) {
+            next += ending_period_us(loop);
+            loop = ending_step(e, scr);
+        }
         platform_present(scr);
     }
     if (!quit)

@@ -107,15 +107,25 @@
  * menu and the intro. A choice, not a measurement; the operator found the idle world right by eye (2026-10-17). */
 #define TK_WALK_PASS_HZ 35
 
-/* ENDING.SL's loops wait for nothing either, and their passes do very different amounts of work, so each scene has its own period:
- * the time a pass took in tools/dosemu.py (250,000 instructions a BIOS tick of 54.9 ms; docs/findings.md "ENDING.SL step 4"):
- * scene 1, 388 passes in 506 ticks; scene 2, 500 in 163; scene 3, 102 in 280; scene 4, 80 + 300 in 10 + 37 (tools/ending_check.py
- * --pace). The scenes then last 28 s, 9 s, 15.4 s and 2.7 s and a subtitle line 3.4 s. The emulator's speed is a model of one machine, not a measurement of a real one: the proportions between the
- * scenes are the original's, the overall speed is a choice. */
-#define TK_ENDING_SCENE1_MS 72
-#define TK_ENDING_SCENE2_MS 18
-#define TK_ENDING_SCENE3_MS 151
-#define TK_ENDING_SCENE4_MS 7
+/* ENDING.SL's loops wait for nothing either, and their passes do very different amounts of work, so each loop has its own period in
+ * microseconds. Scenes 1 to 4: the time a pass took in tools/dosemu.py (250,000 instructions a BIOS tick of 54.9 ms; tools/ending_check.py
+ * --pace; docs/findings.md "ENDING.SL steps 4 to 6"): scene 1, 388 passes in 506 ticks; scene 2, 500 in 163; scene 3, 102 in 280;
+ * scene 4, 80 + 300 in 10 + 37. They then last 28 s, 9 s, 15.4 s and 2.7 s and a subtitle line 3.4 s. The emulator's speed is a
+ * model of one machine (it counts instructions, not the cost of writing to the video card): the proportions are the original's as far
+ * as that model goes, the overall speed is a choice.
+ * Scene 5's loops do little but put a small picture on the screen, so the model makes them very short (243 passes in 5 ticks and 11,216
+ * in 29: the first subtitle line would show for 0.3 s). Their periods are a choice instead: the face's 243 passes take 3.9 s (about a
+ * subtitle line of scene 1), the eyes' 11,216 take 5.6 s (each of their 16 pictures 0.35 s). */
+#define TK_ENDING_SCENE1_US 71600
+#define TK_ENDING_SCENE2_US 17900
+#define TK_ENDING_SCENE3_US 150800
+#define TK_ENDING_SCENE4_US 6800
+#define TK_ENDING_SCENE5_FACE_US 16000
+#define TK_ENDING_SCENE5_EYES_US 500
+/* Scene 6 from the emulator again: the wipe's 100 steps in 15 ticks (each copies two rows 99 times over), the fade's 64 in 233 (each
+ * waits through two loops of 50,000 rounds): 0.8 s and 12.8 s. */
+#define TK_ENDING_SCENE6_WIPE_US 8200
+#define TK_ENDING_SCENE6_FADE_US 200000
 /* The BIOS clock the world reads (rain strength, the dark specks, the villagers' direction choice) runs at
  * 1193182 / 65536 = 18.2065 ticks per second. */
 #define TK_BIOS_TICKS_PER_SEC_NUM 1193182ull

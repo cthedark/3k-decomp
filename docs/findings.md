@@ -4304,3 +4304,55 @@ time.
 --pace` now prints each loop's passes and ticks from the records (they carry the emulator's tick).
 
 **Checked:** all 1,375 records identical. `tools/mutate_ending.py`: 13 new mutations (61 in all), all caught. ASan / UBSan clean.
+
+## ENDING.SL step 6: the fifth scene (`0x10ea0` .. `0x110c5`), 2026-11-01
+
+READ from the code (`work/e1/ending.asm`; `0x121dc`, `0x11462`), built in C and CONFIRMED by the comparison (loop tops `0x10fd6` and
+`0x11078`, the ends `0x1101a` and `0x110c8`: 11,461 records more, 12,836 in all). The blue-robed woman of the fourth scene's last
+picture stays on the screen; only her face and eyes move.
+
+**Set-up:** `ending4.lcz` opened again and read from 0x3eaf8 (`lseek`), where the fourth scene's seven blocks end: unpacked, at 0 three
+104 x 94 pictures of her face without headers (0x2630 apart) into `[bp-0x22]`, at 0x5bb1 eight 32 x 26 pictures of her eyes (0x340
+apart) into `[bp-0x36]`; `ending4t.lcz`, two 220 x 15 subtitle lines (0xce4 apart, no header), into `[bp-0x46]`. The screen's 220 x 15
+at (50, 184) is grabbed with its header (`0x121dc`) into the frame buffer and copied into `[bp-0xe]`, the first line put over the copy
+(colour 0 clear) and the copy shown there (`0x122c8`).
+
+**The face (`0x10fd6`):** her face's three pictures in turn at (105, 16) (`0x11462`, opaque, no header), each for 81 passes (`si` past
+0x50); then (`0x1101a`) the grab copied again, the second line over it and shown. **The eyes (`0x11078`, twice round, `di`):** her
+eyes' eight pictures in turn at (144, 37), each for 701 passes (`si` past 0x2bc), `si` and the picture back to 0 for the second round.
+The passes only repeat the same picture: the counts are delays.
+
+**Pace:** these loops do little but put a small picture on the screen, so the emulator (which counts instructions and not the cost of
+writing to the video card) makes them very short: 243 passes in 5 ticks and 11,216 in 29, so the first line would show for 0.3 s and
+the whole scene would take 1.9 s. On a real machine of the time each pass writes to the video card, which costs much more than the
+model says; the port's periods for this scene are a choice instead: 16 ms for the face (3.9 s, about a subtitle line of the first
+scene) and 0.5 ms for the eyes (5.6 s, 0.35 s a picture). The port runs several passes between two frames when the period is below a
+millisecond (`play_ending`, periods in microseconds now).
+
+**The checker** keeps each record's screen as a CRC-32 and the whole screen only when it changes (`tools/ending_check.py`; the port's
+dump writes CRCs, and the whole screen of one record on request), so the 11,216 passes cost little to compare.
+
+**Checked:** all 12,836 records identical; ASan / UBSan clean; a real-time run under SDL's dummy drivers (65 s for the five scenes).
+
+## ENDING.SL step 7: the sixth scene, the sunset (`0x110c8` .. `0x11215`), 2026-11-01
+
+READ from the code (`work/e1/ending.asm`; `0x12610`), built in C and CONFIRMED by the comparison (records at `0x11129`, each wipe step,
+`0x1119f`, each fade step, and `0x11218`, the end: 165 records more, 13,001 in all).
+
+**Set-up:** `ending5.lcz` unpacked into `[bp-0x22]`: the sunset over the sea with silhouettes, 320 x 200 without a header.
+`[bp-0x24]` 0, `[bp-0x28]` 0xf8c0 (row 198).
+
+**The wipe (100 steps, `si`):** a row of the sunset put on the screen at `[bp-0x24]` and one at `[bp-0x28]`, 99 times over (`di`, a
+delay: the same two rows each time), then the first goes two rows down and the second two rows up. So only the even rows are drawn,
+each twice (once from each side), and the odd rows keep the woman in blue: the sunset comes in over her as a set of stripes.
+
+**The fade (64 steps):** each byte of the palette buffer `[bp-0x18]` one nearer `ani.lcp`'s second palette (`0x12610`: a byte above its
+target down by one, below it up by one), the DAC's 256 entries set from it (`0x22c:0x14e`), then two delay loops of 50,000 rounds. The
+two palettes differ only in some entries; after 64 steps every byte has reached its target (they are 0 .. 63). Neither loop keeps the
+song going (`0x19c:0x102` is not called), so the original's song stops at its end here if it ends; the port's player loops on.
+
+**Pace (emulator):** the wipe 100 steps in 15 ticks (8.2 ms a step), the fade 64 in 233 (200 ms a step): 0.8 s and 12.8 s
+(`TK_ENDING_SCENE6_WIPE_US`, `TK_ENDING_SCENE6_FADE_US`).
+
+**Checked:** all 13,001 records identical; `tools/mutate_ending.py`: 8 new mutations (83 in all; `ONLY=s6` runs a subset), all caught;
+ASan / UBSan clean on all six scenes; a real-time run under SDL's dummy drivers (78 s for the six scenes).

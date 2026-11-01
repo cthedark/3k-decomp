@@ -18,6 +18,7 @@ struct ending {
                                        * and the second scene's work picture */
     uint8_t b1e[BUF];                 /* [bp-0x1e]: ENDING1T.LCZ, four 236 x 15 subtitle lines */
     uint8_t b32[BUF];                 /* [bp-0x32]: _1_.LOC, the voice (0xee48 bytes read) */
+    uint8_t pal[0x600];               /* [bp-0x18]: ANI.LCP's two palettes; the first is the one in the DAC */
     int loop;
     /* the first scene's locals */
     unsigned face;                    /* [bp-0x14]: the face picture's offset, 0x710 a picture */
@@ -80,11 +81,10 @@ ending_t *ending_new(screen_t *scr)
     ending_t *e = calloc(1, sizeof *e);
     if (!e)
         return NULL;
-    uint8_t pal[0x300];
-    if (assets_read_at("ANI.LCP", 0, pal, sizeof pal) != 0)
+    if (assets_read_at("ANI.LCP", 0, e->pal, 0x300) != 0 || assets_read_at("ANI.LCP", 0x300, e->pal + 0x300, 0x300) != 0)
         goto fail;
     memset(scr->pix, 0, sizeof scr->pix);   /* 0x204:0x163(0x13): the mode set */
-    screen_set_palette(scr, pal, 0, 256);   /* 0x22c:0x14e */
+    screen_set_palette(scr, e->pal, 0, 256);   /* 0x22c:0x14e */
     size_t n = read_file(e, "ENDING12.LCZ");
     if (!n)
         goto fail;
@@ -457,6 +457,149 @@ static int scene4_strobe(ending_t *e, screen_t *scr)
     return ENDING_SCENE4_STROBE;
 }
 
+/* 0x122c8 for a picture with its header, opaque, on the screen at `at` */
+static void show_hdr(screen_t *scr, unsigned at, const uint8_t *pic)
+{
+    unsigned w = w16(pic, 0), h = w16(pic, 2);
+    for (unsigned r = 0; r < h; r++)
+        for (unsigned c = 0; c < w; c++) {
+            size_t o = (size_t)at + (size_t)r * 320 + c;
+            if (o < sizeof scr->pix)
+                scr->pix[o] = pic[4 + (size_t)r * w + c];
+        }
+}
+
+/* 0x11462: a w x h picture with no header, opaque, on the screen at `at` */
+static void show_raw(screen_t *scr, unsigned at, const uint8_t *pic, unsigned w, unsigned h)
+{
+    for (unsigned r = 0; r < h; r++)
+        for (unsigned c = 0; c < w; c++) {
+            size_t o = (size_t)at + (size_t)r * 320 + c;
+            if (o < sizeof scr->pix)
+                scr->pix[o] = pic[(size_t)r * w + c];
+        }
+}
+
+/* The subtitle line `k` of ENDING4T.LCZ (220 x 15, colour 0 clear) over the kept grab of the screen's (50, 184), shown there */
+static void scene5_subtitle(ending_t *e, screen_t *scr, unsigned k)
+{
+    memcpy(e->be, e->file, 0xCE8);
+    for (unsigned i = 0; i < 0xCE4; i++)   /* 0x12146 */
+        if (e->b46[k * 0xCE4 + i])
+            e->be[4 + i] = e->b46[k * 0xCE4 + i];
+    show_hdr(scr, 0xE632, e->be);
+}
+
+/* 0x10ea0 .. 0x10fd3: ENDING4.LCZ again from 0x3eaf8: at 0 three 104 x 94 pictures of her face (no header, 0x2630 apart) into
+ * [bp-0x22], at 0x5bb1 eight 32 x 26 pictures of her eyes (0x340 apart) into [bp-0x36]; ENDING4T.LCZ, two 220 x 15 subtitle lines,
+ * into [bp-0x46]; the screen's 220 x 15 at (50, 184) grabbed with its header into the frame (0x121dc) and the first line shown over it. */
+static int scene5_begin(ending_t *e, screen_t *scr)
+{
+    size_t n = 0;
+    uint8_t *all = assets_read("ENDING4.LCZ", &n);
+    if (!all || n <= 0x3EAF8) {
+        free(all);
+        return 0;
+    }
+    size_t m = n - 0x3EAF8 < BUF ? n - 0x3EAF8 : BUF;
+    memcpy(e->file, all + 0x3EAF8, m);
+    free(all);
+    unpack(e->file, m, e->b22, BUF);
+    if (m > 0x5BB1)
+        unpack(e->file + 0x5BB1, m - 0x5BB1, e->b36, BUF);
+    if (!(n = read_file(e, "ENDING4T.LCZ")))
+        return 0;
+    unpack(e->file, n, e->b46, BUF);
+    e->wait = 0;
+    e->face = 0;
+    uint8_t *g = e->file;   /* 0x121dc */
+    g[0] = 0xDC, g[1] = 0, g[2] = 0xF, g[3] = 0;
+    for (unsigned r = 0; r < 0xF; r++)
+        memcpy(g + 4 + r * 0xDC, scr->pix + 0xE632 + r * 320, 0xDC);
+    scene5_subtitle(e, scr, 0);
+    return ENDING_SCENE5_FACE;
+}
+
+/* 0x10fd6 .. 0x11017: her face's three pictures in turn at (105, 16), each for 81 passes; then the second subtitle line, and the eyes */
+static int scene5_face(ending_t *e, screen_t *scr)
+{
+    show_raw(scr, 0x1469, e->b22 + e->face, 0x68, 0x5E);
+    if (++e->wait > 0x50) {
+        e->wait = 0;
+        e->face += 0x2630;
+        if (e->face == 0x7290)
+            return ENDING_SCENE5_FACE_END;
+    }
+    return ENDING_SCENE5_FACE;
+}
+
+static int scene5_eyes_begin(ending_t *e, screen_t *scr)
+{
+    scene5_subtitle(e, scr, 1);
+    e->rounds = 0;   /* di */
+    e->wait = 0;
+    e->face = 0;
+    return ENDING_SCENE5_EYES;
+}
+
+/* 0x11078 .. 0x110c5: her eyes' eight pictures in turn at (144, 37), each for 701 passes, twice round; then the loop ends */
+static int scene5_eyes(ending_t *e, screen_t *scr)
+{
+    show_raw(scr, 0x2ED0, e->b36 + e->face, 0x20, 0x1A);
+    if (++e->wait > 0x2BC) {
+        e->wait = 0;
+        e->face += 0x340;
+        if (e->face == 0x1A00) {
+            e->face = 0;
+            if (++e->rounds >= 2)
+                return ENDING_SCENE5_END;
+        }
+    }
+    return ENDING_SCENE5_EYES;
+}
+
+/* 0x110c8 .. 0x11126: ENDING5.LCZ, the sunset (320 x 200, no header), unpacked into [bp-0x22]; [bp-0x24] 0 and [bp-0x28] 0xf8c0 */
+static int scene6_begin(ending_t *e)
+{
+    size_t n = read_file(e, "ENDING5.LCZ");
+    if (!n)
+        return 0;
+    unpack(e->file, n, e->b22, BUF);
+    e->count = 0;
+    e->at = 0xF8C0;
+    e->wait = 0;
+    return ENDING_SCENE6_WIPE;
+}
+
+/* 0x11129 .. 0x11196, 100 steps: a row of the sunset put on the screen at [bp-0x24] and one at [bp-0x28] (99 times over, a delay), then
+ * the first two rows down and the second two rows up; so the even rows come in from the top and the bottom both, each twice, and the
+ * odd rows keep the woman in blue. */
+static int scene6_wipe(ending_t *e, screen_t *scr)
+{
+    memcpy(scr->pix + e->count, e->b22 + e->count, 0x140);
+    memcpy(scr->pix + e->at, e->b22 + e->at, 0x140);
+    e->count += 0x280;
+    e->at -= 0x280;
+    if (++e->wait < 0x64)
+        return ENDING_SCENE6_WIPE;
+    e->wait = 0;
+    return ENDING_SCENE6_FADE;
+}
+
+/* 0x1119f .. 0x11215, 64 steps: each byte of the palette one nearer ANI.LCP's second palette (0x12610), the DAC set from it, two delay
+ * loops of 50,000 rounds */
+static int scene6_fade(ending_t *e, screen_t *scr)
+{
+    for (unsigned i = 0; i < 0x300; i++) {
+        if (e->pal[i] > e->pal[0x300 + i])
+            e->pal[i]--;
+        else if (e->pal[i] < e->pal[0x300 + i])
+            e->pal[i]++;
+    }
+    screen_set_palette(scr, e->pal, 0, 256);
+    return ++e->wait < 0x40 ? ENDING_SCENE6_FADE : ENDING_SCENE6_END;
+}
+
 void ending_set_voice(ending_t *e, void (*play)(void *ctx, unsigned off), void (*cut)(void *ctx), int (*busy)(void *ctx), void *ctx)
 {
     e->voice = play;
@@ -477,6 +620,13 @@ int ending_step(ending_t *e, screen_t *scr)
     case ENDING_SCENE4_SHAKE: e->loop = scene4_shake(e, scr); break;
     case ENDING_SCENE4_SHAKE_END: e->loop = scene4_strobe_begin(e, scr); break;
     case ENDING_SCENE4_STROBE: e->loop = scene4_strobe(e, scr); break;
+    case ENDING_SCENE4_END: e->loop = scene5_begin(e, scr); break;
+    case ENDING_SCENE5_FACE: e->loop = scene5_face(e, scr); break;
+    case ENDING_SCENE5_FACE_END: e->loop = scene5_eyes_begin(e, scr); break;
+    case ENDING_SCENE5_EYES: e->loop = scene5_eyes(e, scr); break;
+    case ENDING_SCENE5_END: e->loop = scene6_begin(e); break;
+    case ENDING_SCENE6_WIPE: e->loop = scene6_wipe(e, scr); break;
+    case ENDING_SCENE6_FADE: e->loop = scene6_fade(e, scr); break;
     default: e->loop = 0; break;
     }
     return e->loop;
