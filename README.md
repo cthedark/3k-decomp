@@ -1,3 +1,5 @@
+English | [中文](README.zh.md) | [한국어](README.ko.md)
+
 # 3k-decomp
 
 A personal reverse-engineering experiment: reconstruct the source code of
@@ -154,7 +156,7 @@ keep it that way:
 
 ```
 original_bin/   original game files, read-only, not for redistribution (git-ignored)
-README.md       this file
+README.md       this file (README.zh.md, README.ko.md: the same in Chinese and Korean)
 docs/           findings: file formats, code notes, the port's milestones (start with docs/README.md)
 src/            the reconstructed game, C99 (plus one C++ file for the FM chip)
 tests/          unit tests, the headless platform, dump programs for the checks
