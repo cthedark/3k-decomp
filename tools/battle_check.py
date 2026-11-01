@@ -138,6 +138,16 @@ def oracle(a, n, keys):
     # reaching DOS (the run then ends with exit code 255), so the call itself is what is recorded
     execd = []
     emu.uc.hook_add(UC_HOOK_CODE, lambda uc, address, size, user: execd.append(emu.pass_count - 1), None, 0x18C29, 0x18C29)
+    # 0x18634: a kind 0x13 record's execl("ending.sl"); here the C runtime's execl returns and WALK.SL would go on with its
+    # buffers freed, so the run stops at the call
+    ended = []
+
+    def end_cb(uc, address, size, user):
+        ended.append(emu.pass_count - 1)
+        emu.stop_reason = 'exec ending.sl'
+        uc.emu_stop()
+
+    emu.uc.hook_add(UC_HOOK_CODE, end_cb, None, 0x18634, 0x18634)
     # The loop tops set the clock to base + pass / tick_div. The run's own limit is in emulated time, which a battle's passes use more
     # of than the clock they are given, so it is generous: it only matters when the original waits somewhere that is not a loop top.
     emu.run((a.tick_base or 0) + n + 400, {})
@@ -149,7 +159,8 @@ def oracle(a, n, keys):
             continue
         if not src.exists() or src.read_bytes() != p.read_bytes():
             files[p.name.upper()] = p.read_bytes()
-    files['__stop__'] = (f'exec mark.exe at pass {execd[0]}' if execd else emu.stop_reason or '').encode()
+    files['__stop__'] = (f'exec mark.exe at pass {execd[0]}' if execd else f'exec ending.sl at pass {ended[0]}' if ended
+                         else emu.stop_reason or '').encode()
     return rec, flash, ([e for e in sb.events if e[0] <= n] if sb else None), files
 
 
@@ -242,7 +253,7 @@ def main():
         return 2
     first = {}
     ended = None
-    left = None
+    left, left_prog = None, 'MARK.EXE'
     kinds = {}
     in_battle, back, stopped = False, 0, None   # --world-passes: how many world passes after a battle are compared
     for i in range(a.n):
@@ -255,10 +266,12 @@ def main():
                 print(f'pass {i}: the port lost the battle, the original did not leave the battle')
                 first['end'] = i
             break
-        if pkind == 16:   # key 4's yes: WALK.SL has ended in this pass; the original must have started MARK.EXE there
-            left = i
+        if pkind in (16, 21):   # key 4's yes or a kind 0x13 record: WALK.SL has ended in this pass; the original must have
+            left = i            # started MARK.EXE (16) or ENDING.SL (21) there
             stop = files.get('__stop__', b'').decode() if files else ''
-            if i + 1 < len(rec) or not exec_end or not stop.endswith(f'at pass {i}'):
+            prog = 'mark.exe' if pkind == 16 else 'ending.sl'
+            left_prog = prog.upper()
+            if i + 1 < len(rec) or not exec_end or stop != f'exec {prog} at pass {i}':
                 print(f'pass {i}: the port left WALK.SL; the original: {stop or "did not"}')
                 first['end'] = i
             break
@@ -384,7 +397,7 @@ def main():
         kinds['flash'] = len(of)
     end = '' if ended is None else f'; the party lost at pass {ended} in both (not compared after)'
     if left is not None:
-        end = f'; WALK.SL left for MARK.EXE at pass {left} in both'
+        end = f'; WALK.SL left for {left_prog} at pass {left} in both'
     if stopped is not None:
         end = f'; back in the world at pass {stopped - a.world_passes}, compared {a.world_passes} world passes more'
     print(f'all {n} passes identical (' + ', '.join(f'{v} {KIND_NAME[k]}' for k, v in sorted(kinds.items(), key=str)) + f'){end}')

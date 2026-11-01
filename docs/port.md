@@ -1478,4 +1478,16 @@ record says (`docs/findings.md` "WALK.SL step 45").
 - **Checked:** `tools/check_battle.sh`, 12 `cards_` starts, all identical at every pass and step; `tools/mutate_battle.py`: 43 card
   mutations, all caught, five dropped with notes; ASan / UBSan clean on three starts; a real-time game under SDL's dummy drivers.
 - **Guesses:** the palette count's first value (0x19, SEEN once); the byte past the deck that a rare rand reaches (0).
-- **Not built:** the record block's kind 0x13 (the ending).
+- **Not built:** the record block's kind 0x13 (the ending; since built, 9w).
+
+## Milestone 9w: the ending's record (kind 0x13) (C), built 2026-10-31
+Stepping on scene 52's ending record with its flag set ends WALK.SL as the original does before it starts `ENDING.SL`: the music and
+the sounds stop and the walk returns (`walk_ended`; `play_walk` gives 4). `ENDING.SL` is not built, so the game stops there with
+"game: the end (ENDING.SL is not built yet), stopping" (`--scene walk`: "walk: ended") (`docs/findings.md` "WALK.SL step 46").
+
+- **Code:** `src/walk.c` (kind 0x13 in `hit_record`, `walk_ended`, `WALK_KIND_ENDED` = 21); `src/main.c`; `tools/battle_check.py`
+  (the run stops at `0x18634`, the `execl`, and the port's end pass must be that pass); `tests/test_walk.c` (its unbuilt-kind example
+  is now a sell counter stepped on, kind 0x14).
+- **Checked:** `tools/check_battle.sh`, 4 `end_` starts, all identical; `tools/mutate_battle.py`: 3 mutations, all caught, one dropped
+  with a note; a real-time run under SDL's dummy drivers.
+- **Not built:** `ENDING.SL`; of the record block only kind 0x14 stepped on (sell counters are built for F7, `port.md` 9n) is left.

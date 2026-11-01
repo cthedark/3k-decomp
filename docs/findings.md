@@ -4134,3 +4134,21 @@ for 580 rounds; the mouse on +, -, a card a pixel from its edge and to end the w
 wait; a button held from a card into the next round; the pointer left over the number box at the end. `tools/mutate_battle.py`: 43
 card mutations, all caught (three after the starts were added); five dropped with notes (the text pictures' extra row, a rand range no start reaches, two that change
 nothing, the button latch the key latch covers). ASan / UBSan clean on three starts; a real-time game under SDL's dummy drivers.
+
+## WALK.SL step 46: the ending (kind 0x13, `0x18548` .. `0x18639`), 2026-10-31
+
+READ from the code (`work/b11/rec.asm`), built and CONFIRMED by the comparison. Scene 52's records 5 and 6 at (146, 60) and (146, 61)
+test flag 20 bit 1 (party byte 220, value 2). With it set: the Sound Blaster driver ended (`0x190e:0x76`) when there is one
+(`[0x380]:0xc`); the music stopped and its driver shut down (`0x165d:0x126`, `0x165d:0x14e`) when it is on (`[0x37e]:5`); six far
+buffers freed (`0x176b:0x704`: the world buffer, `[bp-0x20]`, `[bp-0x6e]`, `[bp-0x6a]`, the map buffer, `[bp-0x54]`); then
+`execl("ending.sl", 0)` (`ds:0x11c`). Nothing is written first: the scene's state and the party stay as they are in memory. Without
+the flag nothing happens and the record loop runs again as for any record. Should the exec fail, WALK.SL goes on with its buffers
+freed (the emulator's C runtime returns from `execl`, so `tools/battle_check.py` stops the run at the call `0x18634`).
+
+The port ends the walk there (`walk_ended`): `src/main.c` stops the song and the sounds and reports the end. `ENDING.SL` itself
+(14,756 bytes packed, 25,301 unpacked) is not read or built.
+
+**Checked:** `tools/check_battle.sh`, 4 `end_` starts, all identical up to the pass WALK.SL ends in, which is the same in both: both
+records with their flag, with the music and the Sound Blaster, and without the flag. `tools/mutate_battle.py`: 3 mutations, all
+caught; one dropped (the world going on after the end, which nothing compares). A real-time run under SDL's dummy drivers walked onto
+the record and the port stopped with "walk: the game's end".

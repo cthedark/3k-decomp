@@ -58,6 +58,7 @@ struct walk {
     /* Keys 3 and 4 (0x14647 .. 0x14d46): 1 while the save's number box runs, 2 while the leave's yes / no buttons run (talking 3 or 2);
      * left: yes was chosen to leave, the program would now exec MARK.EXE; slide: [bp-0x76], key A's sliding round corners */
     int sys, left, slide;
+    int ended;                          /* a kind 0x13 record has ended WALK.SL: the program would now exec ENDING.SL */
     void (*show)(void *ctx, screen_t *scr);   /* walk_set_show, handed to F4's picker */
     void *show_ctx;
     uint8_t talk_mbg[60];               /* the 6 x 10 under their pointer (the pointer's own + 0x40) */
@@ -186,7 +187,7 @@ int walk_reset(walk_t *w, uint32_t seed)
     w->v48 = w->scene->header[3];   /* 0x11233: the shake starts at the map header's byte 3 (0 in scenes 0 and 1) */
     w->c2 = 0;
     w->vbe = 1;
-    w->sys = w->left = w->slide = 0;   /* 0x10ba3: no sliding at the start */
+    w->sys = w->left = w->slide = w->ended = 0;   /* 0x10ba3: no sliding at the start */
     w->talking = 0;
     w->using = w->use_selling = 0;
     memset(w->alt, 0, WALK_ALT_LEN);
@@ -888,6 +889,17 @@ static void hit_record(walk_t *w, unsigned si)
     }
     if (kind == 8 && w->scr) {
         boat(w, si);
+        return;
+    }
+    /* Kind 0x13, the ending (0x18548 .. 0x18639): when its flag (byte 3, bit byte 4) is set, the Sound Blaster driver ended (0x190e:0x76),
+     * the music stopped (0x165d:0x126, 0x165d:0x14e) when it is on, six buffers freed and execl("ending.sl") (walk_ended). */
+    if (kind == 0x13 && w->scr) {
+        if (walk_flag_test(s->tab_b, rec[3], rec[4])) {
+            w->ended = 1;
+            return;
+        }
+        w->vbe = kind;
+        records_again(w, si / WS_RECORD_SIZE);
         return;
     }
     if (kind == 0xE && w->scr) {   /* the card game: its loops run until it ends (cg_done) */
@@ -2868,6 +2880,8 @@ int walk_kind(const walk_t *w)
         return 4;
     if (w->left)
         return WALK_KIND_LEFT;
+    if (w->ended)
+        return WALK_KIND_ENDED;
     if (w->talking == 7)
         return battle_kind(w->cast);
     return kind[w->talking];
@@ -4741,6 +4755,11 @@ int walk_left(const walk_t *w)
     return w->left;
 }
 
+int walk_ended(const walk_t *w)
+{
+    return w->ended;
+}
+
 /* Keys 1 to 4 and A. Returns 1 when the pass ends there (key 3's number box or key 4's buttons now run), else 0. */
 static int sys_keys(walk_t *w, screen_t *scr, unsigned k)
 {
@@ -5026,7 +5045,7 @@ int walk_pass(walk_t *w, screen_t *scr, uint32_t ticks, unsigned port60)
     unsigned x = s->tab_b[0], y = s->tab_b[1];
     w->unbuilt_new = 0;
     w->scr = scr;
-    if (w->left)   /* WALK.SL has ended (key 4) */
+    if (w->left || w->ended)   /* WALK.SL has ended (key 4, or a kind 0x13 record) */
         return 0;
     if (w->talking) {   /* a talk's message box waits (0x1b506) */
         talk_round(w, scr, port60);

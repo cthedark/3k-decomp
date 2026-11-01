@@ -125,11 +125,14 @@ void walk_mouse_reset(walk_t *w, screen_t *scr);
 unsigned walk_mouse_key(unsigned x, unsigned y, unsigned last);
 /* Which loop the world's next pass is in, for comparing with the original's loop tops: 0 the world (0x11d36), 4 a message box
  * (0x1b506), 8 a talk's yes / no (0x18d23), 9 its number (0x19166), 10 F3's wait after a take (0x160b0, 0x164ad); WALK_KIND_LEFT once
- * key 4's yes has ended WALK.SL. */
-enum { WALK_KIND_LEFT = 16 };
+ * key 4's yes has ended WALK.SL, WALK_KIND_ENDED once a kind 0x13 record has. */
+enum { WALK_KIND_LEFT = 16, WALK_KIND_ENDED = 21 };
 int walk_kind(const walk_t *w);
 /* Key 4's yes was chosen: WALK.SL has ended and the original now starts MARK.EXE (its title). The pass that chose it is the last. */
 int walk_left(const walk_t *w);
+/* A kind 0x13 record with its flag set was stepped on: WALK.SL has ended and the original now starts ENDING.SL (the sounds and the
+ * music stopped first). The pass that stepped on it is the last. */
+int walk_ended(const walk_t *w);
 /* The palette cycle of 0x1c284 (the battle runs it too, on the same counters). */
 void walk_palette_step(walk_t *w, screen_t *scr);
 /* The DAC's entries 0 .. 15 from the palette buffer (RPG.LCP's first 48 bytes), as the original has them at its loop's first pass. Its

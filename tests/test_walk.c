@@ -1296,15 +1296,15 @@ static void test_walking(void)
     CHECK(px[5] == 38 && s->gmap[cell] == 0xEE);
     walk_pass(w, &scr, 22, 0x4D);
     CHECK(s->gmap[cell] == 0x19);
-    /* only some kinds are reported: kind 0x13 (the ending) is, kind 6 is not */
+    /* only some kinds are reported: kind 0x14 (a sell counter, stepped on) is, kind 6 is not */
     CHECK(BEGIN());
     s->tab_a[1000 + 15 * 2 + 2] = 6;
     rc = run_walk(w, &scr, rt, 1, 8, NULL, NULL, NULL);
     CHECK(!(rc & WALK_PASS_UNBUILT));
     CHECK(BEGIN());
-    s->tab_a[1000 + 15 * 2 + 2] = 0x13;
+    s->tab_a[1000 + 15 * 2 + 2] = 0x14;
     rc = run_walk(w, &scr, rt, 1, 8, NULL, NULL, NULL);
-    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "kind 0x13"));
+    CHECK((rc & WALK_PASS_UNBUILT) && walk_unbuilt(w) && strstr(walk_unbuilt(w), "kind 0x14"));
 
     /* through the door of the house: Right to x = 38, then Up (the roof comes off, the rain stops), then Down again (the roof goes back,
      * the window shakes, the rain returns). The record is record 1 of scene 0: the roof is x 12 .. 21, y 11 .. 21 of the object map. */

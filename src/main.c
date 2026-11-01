@@ -1115,6 +1115,12 @@ static int play_walk(screen_t *scr)
             result = 3;
             break;
         }
+        if (walk_ended(w)) {   /* a kind 0x13 record: the sounds and the music stopped, then ENDING.SL (not built) */
+            printf("walk: the game's end (the original starts ENDING.SL)\n");
+            platform_present(scr);
+            result = 4;
+            break;
+        }
         /* Esc closes the window in the world, but F3's wait, F4's picker and list take it (they give up or end on it) */
         platform_escape_quits(walk_kind(w) == 0);
         if ((got & WALK_PASS_VILLAGER_EVENT) && !event_reported) {
@@ -1323,6 +1329,11 @@ static int run_game(screen_t *scr, int scale, int faithful)
                     }
                     if (q == 3) {   /* key 4's yes: MARK.EXE, its title */
                         again = 1;
+                        break;
+                    }
+                    if (q == 4) {   /* the game's end: ENDING.SL, not built */
+                        printf("game: the end (ENDING.SL is not built yet), stopping\n");
+                        rc = 0;
                         break;
                     }
                     rc = q < 0 ? 1 : 0;
@@ -1627,6 +1638,10 @@ int main(int argc, char **argv)
         }
         if (rc == 3) {   /* key 4's yes: the original starts MARK.EXE's title, which is not started from here */
             printf("walk: left\n");
+            rc = 1;
+        }
+        if (rc == 4) {   /* the game's end: the original starts ENDING.SL, which is not built */
+            printf("walk: ended\n");
             rc = 1;
         }
         printf("walk: %s\n", rc == 1 ? "closed" : "could not start");

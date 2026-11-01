@@ -1114,6 +1114,13 @@ m("walk.c", "boat: steps not shown", "        put_pic(scr, 0x1440, buf + 0x32C8)
 # written and the place taken, which are the door's scene_leave (its mutations cover both).
 m("walk.c", "boat: pointer kept", "    walk_mouse_hide(w, w->scr);\n    boat_ride", "    boat_ride")
 m("walk.c", "boat: pointer not reset", "    walk_mouse_reset(w, w->scr);\n    w->vbe = 8;", "    w->vbe = 8;")
+# the ending (step 46); RUNS="end_"
+m("walk.c", "end: not taken", "    if (kind == 0x13 && w->scr) {", "    if (kind == 0x113 && w->scr) {")
+m("walk.c", "end: flag ignored", "        if (walk_flag_test(s->tab_b, rec[3], rec[4])) {\n            w->ended = 1;", "        if (1) {\n            w->ended = 1;")
+m("walk.c", "end: flag bit one higher", "        if (walk_flag_test(s->tab_b, rec[3], rec[4])) {\n            w->ended = 1;", "        if (walk_flag_test(s->tab_b, rec[3], rec[4] + 1u)) {\n            w->ended = 1;")
+# Dropped: the world going on after the end (the comparison stops at the pass WALK.SL ends in; main.c stops calling it).
+# Dropped: the record loop not run again after a kind 0x13 record without its flag (nothing changed for it to apply).
+
 # the card game (step 45); RUNS="cards_"
 m("walk.c", "cards: not taken", "    if (kind == 0xE && w->scr) {", "    if (kind == 0xEE && w->scr) {")
 m("walk.c", "cards: no coins check", "    if (shop_coins(w) == 0) {\n        walk_mouse_reset(w, scr);", "    if (0) {\n        walk_mouse_reset(w, scr);")

@@ -831,6 +831,12 @@ run cards_mouse_end 22 168 48 120 $CIN --mouse 0:50:152:0 --key 20:0x1c --key 22
 DOPTS="--word 7:10:0"; run cards_nocoins 22 168 48 60 $CIN
 DOPTS="--word 7:10:1"; run cards_one 22 168 48 200 $CIN --key 20:0x4e --key 22:0xce --key 30:0x4e --key 32:0xce --key 40:0x1c --key 42:0x9c --key 60:0x39 \
     --key 62:0xb9 --key 80:0x1c --key 82:0x9c --key 100:0x1c --key 102:0x9c --key 120:0x1c --key 122:0x9c; DOPTS=""
+# the ending (kind 0x13, step 46): scene 52's two records (the second a row lower) with their flag, with the music and the Sound
+# Blaster; without the flag (nothing happens)
+DOPTS="--byte 0:220:2"; run end_s52 52 142 60 60 --key 1:0x4d --key 30:0xcd
+run end_s52r6 52 142 61 60 --key 1:0x4d --key 30:0xcd
+run end_s52_opl 52 142 60 60 --key 1:0x4d --key 30:0xcd --opl --sb; DOPTS=""
+run end_unset 52 142 60 60 --key 1:0x4d --key 30:0xcd
 # walking on after the warp (the party and the trail put at the arrival)
 run warp_s23_walk 23 80 39 160 --key 1:0x50 --key 40:0xd0 --key 60:0x4b --key 90:0xcb --key 100:0x48 --key 130:0xc8
 # shops (kind 5, step 40): scene 0's food shop (type 0) entered from outside its door: purchases by the hero, the second member and the
