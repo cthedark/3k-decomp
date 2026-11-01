@@ -1,6 +1,6 @@
 # Names and terms, so that every text uses the same one. Names: English as tone-less pinyin, Korean by the Korean reading of the
-# characters (operator's rule, 2026-11-01). Norse names spelled in Chinese take each language's own form of the Norse name
-# (operator, 2026-11-01). Titles and things are translated. "?" in the note: a choice to confirm.
+# characters (operator's rule, 2026-11-01). Norse names spelled in Chinese take each language's own form of the Norse name;
+# four Korean readings that are ordinary words are replaced by the name's sound (operator, 2026-11-01). Titles and things are translated. "?" in the note: a choice to confirm.
 zh	en	ko	note
 桑得斯	Sangdesi	상득사	the hero
 伊歐妮	Yiouni	이구니	party member
@@ -9,7 +9,7 @@ zh	en	ko	note
 凱薩琳	Kaisalin	개살린	party member
 桑瑞克	Sangruike	상서극	the hero's father
 卡洛安	Kaluoan	가락안	king of Bangpei
-娜蒂	Nadi	나체	the Archmage, the villain; 나체 also means "nude" in Korean (?)
+娜蒂	Nadi	나디	the Archmage, the villain; by sound (the reading 나체 means "nude")
 胡都	Hudu	호도	the prince with the horn
 尼古多	Niguduo	이고다	Nadi's father
 黛妮	Daini	대니	the lost princess
@@ -46,7 +46,7 @@ zh	en	ko	note
 巴也	Baye	파야	the earth god
 麗達	Lida	여달	the star god
 阿德	Ade	아덕	the great sun
-卡文	Kawen	가문	the white-haired boy who freed Nadi; 가문 also means "family" in Korean (?)
+卡文	Kawen	카원	the white-haired boy who freed Nadi; by sound (the reading 가문 means "family")
 加諾	Jianuo	가낙	the father's comrade on Mount Yabolasi
 亞伯拉斯山	Mount Yabolasi	아백랍사산	
 鄂丁三世	Eding III	악정 3세	King Maiya
@@ -88,7 +88,7 @@ zh	en	ko	note
 巫塔	Wuta	무탑	
 宏特羅	Hongteluo	굉특라	a continent and its founder
 驟降隧道	Plunge Tunnel	취강 터널	
-莎坦	Shatan	사탄	the murdered dancer; 사탄 reads as "Satan" in Korean (?)
+莎坦	Shatan	샤탄	the murdered dancer; by sound (the reading 사탄 means "Satan")
 亞立克	Yalike	아립극	
 亞樂蒙	Yalemeng	아락몽	the beastmen's planet
 冠紀元 / 天紀元	the Guan Era / the Tian Era	관기원 / 천기원	
@@ -133,7 +133,7 @@ zh	en	ko	note
 結玉史	Jieyushi	결옥사	the Three-Realm God
 果倫	Guolun	과륜	
 李程	Li Cheng	이정	the court physician
-貝倫	Beilun	패륜	a key's owner; 패륜 means "immorality" in Korean (?)
+貝倫	Beilun	베이룬	a key's owner; by sound (the reading 패륜 means "immorality")
 拉那	Lana	납나	
 川源	Chuanyuan	천원	
 卡不提	Kabuti	가부제	
