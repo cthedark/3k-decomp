@@ -4225,3 +4225,29 @@ fifth face picture is never shown. The palette does not change during the scene.
 **Checked:** all 389 records identical. `tools/mutate_ending.py`: 18 mutations, all caught. ASan / UBSan clean on the whole scene.
 `build/3k --scene ending` plays it in real time (`TK_ENDING_PASS_HZ`, 35 passes a second, a choice) with the intro's song, then stops;
 a run under SDL's dummy drivers reached the end of the scene.
+
+## ENDING.SL step 3: the second scene (`0x10603` .. `0x108cd`), 2026-11-01
+
+READ from the code (`work/e1/ending.asm`, `work/e1/h2.asm`), built in C and CONFIRMED by the comparison (`tools/ending_check.py` now
+also records the loop top `0x106d1` and its end `0x108d0`: 501 records more).
+
+**Set-up (`0x10603`):** `ending2.lcz` read and unpacked, at 0 a 142 x 138 background with a header into `[bp-0x22]` (over the clouds),
+at 0x46c five pictures with headers into `[bp-0x36]`: 90 x 138 at 0, 76 x 79 at 0x3088, 101 x 92 at 0x4800, 142 x 64 at 0x6c50 and
+97 x 87 at 0x8fd4; `_1_.loc` read (0xee48 bytes at most, the file is 0xede6) into `[bp-0x32]`; the screen cleared (`0x22c:0xd8`); the
+picture's place `[bp-0x48]` 0x286c, (108, 32).
+
+**A pass (`0x106d1`):** the background's rows turned two pixels (`0x1252d` mode 2). When `[bp-0x1a]` is 0 (a new picture): its width
+and height (`0x164:4` reads a word) into `[bp-0x24]` and `[bp-0x28]`, `[bp-0x1a]` = 1, `di` = 0, and for the five pictures in turn the
+voice block at `_1_.loc` 0x6771, 0x7742, 0x8849, 0x8e01 or 0xa1bb (`0x11400`: with a Sound Blaster, the sound cut, the speaker on and
+the block played; the blocks decode to 0.33 .. 0.67 s of 12 or 13 kHz sound). Each pass: the background's top-left w x h grabbed into
+`[bp-0x46]` with a header (`0x1222d`, the background 142 wide), the picture over it with colour 0 clear (`0x11ec6`), and the grab
+put on the screen opaque at its place (`0x122c8`). After the 100th pass (`di` past 0x63) the sound is cut (with a Sound Blaster) and
+the next picture goes at 0x76cb (11, 95), 0x1732 (178, 18) and 0x8e00 (192, 113); after the fifth the loop ends. Nothing clears the screen
+between pictures, so they build up into a collage, the newest moving with the background.
+
+**`0x19c:0x102`** (in every pass of both scenes) is the FM driver's: when the song has ended it is started again. The port's music
+player already loops.
+
+**Checked:** all 890 records of the two scenes identical (388 + 1 + 500 + 1). `tools/mutate_ending.py`: 34 mutations (16 for this
+scene), all caught. ASan / UBSan clean. The voice is not compared: the emulator has no Sound Blaster. The port plays the blocks with the
+`_1_.LOC` bank the world uses (`ending_set_voice`, `src/main.c`), cutting the sound before each and after each picture's 100 passes.

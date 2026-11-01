@@ -22,8 +22,8 @@ from unicorn import UC_HOOK_CODE  # noqa: E402
 from unicorn.x86_const import UC_X86_REG_BP, UC_X86_REG_SS  # noqa: E402
 
 # loop top -> its number (the port's record carries the same number); 0x10603 is the first scene's end
-TOPS = {0x1042D: 1, 0x10603: 2}
-NAMES = {1: 'scene 1', 2: 'scene 1 ended'}
+TOPS = {0x1042D: 1, 0x10603: 2, 0x106D1: 3, 0x108D0: 4}
+NAMES = {1: 'scene 1', 2: 'scene 1 ended', 3: 'scene 2', 4: 'scene 2 ended'}
 FRAME = 1 + 64000 + 768
 
 

@@ -1510,3 +1510,15 @@ lilac sky, the villain rising out of the bottom, then her face moving through fo
 - **Choice:** 35 passes a second (`TK_ENDING_PASS_HZ`), as for the other loops that wait for nothing: 11 s for the scene, 1.4 s a
   subtitle line. Not yet judged by eye or ear.
 - **Not built:** the Sound Blaster's restart in each pass (no voice plays in this scene in the runs compared); scenes 2 to 7.
+
+## Milestone 10b: ENDING.SL, the second scene (C), built 2026-11-01
+After the first scene, five pictures over a scrolling background build up a collage on a black screen, each with its voice line from
+`_1_.LOC` when there is a sound device (`docs/findings.md` "ENDING.SL step 3").
+
+- **Code:** `src/ending.c` (`scene2_begin`, `scene2`, `ending_set_voice`; the buffers are now main's seven 0xffdc-byte ones by their
+  stack places); `src/main.c` (`play_ending` runs every built scene, the voice through the world's `_1_.LOC` bank);
+  `tools/ending_check.py` (loop tops `0x106d1` and `0x108d0`).
+- **Checked:** all 890 records of both scenes identical; 34 mutations, all caught; ASan / UBSan clean; a real-time run under SDL's
+  dummy drivers.
+- **Not compared:** the voice (the emulator has no Sound Blaster); the five blocks decode (0.33 .. 0.67 s each).
+- **Pace:** 100 passes a picture, 2.9 s at `TK_ENDING_PASS_HZ`.

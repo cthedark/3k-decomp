@@ -1142,8 +1142,15 @@ static int play_walk(screen_t *scr)
     return result;
 }
 
+static void ending_voice(void *ctx, unsigned off)
+{
+    audio_stop();   /* 0x11400: the sound cut first */
+    sfx_play(ctx, SFX_LOC, off);
+}
+
 /* ENDING.SL (ending.h) in real time, with the intro's song (ENDING.SL 0x102d5 starts the same block when there is an FM card). Its
- * loops wait for nothing, so they run at TK_ENDING_PASS_HZ. Only the first scene is built: after it the run stops and says so.
+ * loops wait for nothing, so they run at TK_ENDING_PASS_HZ. With a sound device the voice lines play (a Sound Blaster). Only the first
+ * scenes are built: after them the run stops and says so.
  * Returns 0, or 1 when the window was closed. */
 static int play_ending(screen_t *scr)
 {
@@ -1153,10 +1160,13 @@ static int play_ending(screen_t *scr)
         return 0;
     }
     music_t *song = song_start("ending");
+    sfx_bank_t *bank = audio_enabled() ? sfx_bank_load() : NULL;   /* the voice lines are blocks of _1_.LOC */
+    if (bank)
+        ending_set_voice(e, ending_voice, sfx_cut, bank);
     platform_present(scr);
     uint32_t next = platform_ticks_ms();
     int loop = ENDING_SCENE1, quit = 0;
-    while (loop == ENDING_SCENE1) {
+    while (loop) {
         if (!platform_poll()) {
             quit = 1;
             break;
@@ -1171,8 +1181,11 @@ static int play_ending(screen_t *scr)
         platform_present(scr);
     }
     if (!quit)
-        printf("ending: the first scene is over; the rest of ENDING.SL is not built yet\n");
+        printf("ending: the built scenes are over; the rest of ENDING.SL is not built yet\n");
     song_stop(song);
+    if (bank)
+        audio_stop();
+    sfx_bank_free(bank);
     ending_free(e);
     return quit;
 }
