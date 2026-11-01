@@ -57,6 +57,7 @@ intro6_t *intro6_create(screen_t *scr, int faithful_keys)
              slide_load_chunks("story6_t.lcz", 1, d3, w3) == 0 && slide_load_palettes(t->pal1, t->pal2) == 0;
     }
     if (ok) {
+        subs_translate(lines, LINES_BYTES, 6);
         t->subs = subs_create(lines, LINES_BYTES);
         if (t->subs && subs_load_voice(t->subs, 6) != 0)
             fprintf(stderr, "intro6: no voice-over, using the timed hold\n");

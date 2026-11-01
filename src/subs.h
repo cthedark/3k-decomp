@@ -32,6 +32,10 @@ typedef struct subs subs_t;
  * which stops when the line offset passes len - 300. Returns NULL if len is not a positive
  * multiple of 600. */
 subs_t *subs_create(const uint8_t *lines, size_t len);
+
+/* The translated modes (localization/README.md): line k of slide `slide`'s subtitles (STORYn_T.LCZ, `len` bytes of 600-byte lines)
+ * redrawn from translation "story<slide>.<k + 1>" where it has one (its 14 rows of 40 bytes). */
+void subs_translate(uint8_t *lines, size_t len, unsigned slide);
 void subs_free(subs_t *s);
 
 /* Give the player the voice-over of slide `slide` (1..6), one clip per line. With a voice and a

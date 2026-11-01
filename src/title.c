@@ -6,6 +6,7 @@
 
 #include "assets.h"
 #include "gfx.h"
+#include "l10n.h"
 #include "lcz.h"
 
 /* Layout facts, each checked against the original's code (addresses in MARK.EXE):
@@ -79,6 +80,12 @@ static int load_chunks(title_t *t)
         uint8_t *dst = i == 0 ? t->strip : i == 1 ? t->banner : i <= 4 ? t->mask[i - 2] : t->text;
         memcpy(dst, c.pixels, want);
         lcz_chunk_free(&c);
+    }
+    {   /* the translated modes: the line (a stencil: 0 lets the banner show through, 0xfe covers it) from "title.line", centred */
+        uint8_t bits[LOGO_PIXELS / 8];
+        if (l10n_bitmap("title.line", bits, LOGO_W, LOGO_H, LOGO_W / 8, (LOGO_H - 14) / 2) == 0)
+            for (unsigned i = 0; i < LOGO_PIXELS; i++)
+                t->text[i] = bits[i / 8] & (0x80 >> (i % 8)) ? 0 : 0xFE;
     }
     if (sprite_w(t->strip) != STRIP_W || sprite_h(t->strip) != STRIP_H ||
         sprite_w(t->banner) != BANNER_W || sprite_h(t->banner) != BANNER_H) {

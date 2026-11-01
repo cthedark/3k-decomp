@@ -84,8 +84,8 @@ $(BUILD)/test_battle: src/battle.c src/msgbox.c src/walk.c src/walkscene.c src/l
 $(BUILD)/walk_dump: src/walk.c src/battle.c src/msgbox.c src/gameover.c src/sfx.c src/voc.c src/walkscene.c src/l10n.c src/assets.c src/lcz.c src/screen.c tests/walk_dump.c src/*.h | $(BUILD)
 	$(CC) $(CFLAGS) -Isrc src/walk.c src/battle.c src/msgbox.c src/gameover.c src/sfx.c src/voc.c src/walkscene.c src/l10n.c src/assets.c src/lcz.c src/screen.c tests/walk_dump.c -o $@
 
-$(BUILD)/ending_dump: src/ending.c src/assets.c src/lcz.c src/screen.c tests/ending_dump.c src/*.h | $(BUILD)
-	$(CC) $(CFLAGS) -Isrc src/ending.c src/assets.c src/lcz.c src/screen.c tests/ending_dump.c -o $@
+$(BUILD)/ending_dump: src/ending.c src/l10n.c src/assets.c src/lcz.c src/screen.c tests/ending_dump.c src/*.h | $(BUILD)
+	$(CC) $(CFLAGS) -Isrc src/ending.c src/l10n.c src/assets.c src/lcz.c src/screen.c tests/ending_dump.c -o $@
 
 # The translations' check: ids, glyphs and room (localization/README.md).
 $(BUILD)/l10n_check: src/l10n.c src/assets.c tests/l10n_check.c src/*.h | $(BUILD)

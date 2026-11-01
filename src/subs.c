@@ -1,10 +1,12 @@
 #include "subs.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "audio.h"
 #include "gfx.h"
+#include "l10n.h"
 #include "voice.h"
 
 /* Layout facts, from STORY2.SL's player (addresses in that program):
@@ -46,6 +48,15 @@ struct subs {
     voice_bank_t *voice;   /* NULL: the timed hold */
     int clip_started;      /* the current hold is waiting for a clip */
 };
+
+void subs_translate(uint8_t *lines, size_t len, unsigned slide)
+{
+    for (size_t k = 0; (k + 1) * LINE_STEP <= len; k++) {
+        char id[24];
+        snprintf(id, sizeof id, "story%u.%u", slide, (unsigned)k + 1);
+        l10n_bitmap(id, lines + k * LINE_STEP, 320, 14, 40, 0);
+    }
+}
 
 subs_t *subs_create(const uint8_t *lines, size_t len)
 {

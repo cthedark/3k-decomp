@@ -1640,3 +1640,18 @@ to. A text with no translation is drawn as the original draws it.
   clean on the menu, a talk with two boxes and the world's first screen in both languages.
 - **Not yet:** most of the translations (a sample: buttons, yes / no, names, menu, scene 0's talks); the picture texts other than
   the menu (intro and ending subtitles, shouts, title line, game over); the shop's greeting strip, placed by the Chinese length.
+
+## Milestone 11b: the translations and the text in pictures (C), built 2026-11-01
+Everything the game shows as text is now in English and Korean as well (`localization/README.md`, steps 3 and 4): 760 messages,
+219 items, 50 spells, the fields and the programs' own strings (1,065 texts a language), and the text drawn as pictures (the intro
+and ending subtitles, the battle's shouts, the title's line, the game-over lettering: 72 more). Only the title logo and the
+credits stay in Chinese, as decided.
+
+- **Code:** `battle.c` (`text_translation`: strings the game puts together are translated piece by piece; `battle_text_cols` and
+  `battle_text_pic_cols`, so the shop's greeting is laid out by the translation's width; the shouts); `l10n.c` (`l10n_bitmap`,
+  `l10n_picture`); `subs.c` `subs_translate`; `ending.c` `ending_translate`; `title.c`, `gameover.c`; `walk.c` (the greeting).
+- **Checked:** `build/l10n_check` for both languages, 1,137 texts each, no problems: it now also holds the boxes that do not wait to
+  three rows and the shops' greetings to their strip. On screen (headless dumps): subtitles, shouts, ending lines, the title line
+  and the game-over lettering in both languages. The Chinese path: `make test`, the six intro checks, `check_menu.sh`,
+  `check_credits.sh`, the ending's 14,863 records, and 101 battle and world starts that draw text (s1, lose, lvl, boss, talk,
+  shop, sell, take, cards) plus the game-over screen's 400 passes: all identical. Every mutation pattern still matches once.

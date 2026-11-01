@@ -57,6 +57,7 @@ intro5_t *intro5_create(screen_t *scr, int faithful_keys)
              slide_load_palettes(t->pal1, t->pal2) == 0;
     }
     if (ok) {
+        subs_translate(lines, LINES_BYTES, 5);
         t->subs = subs_create(lines, LINES_BYTES);
         if (t->subs && subs_load_voice(t->subs, 5) != 0)
             fprintf(stderr, "intro5: no voice-over, using the timed hold\n");

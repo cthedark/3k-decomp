@@ -434,3 +434,120 @@ int l10n_draw(const char *text, size_t len, int font, uint8_t *px, unsigned pw, 
         *end_x = x;
     return missing ? -1 : 0;
 }
+
+/* ---- text drawn as pictures ---------------------------------------------------------------------------------------------- */
+
+static uint8_t one(void *ctx, unsigned gw, unsigned index)
+{
+    (void)ctx, (void)gw, (void)index;
+    return 1;
+}
+
+/* The translation of `id` as a 14-row mask `mw` wide (left-aligned); its width in `*tw`. NULL when there is none. */
+static uint8_t *text_mask(const char *id, unsigned max_w, unsigned *mw, unsigned *tw)
+{
+    const char *t = l10n_text(id);
+    if (!t)
+        return NULL;
+    size_t len = strlen(t);
+    int font = l10n_width(t, len, L10N_FONT_NORMAL) <= max_w ? L10N_FONT_NORMAL : L10N_FONT_NARROW;
+    unsigned w = l10n_width(t, len, font);
+    uint8_t *m = calloc((size_t)(w ? w : 1) * 14, 1);
+    if (!m)
+        return NULL;
+    l10n_draw(t, len, font, m, w ? w : 1, 0, one, NULL, NULL);
+    *mw = w ? w : 1;
+    *tw = w;
+    return m;
+}
+
+int l10n_bitmap(const char *id, uint8_t *dst, unsigned w, unsigned h, unsigned stride, unsigned y0)
+{
+    unsigned mw, tw;
+    uint8_t *m = text_mask(id, w, &mw, &tw);
+    if (!m)
+        return -1;
+    memset(dst, 0, (size_t)stride * h);
+    unsigned x0 = tw < w ? (w - tw) / 2 : 0;
+    for (unsigned r = 0; r < 14 && y0 + r < h; r++)
+        for (unsigned x = 0; x < tw && x0 + x < w; x++)
+            if (m[r * mw + x])
+                dst[(y0 + r) * stride + (x0 + x) / 8] |= (uint8_t)(0x80 >> ((x0 + x) % 8));
+    free(m);
+    return 0;
+}
+
+int l10n_picture(const char *id, uint8_t *pix, unsigned w, unsigned h, int fit)
+{
+    unsigned mw, tw;
+    uint8_t *m = text_mask(id, w, &mw, &tw);
+    if (!m)
+        return -1;
+    /* the colours: inside the letters (a set pixel whose four neighbours are set), per row the original row's most used colour
+     * (the picture's most used inside colour for the other rows); at their edge, the picture's most used edge colour */
+    uint8_t *row_c = calloc(h, 1);
+    unsigned inner[256] = {0}, edge[256] = {0};
+    for (unsigned r = 0; row_c && r < h; r++) {
+        unsigned count[256] = {0}, best = 0;
+        for (unsigned x = 0; x < w; x++) {
+            uint8_t v = pix[r * w + x];
+            if (!v)
+                continue;
+            int in = r > 0 && r + 1 < h && x > 0 && x + 1 < w && pix[(r - 1) * w + x] && pix[(r + 1) * w + x] && pix[r * w + x - 1] &&
+                     pix[r * w + x + 1];
+            if (in)
+                count[v]++, inner[v]++;
+            else
+                edge[v]++;
+        }
+        for (unsigned c = 1; c < 256; c++)
+            if (count[c] > count[best])
+                best = c;
+        row_c[r] = (uint8_t)best;
+    }
+    unsigned top = 0, rim = 0;
+    for (unsigned c = 1; c < 256; c++) {
+        if (inner[c] > inner[top])
+            top = c;
+        if (edge[c] > edge[rim])
+            rim = c;
+    }
+    if (!top)   /* letters too thin to have an inside: the edge colour inside, no outline */
+        top = rim, rim = 0;
+    /* the scale: rows to the picture's height (fit) or 1; across the same, less if the text would not fit */
+    unsigned dh = fit ? h : (14 < h ? 14 : h), dw = fit ? tw * h / 14 : tw;
+    if (dw > w) {   /* too wide: the same factor down and across, so the letters keep their shape */
+        if (fit && tw)
+            dh = 14 * w / tw < h ? 14 * w / tw : h;
+        dw = w;
+    }
+    unsigned x0 = (w - dw) / 2, y0 = (h - dh) / 2;
+    memset(pix, 0, (size_t)w * h);
+    for (unsigned r = 0; row_c && r < dh; r++) {
+        uint8_t c = row_c[y0 + r] ? row_c[y0 + r] : (uint8_t)top;
+        for (unsigned x = 0; x < dw; x++)
+            if (m[(r * 14 / dh) * mw + (dw ? x * tw / dw : 0)])
+                pix[(y0 + r) * w + x0 + x] = c;
+    }
+    if (rim) {   /* the outline: clear pixels next to the letters (marked first, so it is one pixel wide) */
+        uint8_t *mark = calloc((size_t)w * h, 1);
+        for (unsigned r = 0; mark && r < h; r++)
+            for (unsigned x = 0; x < w; x++) {
+                if (pix[r * w + x])
+                    continue;
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dx = -1; dx <= 1; dx++) {
+                        int yy = (int)r + dy, xx = (int)x + dx;
+                        if (yy >= 0 && yy < (int)h && xx >= 0 && xx < (int)w && pix[yy * w + xx])
+                            mark[r * w + x] = 1;
+                    }
+            }
+        for (size_t i = 0; mark && i < (size_t)w * h; i++)
+            if (mark[i])
+                pix[i] = (uint8_t)rim;
+        free(mark);
+    }
+    free(row_c);
+    free(m);
+    return 0;
+}

@@ -8,6 +8,7 @@
 #include "audio.h"
 #include "gfx.h"
 #include "lcz.h"
+#include "subs.h"
 #include "tkrand.h"
 #include "voc.h"
 
@@ -110,6 +111,7 @@ intro0_t *intro0_create(screen_t *scr)
         free(t);
         return NULL;
     }
+    subs_translate(t->lines, 4200, 0);   /* the translated modes' subtitles (subs.h) */
     for (int i = 0; i < 768; i++)
         if (t->pal_target[i] > 63) {
             fprintf(stderr, "intro: ani.lcp does not start with a 6-bit palette\n");

@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "assets.h"
+#include "l10n.h"
 #include "battle.h"
 #include "gameover.h"
 #include "sfx.h"
@@ -141,6 +142,9 @@ int main(int argc, char **argv)
     if (argc < 4)
         return 2;
     assets_set_dir(argv[1]);
+    /* TK_LANG=en|ko: the translated modes (localization/README.md), to look at them; the checks never set it */
+    if (getenv("TK_LANG") && l10n_lang_of(getenv("TK_LANG")) > 0)
+        l10n_init((l10n_lang)l10n_lang_of(getenv("TK_LANG")), "localization");
     const char *mode = argv[2], *out = argv[3];
     if (!strcmp(mode, "scene")) {
         walk_scene_t *s = walk_scene_load();

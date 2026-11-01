@@ -1,9 +1,11 @@
 #include "ending.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "assets.h"
+#include "l10n.h"
 
 enum { BUF = 0xFFDC };
 
@@ -62,6 +64,17 @@ static size_t unpack(const uint8_t *in, size_t n, uint8_t *out, size_t cap)
     return o;
 }
 
+/* The translated modes (localization/README.md): `n` subtitle lines of `w` x 15 one-byte pixels, `step` bytes apart, redrawn from
+ * translations "<base>.1" .. */
+static void ending_translate(uint8_t *lines, const char *base, unsigned n, unsigned w, unsigned step)
+{
+    for (unsigned k = 0; k < n; k++) {
+        char id[24];
+        snprintf(id, sizeof id, "%s.%u", base, k + 1);
+        l10n_picture(id, lines + (size_t)k * step, w, 15, 0);
+    }
+}
+
 /* fopen, fread up to 0xffdc bytes into the file buffer, fclose; the length read */
 static size_t read_file(ending_t *e, const char *name)
 {
@@ -97,6 +110,7 @@ ending_t *ending_new(screen_t *scr)
     if (!(n = read_file(e, "ENDING1T.LCZ")))
         goto fail;
     unpack(e->file, n, e->b1e, sizeof e->b1e);
+    ending_translate(e->b1e, "ending1t", 4, 0xEC, 0xDD4);
     e->count = 0x140;
     e->at = 0xFA00;
     e->swap = 0xA;    /* [bp-0x48] is the last file handle (ENDING1T.LCZ's), 0xa in the original (SEEN) */
@@ -510,6 +524,7 @@ static int scene5_begin(ending_t *e, screen_t *scr)
     if (!(n = read_file(e, "ENDING4T.LCZ")))
         return 0;
     unpack(e->file, n, e->b46, BUF);
+    ending_translate(e->b46, "ending4t", 2, 0xDC, 0xCE4);
     e->wait = 0;
     e->face = 0;
     uint8_t *g = e->file;   /* 0x121dc */

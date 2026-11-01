@@ -421,6 +421,11 @@ battle_t *battle_begin(walk_t *w, screen_t *scr)
         free(b);
         return NULL;
     }
+    for (unsigned k = 0; k < SHOUTS; k++) {   /* the translated modes: the shouts (one-bit 136 x 14, 17 bytes a row) redrawn */
+        char id[16];
+        snprintf(id, sizeof id, "shout.%u", k);
+        l10n_bitmap(id, b->fxmem + FX_N * 64 + 0xFF * k, 136, 14, 17, 0);
+    }
     {   /* NUMBER.LCZ 0x359b (0x25eeb at the win): x, = and the ten digits, 13 x 13 each, no headers */
         uint8_t head[3];
         size_t len = 0;

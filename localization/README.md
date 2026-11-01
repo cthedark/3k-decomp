@@ -105,5 +105,18 @@ Chinese by Kiro; to be read through by the operator while playing.
 - `l10n_check` also checks: the boxes that do not wait (sellers, askers, bosses and the system prompts: the list is in the check,
   from `tools/l10n_nowait.py`) get one box of three rows; a shop's greeting (messages 1-6) fits its 320-pixel strip.
 
+## The text in pictures (step 4, done 2026-11-01)
+Each picture is redrawn from its translation when it is loaded, in the same format, so the code that shows it is the original's:
+- the intro's subtitles (`subs_translate`, one-bit 320 x 14 lines; `intro0.c` to `intro6.c`): `story0.1` .. `story6.11`;
+- the ending's (`ending_translate` in `ending.c`, one byte a pixel, 236 x 15 and 220 x 15): `ending1t.*`, `ending4t.*`;
+- the battle's shouts (`battle_create`, one-bit 136 x 14): `shout.0` .. `shout.11`;
+- the title's line (`title.c`, a 112 x 24 stencil: 0 lets the moving banner show through): `title.line`;
+- the game-over lettering (`gameover.c`, 93 x 26): `gameover`, scaled to the picture with the same factor both ways.
+`l10n_bitmap` draws the one-bit ones, `l10n_picture` the others: its rows take the colours the original lettering had there (inside
+the letters by row, so the shading from top to bottom stays; a one-pixel outline in the edge colour). The menu's items (step 2)
+and the credits and title logo (kept, decided) are the rest of the pictures with text.
+
+`build/walk_dump` and `build/ending_dump` take `TK_LANG=en|ko` to show the translated modes (the checks never set it).
+
 ## Next
-4. The pictures: the intro and ending subtitles, the battle's shouts, the title line and the game-over lettering.
+The operator's play-through, in each language: lines that read stiffly, and any `walk: not built:` reports.

@@ -94,6 +94,7 @@ intro1_t *intro1_create(screen_t *scr, int faithful_keys)
         ok = 0;
     }
     if (ok) {
+        subs_translate(tline, LINES_BYTES, 1);
         t->subs = subs_create(tline, LINES_BYTES);
         if (t->subs && subs_load_voice(t->subs, 1) != 0)
             fprintf(stderr, "intro1: no voice-over, using the timed hold\n");

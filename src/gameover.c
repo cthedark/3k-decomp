@@ -6,6 +6,7 @@
 
 #include "assets.h"
 #include "battle.h"
+#include "l10n.h"
 #include "lcz.h"
 
 enum { W = SCREEN_W, H = SCREEN_H, TILE_W = 80, TILE_H = 50, WORDS_AT = 0x6D36 - 4 }   /* 0x11626 is given the picture with its 4-byte header: row 87, column 114 */;
@@ -45,6 +46,7 @@ gameover_t *gameover_begin(const screen_t *scr)
     }
     memcpy(g->word, c.pixels + 4, (size_t)g->word_w * g->word_h);
     lcz_chunk_free(&c);
+    l10n_picture("gameover", g->word, g->word_w, g->word_h, 1);   /* the translated modes: the lettering redrawn, in its colours */
 
     /* 0x102af .. 0x1031f: the screen four times through the table, then 0x11a76 to 80 x 50 and 0x115dc into each of the 4 x 4 places */
     memcpy(g->pic, scr->pix, sizeof g->pic);

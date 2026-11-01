@@ -157,7 +157,7 @@ def main():
         (src / 'ending.c').write_text(text.replace(old, new))
         exe = WORK / 'ending_dump'
         r = subprocess.run(['cc', '-std=c99', '-O1', '-w', '-I', str(src)] +
-                           [str(src / f) for f in ('ending.c', 'assets.c', 'lcz.c', 'screen.c')] +
+                           [str(src / f) for f in ('ending.c', 'l10n.c', 'assets.c', 'lcz.c', 'screen.c')] +
                            [str(ROOT / 'tests/ending_dump.c'), '-o', str(exe)], capture_output=True, text=True)
         if r.returncode != 0:
             print(f'DOES NOT BUILD: {name}: {r.stderr.strip()[:200]}')

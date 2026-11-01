@@ -6,7 +6,7 @@ ROOT=/Users/cthedark/projects/personal/3k-decomp
 M=$ROOT/work/mut
 DATA=$ROOT/original_bin
 mkdir -p "$M"
-SRCS="src/lcz.c src/assets.c src/screen.c src/gfx.c src/title.c src/tkrand.c src/intro0.c src/intro1.c src/intro2.c src/intro3.c src/intro4.c src/intro5.c src/intro6.c src/subs.c src/slide.c src/voc.c src/voice.c src/audio.c"
+SRCS="src/lcz.c src/assets.c src/screen.c src/gfx.c src/title.c src/tkrand.c src/intro0.c src/intro1.c src/intro2.c src/intro3.c src/intro4.c src/intro5.c src/intro6.c src/subs.c src/slide.c src/voc.c src/voice.c src/audio.c src/l10n.c"
 
 fresh() { mkdir -p "$M/src" "$M/tests"; cp "$ROOT"/src/* "$M/src/"; cp "$ROOT"/tests/* "$M/tests/"; }
 run() {

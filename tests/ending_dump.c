@@ -10,6 +10,7 @@
 #include <stdlib.h>
 
 #include "assets.h"
+#include "l10n.h"
 #include "ending.h"
 
 static uint32_t crc32(const uint8_t *p, size_t n)
@@ -55,6 +56,9 @@ int main(int argc, char **argv)
         return 2;
     }
     assets_set_dir(argv[1]);
+    /* TK_LANG=en|ko: the translated modes (localization/README.md), to look at them; the checks never set it */
+    if (getenv("TK_LANG") && l10n_lang_of(getenv("TK_LANG")) > 0)
+        l10n_init((l10n_lang)l10n_lang_of(getenv("TK_LANG")), "localization");
     int n = atoi(argv[2]);
     if (getenv("ENDING_FULL"))
         full_at = atol(getenv("ENDING_FULL"));

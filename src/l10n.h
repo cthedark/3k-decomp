@@ -59,4 +59,15 @@ unsigned l10n_wrap(const char *text, unsigned width, int font, l10n_line *lines,
 int l10n_draw(const char *text, size_t len, int font, uint8_t *px, unsigned pw, unsigned x0,
               uint8_t (*cellfn)(void *ctx, unsigned gw, unsigned index), void *ctx, unsigned *end_x);
 
+/* Text drawn as pictures (the subtitles, the shouts, the title line, the game-over lettering): the translation of `id` put in place
+ * of the picture, in the normal font or, when that does not fit, the narrow one, centred across. Both return -1 and leave the picture
+ * as it is when `id` has no translation (or in Chinese), else 0.
+ * l10n_bitmap: a one-bit picture, `w` x `h` pixels, `stride` bytes a row, the most significant bit the leftmost pixel; the text's 14
+ * rows from row `y0`.
+ * l10n_picture: a picture of one byte a pixel, `w` x `h`, 0 clear. The text is scaled to the picture's height (the same factor across,
+ * less if it would not fit) when `fit` is set, else drawn at its size, centred down. Each row takes the colour the original
+ * picture's row has most (so its shading from top to bottom stays), or its most used colour for rows that had none. */
+int l10n_bitmap(const char *id, uint8_t *dst, unsigned w, unsigned h, unsigned stride, unsigned y0);
+int l10n_picture(const char *id, uint8_t *pix, unsigned w, unsigned h, int fit);
+
 #endif
