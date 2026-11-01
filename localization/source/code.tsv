@@ -1,8 +1,8 @@
-# Strings in the programs' code: code.yes: walk.c yes_no: the yes / no choice; code.no: walk.c yes_no; code.coins: walk.c F3: after the number of coins taken; code.price: walk.c walk_sell_text: before the price; code.half: walk.c walk_sell_text: before half the price; code.sell: walk.c use_sell: the question
+# Strings in the programs' code: code.yes: walk.c yes_no: the yes / no choice; code.no: walk.c yes_no; code.coins: walk.c F3: after the number of coins taken; code.price: walk.c walk_sell_text: before ":" and the price; code.half: walk.c walk_sell_text: before ":" and half the price; code.sell: walk.c use_sell: the question, before "?"
 id	bytes	zh	big5
 code.yes	2	是	ac4f
 code.no	2	否	a75f
 code.coins	6	枚金幣	aa54aaf7b9f4
-code.price	5	原價:	adecbbf93a
-code.half	5	半價:	a562bbf93a
-code.sell	7	願意嗎?	c440b74eb6dc3f
+code.price	4	原價	adecbbf9
+code.half	4	半價	a562bbf9
+code.sell	6	願意嗎	c440b74eb6dc

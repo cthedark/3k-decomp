@@ -81,12 +81,14 @@ def main(argv):
                                'to "#". Records 7, 8, 213 and 748-751 are also read as fixed fields (labels, names, card game).')
 
     # the fixed fields inside MES_TXT.LCC
-    rows = [('shop.prices', 10, mes[0x306:0x310])]
+    rows = [('shop.prices', 10, mes[0x306:0x310]),
+            ('shop.inn', 12, mes[0x3BF:0x3CB]),     # the inn's price row (walk.c, shop type 4)
+            ('shop.heal', 12, mes[0x3CB:0x3D7])]    # the healer's price row (type 3)
     rows += [(f'label.{k:02d}', 4, mes[0x386 + 4 * k:0x38A + 4 * k]) for k in range(14)]
     rows += [(f'member.{k}', 6, field(mes[0x6A06 + 6 * k:0x6A0C + 6 * k])) for k in range(50 // 6)]
     rows += [(f'card.{k}', 0x14 if k < 2 else 0x12, mes[0x17586 + 0x80 * k:0x17586 + 0x80 * k + (0x14 if k < 2 else 0x12)])
              for k in range(4)]
-    counts['fields'] = write(out, 'fields', rows, 'Fixed fields in MES_TXT.LCC: the shop strip (0x306), the button labels (0x386, '
+    counts['fields'] = write(out, 'fields', rows, 'Fixed fields in MES_TXT.LCC: the shop strip (0x306), the inn and healer price rows (0x3bf, 0x3cb), the button labels (0x386, '
                              '4 bytes = 2 characters = 32 pixels), the members\' names (0x6a06), the card game\'s lines (0x17586).')
 
     obj = read('OBJECT.LCC')
@@ -101,12 +103,13 @@ def main(argv):
                              'spell i at 200 m + 20 i.')
 
     # strings the programs hold (WALK.SL's code; the port has them as constants in src/walk.c)
+    # the strings the game puts together (coins, prices) are matched by their Chinese part alone (battle_text_pic)
     fixed = [('code.yes', 2, bytes([0xAC, 0x4F]), 'walk.c yes_no: the yes / no choice'),
              ('code.no', 2, bytes([0xA7, 0x5F]), 'walk.c yes_no'),
              ('code.coins', 6, bytes([0xAA, 0x54, 0xAA, 0xF7, 0xB9, 0xF4]), 'walk.c F3: after the number of coins taken'),
-             ('code.price', 5, bytes([0xAD, 0xEC, 0xBB, 0xF9, ord(':')]), 'walk.c walk_sell_text: before the price'),
-             ('code.half', 5, bytes([0xA5, 0x62, 0xBB, 0xF9, ord(':')]), 'walk.c walk_sell_text: before half the price'),
-             ('code.sell', 7, bytes([0xC4, 0x40, 0xB7, 0x4E, 0xB6, 0xDC, ord('?')]), 'walk.c use_sell: the question')]
+             ('code.price', 4, bytes([0xAD, 0xEC, 0xBB, 0xF9]), 'walk.c walk_sell_text: before ":" and the price'),
+             ('code.half', 4, bytes([0xA5, 0x62, 0xBB, 0xF9]), 'walk.c walk_sell_text: before ":" and half the price'),
+             ('code.sell', 6, bytes([0xC4, 0x40, 0xB7, 0x4E, 0xB6, 0xDC]), 'walk.c use_sell: the question, before "?"')]
     rows = [(i, n, b) for i, n, b, _ in fixed]
     counts['code'] = write(out, 'code', rows, 'Strings in the programs\' code: ' + '; '.join(f'{i}: {w}' for i, _, _, w in fixed))
 

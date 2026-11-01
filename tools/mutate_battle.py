@@ -1007,7 +1007,7 @@ m("walk.c", "shop: window shaded five times", "    for (int k = 0; k < 6; k++)\n
 m("walk.c", "shop: strip shaded twice", "    for (int k = 0; k < 3; k++)\n        shade(w, w->shop_a, sizeof w->shop_a);", "    for (int k = 0; k < 2; k++)\n        shade(w, w->shop_a, sizeof w->shop_a);")
 m("walk.c", "shop: first picture shown", "    put(scr, SHOP_PIC_AT, w->shop_pics + 0x1482, 70, 75);", "    put(scr, SHOP_PIC_AT, w->shop_pics, 70, 75);")
 m("walk.c", "shop: pictures of the next type", "(size_t)t * 0x3D86, w->shop_pics", "(size_t)(t + 1) * 0x3D86, w->shop_pics")
-m("walk.c", "shop: greeting not centred", "((320 - 8 * n) & 0xFFFF) >> 1", "0")
+m("walk.c", "shop: greeting not centred", "((320 - 8 * cols) & 0xFFFF) >> 1", "0")
 m("walk.c", "shop: greeting past the #", "    while (n < 0x78 && msg[n] != '#')\n        n++;", "    while (n < 0x78 && msg[n] != '#')\n        n++;\n    n += n < 0x78;")
 m("walk.c", "shop: box's shadow colour", "    fill(scr, 0x1D55, 0x61, 0x40, 0x63);", "    fill(scr, 0x1D55, 0x61, 0x40, 0x64);")
 m("walk.c", "shop: no inside", "    fill(scr, SHOP_ROW0, 0x60, 0x3F, 0xAE);\n", "")

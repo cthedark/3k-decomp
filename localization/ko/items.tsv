@@ -1,0 +1,221 @@
+# 한국어: 물품 이름 (localization/source/items.tsv). 96 픽셀: 한글 6자 (띄어쓰기는 반 칸).
+id	text
+item.001	탑탑열매
+item.002	철 열쇠
+item.003	십층강도
+item.004	땅의 휘장
+item.005	봉마검
+item.006	쇄석도
+item.007	광란클럽표
+item.008	위성 완장
+item.009	결정수
+item.010	채소볼
+item.011	종합 도시락
+item.012	고무 장갑
+item.013	에어 부츠
+item.014	가죽 모자
+item.015	구리 열쇠
+item.016	진보반
+item.017	산해포
+item.018	견과정
+item.019	마시경
+item.020	회복액
+item.021	청환
+item.022	역환
+item.023	마법 구슬
+item.024	강철 톱
+item.025	스텐 열쇠
+item.026	납나 철갑
+item.027	천원 호갑
+item.028	탐룡주
+item.029	해독기
+item.030	마법 카드
+item.031	화염 화살
+item.032	화은수
+item.033	금장 망치
+item.034	은 열쇠
+item.035	주머니원숭이
+item.036	계산기
+item.037	산화침
+item.038	동합금 투구
+item.039	낙화 열쇠
+item.040	포합금 투구
+item.041	금은 방패
+item.042	진주 방패
+item.043	현철 열쇠
+item.044	쪽지
+item.045	홍기 거성
+item.046	명장검
+item.047	고압 채소즙
+item.048	정화 꼬치
+item.049	꽃향기 술
+item.050	호피 장갑
+item.051	은사 호갑
+item.052	고무 투구
+item.053	추뢰부
+item.054	급풍 비도
+item.055	청동검
+item.056	소설책
+item.057	머리핀
+item.058	술잔
+item.059	장난감
+item.060	슬리퍼
+item.061	공구
+item.062	묵은 식초
+item.063	진주 목걸이
+item.064	수연정
+item.065	가문의 사진
+item.066	가부제 남주
+item.067	진맥양
+item.068	백화양
+item.069	금성주
+item.070	비천모
+item.071	인골 열쇠
+item.072	환안경
+item.073	피풍창
+item.076	황금 전화
+item.077	크롬 투구
+item.078	천사 장갑
+item.079	매아 통행증
+item.080	천신로
+item.081	생명의 잎
+item.082	비타민 가루
+item.083	홍월검
+item.084	비운도
+item.085	잔화 가위
+item.086	동안수
+item.087	위성 금갑
+item.088	금갑 전투구
+item.089	아백랍사 검
+item.090	수중월 보석
+item.091	돌 열쇠
+item.092	영웅 카드
+item.093	쉬련환
+item.094	초보액
+item.095	양생단
+item.096	일조 방패
+item.097	자성 방패
+item.098	녹마 방패
+item.099	산호 열쇠
+item.100	달의 휘장
+item.101	하늘의 휘장
+item.102	해의 휘장
+item.103	별의 휘장
+item.104	광능검
+item.105	삼계 전부
+item.106	매아 천궁
+item.107	양자총
+item.108	납길 법장
+item.109	환마 방패
+item.110	비운 방패
+item.111	도룡 방패
+item.112	생명 방패
+item.113	거울 방패
+item.114	용린갑
+item.115	비운 호개
+item.116	영력 갑옷
+item.117	삼계 전의
+item.118	수정 갑옷
+item.119	운사 장갑
+item.120	광능 장갑
+item.121	양자 장갑
+item.122	병신 장갑
+item.123	빙정 장갑
+item.124	용린 투구
+item.125	비운 투구
+item.126	영력 투구
+item.127	삼계 투구
+item.128	수정 투구
+item.129	요성검
+item.130	천익도
+item.131	지동부
+item.132	백화밀
+item.133	착화경
+item.134	단풍 솜털
+item.135	용면곡
+item.136	천홍향
+item.137	가람 샥스핀
+item.138	도룡주
+item.139	보라장미열쇠
+item.140	노란국화열쇠
+item.141	양심경
+item.142	신력환
+item.143	금장 자물쇠
+item.144	인도 반지
+item.146	쌍월 보석
+item.147	추원검
+item.148	열양도
+item.149	풍설장
+item.150	영환 부츠
+item.151	용동 부츠
+item.152	비운 부츠
+item.153	병신 신발
+item.154	수정 부츠
+item.155	필승 법기
+item.156	이인가 VIP증
+item.157	손잡이 열쇠
+item.158	침빙추
+item.159	결정 열쇠
+item.160	동화 단추
+item.161	십자 다이아
+item.162	다륜의 열쇠
+item.163	왕자의 사슬
+item.164	천익
+item.165	엄지 열쇠
+item.166	흑금 열쇠
+item.167	혈홍 열쇠
+item.168	추수 열쇠
+item.169	홍어 열쇠
+item.170	천수검
+item.171	수정 펜던트
+item.172	칠채 수정
+item.173	마적
+item.174	패륜의 열쇠
+item.175	유리 열쇠
+item.176	혈옥
+item.177	고선 열쇠
+item.178	홍다이아몬드
+item.179	녹다이아몬드
+item.180	청다이아몬드
+item.181	황다이아몬드
+item.182	백다이아몬드
+item.183	마수정
+item.184	자수정 열쇠
+item.185	백신초
+item.186	동력 자물쇠
+item.187	비행의 열쇠
+item.188	진주 막대
+item.189	홍화 어포
+item.190	지혜의 샘
+item.191	신굴보물지도
+item.192	용의 숨결
+item.193	돌의 뿌리
+item.194	물고기발자국
+item.195	흑월백일
+item.196	칠색 장미
+item.197	햇빛의 바람
+item.198	양머리 열쇠
+item.199	낭아추
+item.200	중철검
+item.201	현심부
+item.202	고천경
+item.203	환신령
+item.204	유룡주
+item.205	벙어리 병
+item.206	파란 열쇠
+item.211	물의 전갑
+item.212	토행갑
+item.213	바람의 투구
+item.214	바위 투구
+item.220	고전 열쇠
+item.221	물고기 열쇠
+item.222	천수검
+item.230	소나무 열쇠
+item.231	수선화 열쇠
+item.232	목각 열쇠
+item.233	대리석 열쇠
+item.234	도자기 열쇠
+item.235	붉은흙 열쇠
+item.236	진흙 열쇠
+item.241	생명의 샘
+item.242	얼음 송곳

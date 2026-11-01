@@ -3474,13 +3474,18 @@ static void shop_number(walk_t *w, screen_t *scr, unsigned at, unsigned v)
 }
 
 /* 0x243ec into the map buffer (header, then the picture), as the original leaves it; the picture in `px` */
-static void shop_text(walk_t *w, const uint8_t *s, unsigned n, uint8_t colour, uint8_t *px)
+static void shop_text_cols(walk_t *w, const uint8_t *s, unsigned n, unsigned cols, uint8_t colour, uint8_t *px)
 {
-    if (battle_text_pic(w->font8, s, n, colour, px, &w->shop_gw))
+    if (battle_text_pic_cols(w->font8, s, n, cols, colour, px, &w->shop_gw))
         note_unbuilt(w, "a character the font does not have", w->shop_si / WS_RECORD_SIZE);
     uint8_t *mb = w->zoom_grab;
-    mb[0] = (uint8_t)(8 * n), mb[1] = (uint8_t)((8 * n) >> 8), mb[2] = 14, mb[3] = 0;
-    memcpy(mb + 4, px, (size_t)8 * n * 14);
+    mb[0] = (uint8_t)(8 * cols), mb[1] = (uint8_t)((8 * cols) >> 8), mb[2] = 14, mb[3] = 0;
+    memcpy(mb + 4, px, (size_t)8 * cols * 14);
+}
+
+static void shop_text(walk_t *w, const uint8_t *s, unsigned n, uint8_t colour, uint8_t *px)
+{
+    shop_text_cols(w, s, n, n, colour, px);
 }
 
 static unsigned shop_coins(walk_t *w)
@@ -3534,8 +3539,10 @@ static void shop_open(walk_t *w, screen_t *scr, unsigned si)
     unsigned n = 0;
     while (n < 0x78 && msg[n] != '#')
         n++;
-    shop_text(w, msg, n, 0x10, px);
-    blit_nz(w->shop_a, sizeof w->shop_a, 320, ((320 - 8 * n) & 0xFFFF) >> 1, px, 8 * n, 14, -1);
+    /* a translated greeting is laid out by its own width (at most the strip's 40 columns), not the Chinese one's */
+    unsigned cols = l10n_current() == L10N_ZH ? n : battle_text_cols(msg, n, 40);
+    shop_text_cols(w, msg, n, cols, 0x10, px);
+    blit_nz(w->shop_a, sizeof w->shop_a, 320, ((320 - 8 * cols) & 0xFFFF) >> 1, px, 8 * cols, 14, -1);
     shop_text(w, msg + 0x78, 10, 0x10, px);
     blit_nz(w->shop_b, sizeof w->shop_b, 320, 0x78, px, 80, 14, -1);
     fill(scr, 0x1D55, 0x61, 0x40, 0x63);   /* 0x270e0 */

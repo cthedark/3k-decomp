@@ -1,6 +1,8 @@
-# Fixed fields in MES_TXT.LCC: the shop strip (0x306), the button labels (0x386, 4 bytes = 2 characters = 32 pixels), the members' names (0x6a06), the card game's lines (0x17586).
+# Fixed fields in MES_TXT.LCC: the shop strip (0x306), the inn and healer price rows (0x3bf, 0x3cb), the button labels (0x386, 4 bytes = 2 characters = 32 pixels), the members' names (0x6a06), the card game's lines (0x17586).
 id	bytes	zh	big5
 shop.prices	10	謝謝惠顧 !	c1c2c1c2b466c5552021
+shop.inn	12	住宿費用共: 	a6edb14ab64fa5cea6403a20
+shop.heal	12	醫療費用每人	c2e5c0f8b64fa5cea843a448
 label.00	4	交談	a5e6bdcd
 label.01	4	觀看	c65bacdd
 label.02	4	取物	a8faaaab

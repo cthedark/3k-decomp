@@ -1,0 +1,221 @@
+# English: item names (localization/source/items.tsv). 96 pixels: 12 letters, 16 in the narrow font (the most allowed).
+id	text
+item.001	Tata Fruit
+item.002	Iron Key
+item.003	Ten-Fold Blade
+item.004	Earth Badge
+item.005	Demon-Seal Sword
+item.006	Rock Knife
+item.007	Crazy Club Pass
+item.008	Wall Armband
+item.009	Crystal Water
+item.010	Veggie Ball
+item.011	Mixed Lunchbox
+item.012	Rubber Gloves
+item.013	Air Boots
+item.014	Leather Cap
+item.015	Copper Key
+item.016	Treasure Rice
+item.017	Land-Sea Bun
+item.018	Nut Essence
+item.019	Magic Lens
+item.020	Healing Potion
+item.021	Clear Pill
+item.022	Power Pill
+item.023	Magic Bead
+item.024	Steel Saw
+item.025	Steel Key
+item.026	Lana Iron Mail
+item.027	Chuanyuan Armor
+item.028	Dragon Finder
+item.029	Decoder
+item.030	Magic Card
+item.031	Fire Arrow
+item.032	Silver Solvent
+item.033	Smith's Hammer
+item.034	Silver Key
+item.035	Pocket Monkey
+item.036	Calculator
+item.037	Scatter Needles
+item.038	Bronze Helmet
+item.039	Petal Key
+item.040	Plutonium Helm
+item.041	Gold-Silver Shld
+item.042	Pearl Shield
+item.043	Black Iron Key
+item.044	Note
+item.045	Hongqi Star
+item.046	Master's Sword
+item.047	Veggie Juice
+item.048	Meat Skewer
+item.049	Flower Wine
+item.050	Tiger Gloves
+item.051	Silverwire Armor
+item.052	Rubber Helmet
+item.053	Thunder Axe
+item.054	Gale Knife
+item.055	Bronze Sword
+item.056	Novel
+item.057	Hairpin
+item.058	Wine Cup
+item.059	Toy
+item.060	Slippers
+item.061	Tools
+item.062	Aged Vinegar
+item.063	Pearl Necklace
+item.064	Beast Drool Gem
+item.065	Kawen's Photo
+item.066	Kabuti Blue Wine
+item.067	Old Barley Brew
+item.068	Hundred-Flower
+item.069	Jincheng Wine
+item.070	Flying Spear
+item.071	Bone Key
+item.072	Illusion Glasses
+item.073	Cape Lance
+item.076	Golden Boots
+item.077	Chrome Helmet
+item.078	Silk Gloves
+item.079	Maiya Pass
+item.080	Dawn Dew
+item.081	Life Leaf
+item.082	Vital Powder
+item.083	Red Moon Sword
+item.084	Cloud Blade
+item.085	Petal Shears
+item.086	Youth Water
+item.087	Wall Gold Armor
+item.088	Gold War Helm
+item.089	Yabolasi Sword
+item.090	Water-Moon Gem
+item.091	Stone Key
+item.092	Hero Card
+item.093	Temper Pill
+item.094	Super Tonic
+item.095	Health Elixir
+item.096	Sunlight Shield
+item.097	Violet Star Shld
+item.098	Green Demon Shld
+item.099	Coral Key
+item.100	Moon Badge
+item.101	Sky Badge
+item.102	Sun Badge
+item.103	Star Badge
+item.104	Light Sword
+item.105	Three-Realm Axe
+item.106	Maiya Sky Bow
+item.107	Quantum Gun
+item.108	Laji Staff
+item.109	Phantom Shield
+item.110	Cloud Shield
+item.111	Dragonslayer Shd
+item.112	Life Shield
+item.113	Mirror Shield
+item.114	Dragon Scale
+item.115	Cloud Armor
+item.116	Spirit Armor
+item.117	Three-Realm Garb
+item.118	Crystal Armor
+item.119	Cloudsilk Gloves
+item.120	Light Gloves
+item.121	Quantum Gloves
+item.122	War God Gloves
+item.123	Ice Gloves
+item.124	Dragon Helm
+item.125	Cloud Helmet
+item.126	Spirit Helmet
+item.127	Three-Realm Helm
+item.128	Crystal Helmet
+item.129	Starshine Sword
+item.130	Sky Wing Blade
+item.131	Quake Axe
+item.132	Flower Honey
+item.133	Crossflower Stem
+item.134	Maple Down
+item.135	Dragon Lullaby
+item.136	Crimson Incense
+item.137	Kalan Shark Fin
+item.138	Dragonslayer Orb
+item.139	Purple Rose Key
+item.140	Chrysanthemum Ky
+item.141	Mirror of Truth
+item.142	God Power Pill
+item.143	Smith's Lock Key
+item.144	Blade Ring
+item.146	Twin Moon Gem
+item.147	Autumn Sword
+item.148	Blazing Sun Sabr
+item.149	Blizzard Staff
+item.150	Phantom Boots
+item.151	Dragon Boots
+item.152	Cloud Boots
+item.153	War God Shoes
+item.154	Crystal Boots
+item.155	Sure-Win Charm
+item.156	Liyinka VIP Pass
+item.157	Handrail Key
+item.158	Ice Spike
+item.159	Crystal Key
+item.160	Frozen Fire Clip
+item.161	Diamond Cross
+item.162	Duolun's Key
+item.163	King's Chain
+item.164	Sky Wing
+item.165	Thumb Key
+item.166	Black Gold Key
+item.167	Blood-Red Key
+item.168	Autumn Water Key
+item.169	Red Fish Key
+item.170	Sky Water Sword
+item.171	Crystal Pendant
+item.172	Rainbow Crystal
+item.173	Magic Flute
+item.174	Beilun's Key
+item.175	Glass Key
+item.176	Blood Jade
+item.177	Old Ship Key
+item.178	Red Diamond
+item.179	Green Diamond
+item.180	Blue Diamond
+item.181	Yellow Diamond
+item.182	White Diamond
+item.183	Magic Crystal
+item.184	Amethyst Key
+item.185	Hundred-God Herb
+item.186	Power Lock
+item.187	Flight Key
+item.188	Pearl Rod
+item.189	Dried Redfish
+item.190	Wisdom Spring
+item.191	Cave Treasure Mp
+item.192	Dragon's Breath
+item.193	Root of Stone
+item.194	Fish's Footstep
+item.195	Black Moon Day
+item.196	Rainbow Rose
+item.197	Sunlight Wind
+item.198	Ram's Head Key
+item.199	Wolf-Tooth Mace
+item.200	Heavy Iron Sword
+item.201	Heart Charm
+item.202	Heaven Mirror
+item.203	God-Call Bell
+item.204	Dragon Lure Orb
+item.205	Mute Bottle
+item.206	Blue Key
+item.211	Water Armor
+item.212	Earth Armor
+item.213	Wind Helmet
+item.214	Rock Helmet
+item.220	Antique Key
+item.221	Fish Key
+item.222	Hanging Sky Swd
+item.230	Pine Key
+item.231	Narcissus Key
+item.232	Carved Wood Key
+item.233	Marble Key
+item.234	Porcelain Key
+item.235	Red Clay Key
+item.236	Yellow Mud Key
+item.241	Spring of Life
+item.242	Ice Drill

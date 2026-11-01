@@ -2,3 +2,7 @@
 id	text
 code.yes	Y
 code.no	N
+code.coins	coins
+code.price	Price
+code.half	Half
+code.sell	Sell it

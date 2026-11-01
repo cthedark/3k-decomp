@@ -1,0 +1,52 @@
+# English: spell names (localization/source/spells.tsv). 96 pixels: 12 letters, 16 in the narrow font.
+id	text
+spell.0.0	Qi Arrow
+spell.0.1	Gather Spirit
+spell.0.2	Stardust
+spell.0.3	Star Afterimage
+spell.0.4	Dark God
+spell.0.5	Spirit Barrier
+spell.0.6	Thousand Rainbow
+spell.0.7	Heart of Baye
+spell.0.8	Hongqi Strike
+spell.0.9	Dakelitan Curse
+spell.1.0	Wind Demon
+spell.1.1	Forest Stir
+spell.1.2	Mountain Spirit
+spell.1.3	Thunderfire
+spell.1.4	Shatter Stone
+spell.1.5	Heaven's Ward
+spell.1.6	Herb Essence
+spell.1.7	Mountain Mist
+spell.1.8	Spirit Change
+spell.1.9	Three-Realm God
+spell.2.0	Water Blade
+spell.2.1	Thousand Leaves
+spell.2.2	Cure Poison
+spell.2.3	Red Shift
+spell.2.4	Fire Cloud
+spell.2.5	God of the East
+spell.2.6	Qiankun Wave
+spell.2.7	Lightning Burn
+spell.2.8	All-Out Strike
+spell.2.9	Sky Change
+spell.3.0	Moonlight
+spell.3.1	Ice Blossom
+spell.3.2	Rending Wind
+spell.3.3	Clear Sea Wave
+spell.3.4	Silence Wind
+spell.3.5	Twin Moon Doom
+spell.3.6	Calm in Waves
+spell.3.7	Heaven's Sun
+spell.3.8	Five-Star Flame
+spell.3.9	Ethereal
+spell.4.0	Blooming Hand
+spell.4.1	Heartbreaker
+spell.4.2	Melting Steam
+spell.4.3	Chaos Break
+spell.4.4	Thousand Poisons
+spell.4.5	Flying Dragon
+spell.4.6	Moon Dragon
+spell.4.7	Earth Dragon
+spell.4.8	Fire Dragon
+spell.4.9	Sun Dragon

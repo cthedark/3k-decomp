@@ -107,6 +107,11 @@ size_t battle_glyph_offset(unsigned hi, unsigned lo);
 /* 0x243ec: `n` bytes of text as an (8 n) x 14 picture `px` in `colour` (font8: RPG.LCP 0x1a6b7; Big5 pairs from NUMBER.LCZ); the last
  * character's width in *last_gw. Returns 1 when a character the font does not have was drawn blank. See battle.c. */
 int battle_text_pic(const uint8_t *font8, const uint8_t *s, unsigned n, uint8_t colour, uint8_t *px, unsigned *last_gw);
+/* The translated modes (localization/README.md): the 8-pixel columns the translation of the `n` bytes at `s` needs, at most `max`
+ * (`n` when there is none); and battle_text_pic into an (8 cols) x 14 picture (the original's n x 8 when there is no translation). */
+unsigned battle_text_cols(const uint8_t *s, unsigned n, unsigned max);
+int battle_text_pic_cols(const uint8_t *font8, const uint8_t *s, unsigned n, unsigned cols, uint8_t colour, uint8_t *px,
+                         unsigned *last_gw);
 /* N bytes at POS of the data file NAME run-length decoded (0x25eeb); malloc'd, its length in *len; NULL (and a message) on failure. */
 uint8_t *battle_read_unpack(const char *name, size_t pos, size_t n, size_t *len);
 /* (0x130e2 .. 0x13246) A party record's level-up after a won battle: when its experience (word 4) has reached the next level's

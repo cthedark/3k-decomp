@@ -1244,18 +1244,79 @@ static uint8_t text_cell(void *ctx, unsigned gw, unsigned index)
     return index < 2 * split ? (uint8_t)(colour + 1 + index / split) : colour;
 }
 
-int battle_text_pic(const uint8_t *font8, const uint8_t *s, unsigned n, uint8_t colour, uint8_t *px, unsigned *last_gw)
+/* The translation of the `n` bytes at `s`: by the bytes themselves, or, for a string the game puts together (a number and a word,
+ * as "  10 枚金幣"), its ASCII as it is and each run of Big5 characters by its own translation (none when a run has none). Into
+ * `built` (cap bytes) when put together. NULL in Chinese or when there is none. */
+static const char *text_translation(const uint8_t *s, unsigned n, char *built, size_t cap)
 {
-    unsigned w = 8 * n, x = 0;
-    int missing = 0;
     const char *t = l10n_big5(s, n);
-    if (t) {   /* a translation in the same 8 n x 14 picture: the narrow font when the normal one does not fit */
+    if (t || l10n_current() == L10N_ZH)
+        return t;
+    size_t o = 0;
+    unsigned i = 0;
+    int ok = 0;
+    while (i < n && o < cap - 1) {
+        if (s[i] < 0x80) {
+            built[o++] = s[i] >= 0x20 && s[i] < 0x7F ? (char)s[i] : ' ';
+            i++;
+            continue;
+        }
+        unsigned j = i;
+        while (j + 1 < n && s[j] >= 0x80)
+            j += 2;
+        const char *r = l10n_big5(s + i, j - i);
+        if (!r || o + strlen(r) >= cap - 1)
+            return NULL;
+        memcpy(built + o, r, strlen(r));
+        o += strlen(r);
+        ok = 1;
+        i = j;
+    }
+    built[o] = 0;
+    while (o && built[o - 1] == ' ')   /* trailing spaces, as the lookup ignores them */
+        built[--o] = 0;
+    return ok ? built : NULL;
+}
+
+unsigned battle_text_cols(const uint8_t *s, unsigned n, unsigned max)
+{
+    char built[256];
+    const char *t = text_translation(s, n, built, sizeof built);
+    if (!t)
+        return n;
+    size_t len = strlen(t);
+    unsigned w = l10n_width(t, len, L10N_FONT_NORMAL);
+    if (w > 8 * max)
+        w = l10n_width(t, len, L10N_FONT_NARROW);
+    unsigned cols = (w + 7) / 8;
+    return cols > max ? max : cols ? cols : 1;
+}
+
+int battle_text_pic_cols(const uint8_t *font8, const uint8_t *s, unsigned n, unsigned cols, uint8_t colour, uint8_t *px,
+                         unsigned *last_gw)
+{
+    char built[256];
+    const char *t = text_translation(s, n, built, sizeof built);
+    if (t) {   /* a translation in a 8 cols x 14 picture: the narrow font when the normal one does not fit */
+        unsigned w = 8 * cols;
         size_t len = strlen(t);
         int font = l10n_width(t, len, L10N_FONT_NORMAL) <= w ? L10N_FONT_NORMAL : L10N_FONT_NARROW;
         memset(px, 0, (size_t)w * 14);
         int r = l10n_draw(t, len, font, px, w, 0, text_cell, &colour, NULL);
         *last_gw = font == L10N_FONT_NARROW ? 6 : 8;
         return r != 0;
+    }
+    return battle_text_pic(font8, s, n, colour, px, last_gw);
+}
+
+int battle_text_pic(const uint8_t *font8, const uint8_t *s, unsigned n, uint8_t colour, uint8_t *px, unsigned *last_gw)
+{
+    unsigned w = 8 * n, x = 0;
+    int missing = 0;
+    if (l10n_current() != L10N_ZH) {
+        char built[256];
+        if (text_translation(s, n, built, sizeof built))
+            return battle_text_pic_cols(font8, s, n, n, colour, px, last_gw);
     }
     memset(px, 0, (size_t)w * 14);
     for (unsigned i = 0; i < n; i++) {

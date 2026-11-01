@@ -89,9 +89,20 @@ playing.
   text fits its room (labels 32 pixels, yes / no 16, names their bytes x 8 or the narrow font, items and spells also at most 16
   characters, menu items 120, subtitles their picture's width). It also counts the message boxes.
 - `glossary.tsv`: the names and terms used so far.
-- Sample translated (both languages): the buttons, yes / no, the members' names, the menu, messages 1-3 (shops), 10-12 and 13-46
-  (scene 0's villagers, the legend and the father's letter).
+## The translations (step 3, done 2026-11-01)
+Both languages: every message with text (760; not 8, 213 and 748-751, which are the tables of `fields`, nor 108 and 336, which
+are not words, nor the empty 708), every item (219) and spell (50), every field (the buttons, names, card game lines, shop strips,
+the inn's and healer's price rows) and the programs' own strings: 1,065 texts each, all passing `l10n_check`. Drafted from the
+Chinese by Kiro; to be read through by the operator while playing.
+- Names follow the rule (pinyin; Korean readings), listed in `glossary.tsv`. Some Korean readings are also ordinary words (娜蒂
+  나체 "nude", 莎坦 사탄 "Satan", 貝倫 패륜 "immorality", 卡文 가문 "family") and some names are Norse names in Chinese (耶夢加得
+  Jormungandr, 芬麗絲 Fenrir, 尼德赫克 Nidhogg, 赫拉 Hel, 洛奇 Loki): marked "(?)" there, for the operator to decide.
+- Spells: English by meaning, Korean by the Sino-Korean reading of the characters.
+- Strings the game puts together (the coins F3 shows, a sale's prices) are translated piece by piece: `battle_text_pic` takes the
+  ASCII as it is and each run of Chinese by its own entry (`code.coins`, `code.price`, `code.half`, `code.sell`).
+- The shop's greeting strip is laid out by the translation's width (`battle_text_cols`, at most 40 columns), not the Chinese one's.
+- `l10n_check` also checks: the boxes that do not wait (sellers, askers, bosses and the system prompts: the list is in the check,
+  from `tools/l10n_nowait.py`) get one box of three rows; a shop's greeting (messages 1-6) fits its 320-pixel strip.
 
 ## Next
-3. The translations: the rest of the messages (by scene, with the glossary), the items and spells, the card game's lines.
-4. The pictures: the subtitles, shouts, title line and game over; the shop's greeting strip.
+4. The pictures: the intro and ending subtitles, the battle's shouts, the title line and the game-over lettering.

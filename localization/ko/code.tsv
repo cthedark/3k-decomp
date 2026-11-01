@@ -2,3 +2,7 @@
 id	text
 code.yes	O
 code.no	X
+code.coins	금화
+code.price	원가
+code.half	반값
+code.sell	팔래요

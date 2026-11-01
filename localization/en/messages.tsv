@@ -2,8 +2,13 @@
 # A record whose Chinese ends in {7f} is followed by the next one in the same talk: the split between them may move. \n breaks a row.
 id	text
 msg.0001	Welcome! Care to buy something to eat?
-msg.0002	Come, come, young one! Buy some weapons! Mine are the finest!
+msg.0002	Come, young one! Buy weapons! Mine are the best!
 msg.0003	Welcome, welcome! Buy some armor to protect yourself!
+msg.0004	Welcome! Need healing, or a cure for poison?
+msg.0005	Welcome! Welcome! Would you like to stay the night?
+msg.0006	Hello! I buy used goods. Anything to sell me?
+msg.0007	Thank you!
+msg.0009	Enter a number?
 msg.0010	Sorry! That number is not right!
 msg.0011	Too much! You can't carry any more!
 msg.0012	Maiyin Corridor
@@ -41,3 +46,718 @@ msg.0043	A painting signed Sangdesi. A line beside it reads: "Painted by Sangdes
 msg.0044	Sangdesi: If you are reading this letter, something must have happened. Whatever happens, listen to your father: put your own safety first in everything, and never go
 msg.0045	wandering about looking for me. There are fifty gold coins in the chest; use them to buy food until I return. Finally, I must tell you that I am really a Wall Knight. The Wall Knights were the
 msg.0046	strongest guard of the Bangpei Empire's last king, every one a brave warrior. So trust me: before long I will settle this and come home safely.\n                       - Your father, Sangruike
+msg.0047	Sangdesi: If you are reading this letter again, I must have met something I could not overcome. Perhaps I have met misfortune, or I am trapped and cannot get away, but.....
+msg.0048	there are things I must tell you. First: I am not your real father. Forgive me, I cannot tell you yet who your father is, for that would put your life in danger.
+msg.0049	Second: you must have heard the legend of the Warriors of the Five Directions. Yes, it is true. The chest holds the badge the Earth Warrior wore. I hope it helps you understand the
+msg.0050	source of their power. Third: if I meet misfortune, or if you are willing to help me, first make yourself strong. Take the Demon-Seal Sword to Mount Yabolasi and find my comrade, Mr. Jianuo.
+msg.0051	He will help you.\n                          Be safe!\n                                   Father
+msg.0052	Proclamation of King Maiya: Whoever rescues the princess shall receive the treasures of the realm, the "Sword of Maiya" and the "Silverheart Sword".\n                   King Maiya, Eding III
+msg.0053	Forbidden in this city: (1) carrying or selling weapons; (2) cheating or stealing from others; (3) harming others; (4) dealings with the demon world.
+msg.0054	Extra, extra! A crazy show at the Crazy Club! Liyinka Empire Crazy Club tickets: today only 15 gold coins each!
+msg.0055	In the east, underground, a dragon; in the west, in the sky, an ox; on the southern island, money galore; in the northern cave, a stone. What this poem means, I hope you can solve.
+msg.0056	I just got back from Liyinka, south of the Maiyin Strait. It's simply... well, you'll only know when you go and see for yourself!
+msg.0057	Did you know a magical seven-colored bird lives on Mount Qichong in the north? They say the mountain has seven levels, and on each lives a strange bird of a special color.
+msg.0058	In Liezhidun someone rescued an old man from the sea. He says he lives on an island in the underground sea. That island... he called it Yisite or something. Amazing!
+msg.0059	In the yellow sands of the south it is hot and dry all year, so indoor pastimes thrive. The frozen north tests one's endurance; hermits love to go there to train body and mind.
+msg.0060	They say in the frozen north there is a wise old man who has locked himself in an ice cave. Who knows what it takes to open the cave's door.
+msg.0061	Dazhou's companions say that if you could find the legendary Phantom Shield, dealing with Wugeer's fire dragon would not be so hard.
+msg.0062	If you see Old Zhou's eldest son Dazhou, tell him to come home soon.
+msg.0063	They say humans once could use magic too, but the turmoil of the Wuta upheaval made them forget how. Legend says that whoever is awakened by the Gate of Magic can cast spells again.
+msg.0064	Some say the Gate of Magic was lost in the Maiyin Corridor. I wonder if it can be found there.
+msg.0065	The hermits of Mount Yabolasi are all historians or experts. If you could get to know them, you would surely learn a great deal.
+msg.0066	The Wall Knight who set out the day before yesterday to find the princess was Sangruike, a farmer from Sangya Village! The Maiya Empire is full of hidden talent.
+msg.0067	Thirty years ago a man also came from the underworld. He said the red-shift death point of the Five-Ring stars is the entrance to the sea beneath the sea. What red shift? What sea beneath the sea? So strange!
+msg.0068	I hear your father went to the city of Liezhidun to find a seer, looking for clues to rescue the princess.
+msg.0069	Little one, you can't play around in the palace! Off with you.
+msg.0070	Come in!
+msg.0071	Long time no see, Take! So this is the son of Sangruike the Wall Knight? I'm sure you will bring the princess back.
+msg.0072	Hello, Take! The new guard at the door probably doesn't know you!
+msg.0073	So you're Sangdesi! Hmm.. you're quite handsome!.... Our princess likes Take, you know!.. Oh, and they say Kaisalin of the Dragon Kingdom is a beautiful woman warrior. Hmm.... maybe you two......
+msg.0074	You may have Take with you, but unless you give me the Wall Knight's armband, how do I know you're Sangruike's son?
+msg.0075	Good lad, you truly are a hero's son. Behind the pillar to the right of the throne, Sangruike left you a key to your house.
+msg.0076	The two thousand spies I sent out report: Nadi, the mage-priest of Bangpei three thousand years ago, had her soul sealed by the lord of the Five-Direction Warriors, but lately an ignorant boy named Kawen has used star-demon
+msg.0077	sorcery to undo the seal. Having lost her body, Nadi seized the princess and bound her soul to her. Sangdesi, you must help me rescue the princess!
+msg.0078	Legend says the moon god Haosiping of the bright moons Nidu and Nilun was born when the moons stood highest.
+msg.0079	Yet the distance and power of the two moons are set in the Sign of the Moon. To open the Sign of the Moon you need the pattern magnifier invented by Dr. Maiken.
+msg.0080	A worn-out picture of the dragon god.
+msg.0081	The Gate of Magic exists to bring back mankind's memory of the spirit force. Here, in the name of Nigula, the father of magic, may magic be reborn....
+msg.0082	The way of magic is to command heaven, earth, sun and moon........ to take the spirit of all things as one's own spirit, and the power of spirit as one's own power....... The power of magic is not absolute, but absolutely relative.
+msg.0083	The stronger one's spirit force, the stronger one's magic........ This gate only awakens; to rise further, wait for a chance meeting in days to come.\n   Written by Moxi, the 34th of the 13th month, Ya Era 1345
+msg.0084	!!!
+msg.0085	Hmm! You found the Gate of Magic and gained its power? You have learned the basic spell, the art of shaping qi into arrows, but your spirit force is still too weak to cast spells well. Spirit force
+msg.0086	is raised in three ways: by finding and eating the 125 Magic Beads that Nigula, the father of magic, refined from his own strength and power; by taking rare medicines; and by lucky chance.
+msg.0087	Of the three, the Magic Beads are easiest to get. They once lay on the altar of the temple in the sky. But three thousand years ago Dakelitan, empress of the super-civilized Zhunaer Empire, and Nadi led
+msg.0088	the White Rose Legion; their battle at Mount Mata shook the temple and overturned the altar, and the beads scattered over the land. So people can pick them up and grow in magic. That is all. May Nigula be with you.
+msg.0089	I am the captain of the Maiya royal guard. I just found the Gate of Magic here and learned magic. Want to travel with me? Why not find the Gate of Magic first, and come back to me once you have learned magic?
+msg.0090	Hmm! Your magic has grown. You really want me to come with you? All right! You look noble and sincere enough. I accept. I swear as captain of the Maiya royal guard:
+msg.0091	I will travel with the hero Sangdesi and work with him without selfishness. If my heart is not as pure and selfless as the bright moons Nidu and Nilun, may the great sun Ade burn me to death. Sworn, Take.
+msg.0092	But Sangdesi, we are both still too weak. I found that this cave has a secret room. Maybe the steel saw I found can open it, and we'll see if there is anything useful inside.
+msg.0093	Mount Qichong
+msg.0094	Mount Qichong has seven levels inside, each floor a fathom thick, stacked like a tower; it is also called Seven Tower Mountain. Legend says the Lord of Gods appointed the five heavenly gods here and taught the ageless Yueke the way of wisdom.
+msg.0095	The first level: thirteen fathoms high
+msg.0096	Hello! Did you bring anything to eat? I'd love a bite of my favorite, a veggie ball.
+msg.0097	Wow! Thank you so much! From last year to this year I haven't eaten a thing for twenty-five whole months!
+msg.0098	The second level: seven fathoms high
+msg.0099	This place was once praised by the gods and loved by all. Alas! Where are those days? Where are those days!... The Dragon Finder in the chest may help you. Far in the east, underground, lives a great dragon;
+msg.0100	use the Dragon Finder to lure it out, then put it to sleep with the Dragon Lullaby, and you can easily do away with Dageng the fire dragon.
+msg.0101	Hello!
+msg.0102	The third level: nine fathoms high
+msg.0103	2..1193..45...x.265.... Hey! Did you bring a calculator?
+msg.0104	Hmm!...Ah! So 48276 is the distance from the planet Maiya to the great sun Ade! I must write this discovery down... Thank you so much for the calculator. To thank you....
+msg.0105	I'll give you these four decoders as a keepsake. A decoder can open any electronic lock!
+msg.0106	If you meet anyone who has worked out the distance between the two moons Nidu and Nilun, don't forget to come back and tell me.
+msg.0107	The Spring of Wisdom is in the city of Limuya. If you go there, be careful: the way is very dangerous.
+msg.0109	Mount Qichong summit database ID 1785. See the database for the details below:
+msg.0110	Kaluoan I 1967 Fenni 2615 Dakelitan 2831 Xindeli 3698 Hudu 2836 Nadi 2830 Mata 2751 Luokete 5674 Mier 8510 Lunduosi 8731
+msg.0111	Kaluoan I 1967 Fenni 2615 Dakelitan 2831 Xindeli 3698 Hudu 2836 Nadi 2830 Mata 2751 Meilani 5674 Mier 8510 Lunduosi 8731
+msg.0112	The fourth level: eleven fathoms high
+msg.0113	The Coral Bird is out on business.
+msg.0114	The fifth level: ten fathoms high
+msg.0115	No wonder you could break my attack. Whoever wears the badge of the Moon War God must have an unyielding will and grow stronger with every fight. I hope you find your other companions.
+msg.0116	I got the Magic Card last year from Luoqi in the city of Liezhidun. It can judge the good and bad in people's hearts, and lately it is the pass for getting in and out of Liezhidun.
+msg.0117	Come in!
+msg.0118	The sixth level: eight fathoms high
+msg.0119	You must show the Mirror of Truth to prove your hearts are honest. Only then can I let you into the seventh level to see Beiluo, King of All Birds.
+msg.0120	Mount Qichong: eighteen fathoms high
+msg.0121	I am Beiluo, the seven-colored bird who came to Hongqi forty thousand years ago with the heavenly folk. In your short lives, everything of you high humans is as brief and fragile as foam. Gede believed that if
+msg.0122	human life could go on and on, the peace-loving nature of the high humans would surely create a heaven on earth. So he left a secret art, hoping the destined would learn it and pass it on.
+msg.0123	But the first to obtain it, a woman mage-priest, broke the gods' plan for an ideal land, and the gods took the art back. Yet Nadi had already passed it to the seven witch lords who followed her....
+msg.0124	They are: the Great Serpent, Yemengjiade; the White Wolf, Fenlisi; Evil Water, Gealun; Upheaval, Lanen; Despair, Nidehek; Death, Hela; Wickedness, Luoqi. Alas! Humans... such selfish, foolish,
+msg.0125	conceited creatures, dreaming of having everything. Little do they know that though the gods agreed never again to meddle in the world, they long ago left a hidden move in reserve.
+msg.0126	The beastmen's iron works. No one but beastmen may enter! Trespassers die!
+msg.0127	I'm a metalsmith from Yatelan. The beastmen caught me and brought me here twenty-five years ago.. you.... do you have the Illusion Glasses, so I can see the world outside?
+msg.0128	Thank you! Here is a Silver Key; you can open the secret room here with it. Inside are a precious arrow and a bottle of Silver Solvent. The Silver Solvent is especially precious, for it can melt
+msg.0129	anything made of silver. It is a rare medicine. I think it will be useful in your adventures; keep it safe.
+msg.0130	If you pass through Yatelan, would you give this Smith's Hammer to the owner of the "First Metal Shop"? The Yatelan Empire is also called the Land of Smiths; its blacksmiths can easily forge any metal thing.
+msg.0131	Hello!
+msg.0132	Welcome to the City of Gold ---- the Waiyinka Empire
+msg.0133	From today the palace holds the Nine-Square Maze contest. Each stage cleared wins a treasure chest; the final winner may visit the mysterious Tomb of Xigula ---- the Golden Tomb.   King Wasika
+msg.0134	Congratulations to Sangdesi for solving the Nine-Square Maze!!   King Wasika
+msg.0135	Would you like to challenge my Nine-Square Maze? Come and play in the maze behind me!
+msg.0136	I'm sure we will meet again!
+msg.0137	The Sure-Win Charm is a wonder of the world; I won't just give it to you. You must trade it for the Blood Jade of the Glass Palace.
+msg.0138	This is the Sure-Win Charm. It can be used only once; make it count.
+msg.0139	Welcome, look around as you like!
+msg.0140	Come in! Welcome to the Nine-Square Maze contest.
+msg.0141	!!!
+msg.0142	Welcome to the first level of the Maze! You must first defeat me, then solve my riddle, to pass.
+msg.0143	First level, an easy one! What is the total area of the Hongteluo continent, in square km?
+msg.0144	Please go on to the next level!
+msg.0145	Here is a door made of silver. If you can find a way to open it, you pass. And you get a Pocket Monkey, which opens the gate of Mount Qichong.
+msg.0146	Please go on to the next level!
+msg.0147	Enter the underground treasure room no one can solve!
+msg.0148	Tell me, how high is the moon?
+msg.0149	Please go on to the next level!
+msg.0150	Enter the underground treasure room no one can solve!
+msg.0151	How far does sunlight travel?
+msg.0152	Please go on to the next level!
+msg.0153	Enter the underground treasure room no one can solve!
+msg.0154	In which month each year do the sun and moon rise together?
+msg.0155	On which day of the 13th month do the sun and moon rise together?
+msg.0156	Please go on to the next level!
+msg.0157	Enter the underground treasure room no one can solve!
+msg.0158	You must place fifty gold coins in "the Sunlight Wind" as the key.
+msg.0159	Please go on to the next level!
+msg.0160	Enter the underground treasure room no one can solve!
+msg.0161	The spark that overturned the world was the affair of the horn. In what year of the Ya Era did it happen?
+msg.0162	Please go on to the next level!
+msg.0163	Enter the underground treasure room no one can solve!
+msg.0164	The home of Baye, the earth god?
+msg.0165	Please go on to the next level!
+msg.0166	Enter the underground treasure room no one can solve!
+msg.0167	By your reckoning, about how big is the planet Hongqi?
+msg.0168	Please go on to the next level!
+msg.0169	Enter the underground treasure room no one can solve!
+msg.0170	The god of books ---- the Tomb of Xigula
+msg.0171	Heaven's Notes, page 304 .... set Hongqi upon the Laji Staff ....
+msg.0172	Spirit Pool
+msg.0173	Little brother, you're here to dig for gold too! I'm afraid you'll be let down. "City of Gold" only means people here have lots of money, so folks like me come to do a bit of business and earn some.
+msg.0174	Arena
+msg.0175	Don't miss it! The toughest armor is sold only here.
+msg.0176	They say somewhere in the palace a heap of gold left by Xigula is hidden, with a ruby as big as a fist. No one has found them to this day.
+msg.0177	You're too old for toys, but you could buy one as a gift. Only nine gold coins each. Want one?
+msg.0178	A master knows quality at a glance! The sharpest weapons at the lowest prices; after today, never again. Don't miss your chance!
+msg.0179	In a few days it's the day the sun and moon rise together.... you two.... hey! Shouldn't you find a girl to celebrate with!
+msg.0180	Today only: get the strongest attack power!
+msg.0181	A novel by a famous author, only twenty-two gold coins. Buy one?
+msg.0182	Got a girlfriend? Buy her a hairpin! Only eleven gold coins each!
+msg.0183	Buy a wine cup and have yourself a drink! Only eighteen gold coins each!
+msg.0184	What do you have for me?
+msg.0185	Thanks, big spender!
+msg.0186	I've been racking my brain for a gift for tomorrow's Couples' Day at mid-month. Hmm! A hairpin.... a pin for hair, two people as close as hair on one head. So romantic, so original!
+msg.0187	Your hairpin has set my wife and me at odds. He said three people are as close as hair; she said either I'm cheating or I don't trust her. Sigh!
+msg.0188	I don't want to talk to you. Go away!
+msg.0189	Don't think I'll talk to you just because you're handsome!
+msg.0190	Thank you, handsome!
+msg.0191	Maybe this toy will stop my child crying. Sigh! Lately I often hear children's voices from the sky, saying: stars floating in the sky, fell off the slide.. I'm probably just jumpy.
+msg.0192	Hello, Sangdesi!
+msg.0193	Young man, don't stand there in the way of my drinking!
+msg.0194	A drink, a drink! I was just looking for a cup to pour that bottle of Moben's, the best wine in the world, brewed from tata fruit. Thank you so much!
+msg.0195	Thank you, good lad!
+msg.0196	In the chest is a bottle of aged vinegar, good for beauty. Could you take it to Natasha, the owner of the Sword Lodge? I promised it to her but keep forgetting to send it.
+msg.0197	Young man, good people are never lonely!
+msg.0198	You want to give me something?
+msg.0199	Sangya Village
+msg.0200	Wow! Thank you! I love reading! Teacher says the great Xigula loved reading too, and that's how he invented the way to turn water into gold. Did you know he is also called the god of books!
+msg.0201	And the book says: on the middle day of each year the sky is half dark and half light, and the sun and the moon are in the sky at once. How wonderful!
+msg.0202	Hello, Sangdesi!
+msg.0203	I'm Censun. My luck has been terrible lately. The money I just made was all lost again in two days. I've heard about you.. actually I'm a warrior's descendant too, but I can't go with you....
+msg.0204	because... because... gambling ruined me. Never mind! In this chest is the badge of the Moon War God. Never mind whose favor it costs me, I'll sell it to you for just two hundred gold coins. All right?
+msg.0205	It's in the chest; take it yourself. And since you paid so readily, I'll throw in the pearl necklace in the other chest.
+msg.0206	Wow! Wonderful! Thank you so much! What's in that chest is yours. Hey! If you meet the white-haired man, don't say I gave it to you, or I'm done for.
+msg.0207	Remember: on the 35th of the 14th month, the moon god's birthday, polish the badge and hold it up to the moon to gain the moon's power.
+msg.0208	Crime scene, keep out. Wanted: the suspect Kawen, who fled after killing his parents. For crimes so great he is to be killed on sight, as a warning to all.   King Wasika
+msg.0209	A photograph, signed beneath: Kawen.
+msg.0210	Welcome to the Land of Hope ---- the Liyinka Empire
+msg.0211	People are great because of dreams, and live because of hope. This city has the best chances to help you realize your dreams and reach your hopes.   King Adaer
+msg.0212	This is very important to you; please keep it!
+msg.0214	The palace grounds: only those with a VIP pass may enter the palace to seek hope.
+msg.0215	You want the secret of the Plunge Tunnel?!?.... You must gamble with me for everything you have. Only if you win will I tell you the secret.... But you have only one chance in two hundred of winning.
+msg.0216	King Adaer's mouth curled into a sly smile.... Beat the King of the Gambling Land? Ha! Madness.... another fat sheep walking in by itself... The king laughed happily, ha! ha! ha......
+msg.0217	Sangdesi and the others dragged their heavy feet, doubting their luck more with every step: could it last?! As the king's cruel laughter rang out, cold sweat and fear gripped every heart.
+msg.0218	Duty and mission at last woke their courage. When the heroes' readiness to die rose to their brows, that mighty spirit was enough to chill anyone. Adaer's sly grin vanished; cold sweat ran down his neck.
+msg.0219	Notice: the area of the Hongteluo continent
+msg.0220	....Oh! I can't believe you won!.... You... you may take the armrest off the throne; it is the Handrail Key that opens the secret of the Plunge Tunnel.... I, I,... boo! hoo! hoo! hoo!
+msg.0221	Y-you again? What do you want?!?!?!
+msg.0222	Shatan, my love. I hope you remember our vows.   Yalike
+msg.0223	Sang'er: three tiger beasts have rushed down Seven Tower Mountain!   The hateful dancer
+msg.0224	Old Wu: I know you love the Kabuti blue wine here, but don't forget our redfish appointment.   Old Bei
+msg.0225	Farewell, my dear gambler!
+msg.0226	Interested in a God Power Pill that adds 10% to your attack? Only 30 gold coins each.
+msg.0227	The club's Yinka dance is the most beautiful dance on all of Hongqi. Look: their costumes and moves stand for Hongqi's ideal of the three realms living together in peace.
+msg.0228	It's so unfair. Why are those who are weak and don't know violence always bullied? Being human, are we worth less than the brutish, ignorant, stupid monsters of Mount Wuta?
+msg.0229	I'm the finest cook in the land and have tasted every delicacy, yet I've never eaten the legendary Kalan shark fin. Wow! They say eating it doubles your life force.
+msg.0230	The kitchen is no place for you!
+msg.0231	Menluo is a big fool who only likes barley fruit
+msg.0232	There's only one iron pot
+msg.0233	Kawen was here.. stupid humans
+msg.0234	Taluofu is a boring liar
+msg.0235	The dragon Dageng harms the world; it must be killed
+msg.0236	The dragon is a symbol; it must not be killed
+msg.0237	How can we save the country without killing it
+msg.0238	Two boring fools
+msg.0239	The 23rd of the 13th month, the day the sun and moon meet. Are you lonely?
+msg.0240	You want in? Where's your ticket?
+msg.0241	Sangdesi! I admire your courage, but if you want to pass the Plunge Tunnel, first you must beat me, Kawen!
+msg.0242	Remember me? I am the Left Chancellor who fled the Bangpei Empire. Your meddling did this to me. You are dead!
+msg.0243	This is the year 4682 of the Ya Era...... Far, far away, in a universe as deep as the pupil of an eye, hangs a beautiful world like red lips: hidden in the Great Red Galaxy, where high humans, beastmen
+msg.0244	and the spirits of nature, three races, live together: the world of Hongqi. The planet is about 1.8 billion years old, a young and newly born world. Yet its science and culture have gone through
+msg.0245	three ages, the Guan, Tian and Ya Eras, seventy thousand years in all. Around the year 40,000 of the Guan Era its science led the universe. But in the Battle of Yalemeng nearly eighty percent of its
+msg.0246	civilization was destroyed. It was saved only by the heavenly folk who came from the solar system at space-time coordinates 01004. Then came the Tian Era, and after it today's Ya Era. Though at every
+msg.0247	change civilization was cruelly ravaged, the worst came after the year 1682 of the Ya Era. What is left is less than one percent of the Guan Era's.
+msg.0248	At first Hongqi had only one race, the high humans. After the Battle of Yalemeng, the Yalemeng people and the heavenly folk remained too. Today's peoples come from these three mixing and changing. So today's
+msg.0249	high humans are no longer pure, but have magic in their bodies; the beastmen are no longer the brilliant Yalemeng people of old; and the spirits are an entirely new race, with the high humans'
+msg.0250	fine mind and wisdom, the Yalemeng people's strength and endurance, and the heavenly folk's magic and grace. The world of Hongqi, made of high humans, beastmen and spirits, is called the Three Realms.
+msg.0251	After the Battle of Yalemeng, people honored the heavenly folk who saved Hongqi as gods. The five gods are: Gede, god of heaven; Baye, god of the earth; Saiou, god of the sun; Haosiping, god of the moon; Lida, god of the stars.
+msg.0252	All sorts of people come through here. A while ago a white-haired man with one eye bigger than the other came looking for the sound of the magic flute. He didn't find it, and went off hugging a rag doll
+msg.0253	just like himself, saying he would go to the sea first and then up to the sky. Hmph! That white-haired freak may look fierce, but actually he... heh!
+msg.0254	Wow! Such a beautiful pearl necklace! Shall I trade you the treasure in my chest for it?! A white-haired man with one eye bigger than the other gave it to me to keep. It's his house key.
+msg.0255	Save me, someone wants to kill me! He.. he's in the city. I don't know who he is, but he carries a Flying Spear; he's easy to spot.
+msg.0256	Hello!
+msg.0257	Oh! You killed the Left Chancellor! Ha! Ha! But I, the King of Bangpei, am different. I'll make you suffer!
+msg.0258	Welcome to the Liyinka Empire! Have you been to the Crazy Club?!
+msg.0259	Shatan, the dancer at the Crazy Club, was killed this morning. They say her killer fled north. Go after him; I'll ask around for more news.
+msg.0260	Shatan was from Liezhidun, and they say the news has already reached there. The governor there, Luoqi, has promised that whoever brings the killer to justice may see the precious oracle, the Heaven's Notes.
+msg.0261	Hello!
+msg.0262	They say the picture of the dragon god holds the secret of entering the Dragon Kingdom.
+msg.0263	In the Bangpei palace there is a room with a flying cloud drawn on the floor. They say long ago it was a transfer station to the land above the clouds. But no one knows where the switch is.
+msg.0264	So you are the brave warriors everyone has been talking about! It's wonderful to meet you.
+msg.0265	After you saw Shatan, a white-haired man with one eye bigger than the other came looking for her too.
+msg.0266	Sigh! God Power Pills are no good.
+msg.0267	Who do you think you are? The world doesn't need a know-it-all like you to judge right and wrong. There is no line between right and wrong.
+msg.0268	What must go will go; what must come will come. The human world is nothing but a struggle of life, death and power. Heh! heh! heh! All living things just prey on one another.
+msg.0269	How many fathoms high is Mount Qichong?
+msg.0270	Hello! Would you like to buy a Magic Lens to look down on the land? Big sale today, only 90 gold coins!
+msg.0271	This hall was built in memory of the Heaven-Calling Warrior, the War God Warrior and the Ethereal Warrior.
+msg.0272	Men die for money, birds die for food.
+msg.0273	I've lost all my money. Could you give me a hundred for the road?
+msg.0274	Thanks! To repay your kindness, I'll send you to a man named Censun in the Waiyinka Empire. He has a treasure to sell; tell him you're friends of mine and he'll sell it to you cheap!
+msg.0275	Thanks! Oh, too bad! If you'd met me sooner... Censun is a good gambling friend of mine; I promise he'd have given you the Moon Badge.
+msg.0276	I've lost all my money. Could you give me a hundred for the road?
+msg.0277	Sun-Moon Boundary Stone: the planet Maiya has twenty-five months a year, forty-five days a month. It turns forward 584.5 days, then backward 584.5 days. So mid-year the sun and moon rise together.
+msg.0278	This boundary is the center of the wonder; here the sun and moon pass in each other's arms.
+msg.0279	Three Stone Cave
+msg.0280	Sangdesi: I think I've run into trouble.. I left something at the old storage station in Liezhidun.... The code is: the tiger and the mountain at the two ends, the duck, the trouser legs and the iron pot in the middle.
+msg.0281	The City of Liezhidun
+msg.0282	Thieves have been rampant lately, so the lord of the city orders everyone entering to show a Magic Card.
+msg.0283	Welcome to Liezhidun!
+msg.0284	Private storage. Owner: Sangruike.
+msg.0285	Sangdesi: Give the armband to King Maiya; he has a key to the secret room at home. The Blue Key came from Kawen's house.
+msg.0286	Every house here has an electronic lock with its own code. It's the safest!
+msg.0287	[Faster than a comet!].... The Photon Transfer Station sends you anywhere you want to go. No more fear of long journeys; the world is only a step away......
+msg.0288	The space-time Photon Transfer Station makes you a high human of the new world, "the world in your hand, the ends of the earth at your feet". Its speed rivals light, faster than any super airship.
+msg.0289	Chart: the volume of the planet Hongqi
+msg.0290	Sangdesi: Knowing how kind and dutiful you were as a child, I knew you would come to find me. But don't worry, all is well so far. The task King Eding III gave me is beginning
+msg.0291	to show a lead, but it is not simple. I don't think I can do it alone. On the way you must have met many beastman attacks. The beastmen have always lived in the Wuta mountains, and for thousands
+msg.0292	of years never attacked the high humans. Legend says three thousand years ago the Warriors of the Five Directions set a barrier at Mount Wuta that held the beastmen in. Why has the balance of a thousand years broken
+msg.0293	now? From what I've learned, someone broke the barrier. A young man named Kawen from Waiyinka has disappeared; he may be the key. I'm tracking him now, and may find something.
+msg.0294	With this Rock Knife, I will contact you "among the three stones".\n                     Father, Sangruike
+msg.0295	Yes, I'm from the world underground. Hard to believe, isn't it! Just as we find it hard to believe there's a world above. Sigh! Who knows why the same people never visit each other.
+msg.0296	They say there's a tunnel straight down below. Maybe once it's found, the worlds above and below can come and go.
+msg.0297	Five numbers are hidden in this blueprint. Tell the five numbers to Naya, and he'll build you a bridge across the lava at the lowest price.
+msg.0298	Look at the window blueprint as you like.
+msg.0299	Hello, I'm Luoqi, the governor of Liezhidun. Here I'm the boss; bring me any problem and it's settled.
+msg.0300	Shatan died after you saw her, so for now you are suspects. I'll give you a chance: within a hundred days, if you can find the killer and bring him to justice,
+msg.0301	you may see the precious oracle, the fragment of the Heaven's Notes. It will help you a great deal.
+msg.0302	Very good, you have finally done away with Kawen the murderer. You rid the people of a menace, and gave me an answer for the death of the dancer Shatan. The Heaven's Notes is on the table; read it as you like.
+msg.0303	Legend says Nadi, who loved roses, once made a most beautiful rose island.
+msg.0304	Kalusi was the son of Lida of the heavenly folk and Keleinuosi, king of the high humans, born on the 8th of the 8th month of the year 153 of the Tian Era. In the great flood, within three months Kalusi drank in turn.....
+msg.0305	800, 100, 400, 900, 300 and 600 billion tons of sea water, and so drove back the sea that was about to drown the land. After that he was called the god of the sea.
+msg.0306	I may be a dancer, but I'm not easy! You know.. Lida, goddess of the stars, is the goddess of us dancers. In the great war, to raise the warriors' spirits, Lida often danced for the soldiers.
+msg.0307	You were the last to see Shatan; it's your duty to find the killer.
+msg.0308	Thank you for avenging Shatan!
+msg.0309	Oh.... three thousand years ago Hongqi's science had gone beyond space and time! If I'm right, the Limuya palace may once have been Kaluosu's laboratory....
+msg.0310	From the mirrored positions of the Five Dragon stars it is easy to see the cracks where space and time cross; and those positions face opposite ways, feeding and fighting each other. History can start from there.
+msg.0311	The Seven Stars are dim. I think the prophecy of the great seer Zhongluo may come true. The Five-Ring stars are only 10,000, 8,000, 20,000, 700 and 6,000 km from the Death Three distance.
+msg.0312	The distance between stars is worked out from the shift in the infrared light a moving body gives off. They say when each star of the Five Rings is thirty thousand km apart, the wheel of fire will fall from the sky.
+msg.0313	Legend says the Dragon Kingdom in the east built the Zhunaer period, the most glorious in the history of science of the Greater Maiya world. Perhaps the most advanced weapons can be found there.
+msg.0314	Though Zhunaer was destroyed, they say the Zhunaer people have built a new city-state. Whatever happens, the creators of a civilization are more advanced than its learners.
+msg.0315	You're not from around here, are you!
+msg.0316	Don't listen to that man! Zhunaer's super-science was destroyed three thousand years ago. But they say super-science has reappeared in the city of Limuya! You should go and see.
+msg.0317	There's a fire dragon in Wugeer. They say it has raged for over two thousand years. You must kill it and free the people there. The fire dragon that burned the city twenty years ago seems to have been that one;
+msg.0318	it nearly destroyed the Bangpei Empire!
+msg.0319	Hongqi's history is fifty thousand years long, but by the newest finds the Zhunaer people were writing down their daily lives in all kinds of twisted patterns seventy thousand years ago. This hard script is called Twisty Script.
+msg.0320	The old writing you saw on Mount Qichong is, I think, later script, grown from the oracle book that Gede wrote twenty thousand years ago. It seems this script has also appeared on Mount Yabolasi
+msg.0321	on a stone tablet. There are only two ways to read it: find the Spring of Wisdom, or ask the linguist Kaluo to translate. But no one knows where he is. I only heard that for a while
+msg.0322	he was very keen on sea sports.
+msg.0323	<-- Mount Yabolasi area: Warning to travelers: the mountain paths here are tangled and full of wild beasts. For your own safety, do not risk the climb.
+msg.0324	I'm Natasha, owner of the Sword Lodge. Welcome. I'm sorry, I'm busy right now; take your time looking at my collection!
+msg.0325	You have aged vinegar? Wonderful! Would you give it to me!?
+msg.0326	Thank you! To repay your kindness, take the Master's Sword in my chest as a reward. Oh, are you Sangdesi? A few days ago a man named Sangruike came here,
+msg.0327	and said if I met anyone else named Sang, I should tell him: the trousers have five legs.
+msg.0328	Take your time looking at the swords of the Sword Lodge! But remember the five trouser legs Sangruike spoke of!
+msg.0329	You want to learn magic from me? Hmm! Only Sangdesi's earth nature suits my magic. I can teach you, but whether you learn it depends on your effort and your luck.
+msg.0330	Learning magic must match one's nature, for all things hold the five directions that feed and fight each other; so do people, and so does magic. Matched well, they strengthen each other;
+msg.0331	otherwise they harm each other by fighting. That is what a student of magic must avoid most.
+msg.0332	All things have one of five natures: heaven, earth, sun, moon and star. So do the beastmen. So when you attack with magic, use the spell that overcomes the foe's nature, and it will have its greatest effect.
+msg.0333	To rise higher, go and explore the legendary holy place of magic, the Altar of the Five Directions. If fate allows, you will surely gain something.
+msg.0334	Five Directions: Heaven is thunder, feeds Earth, beats Sun. Earth is soil, feeds Sun, beats Moon. Sun is fire, feeds Moon, beats Star. Moon is water, feeds Star, beats Heaven. Star is wind, feeds Sun, beats Earth.
+msg.0335	With the colorless, shapeless, tasteless Spring of Wisdom, you could read this old writing.
+msg.0337	The Archmage, her heart full of evil fire, would burn the Three Realms; this is the source of the chaos. Peace will come from the five directions; the five war gods gather in Heart-of-Heaven Cave. Heaven, earth, sun, moon, star: their power shakes the universe.
+msg.0338	I may look like a child, but I'm very old. Haven't you heard of a child's face with white hair? Since we've met, take the Youth Water in the chest to the King of Bangpei! He controls the way into the underworld.
+msg.0339	Good and evil in this world are illusions, hard to tell apart. Right and wrong differ with each one's background. What is called wrong may be right; what is called right may be wrong. If you go astray, don't panic.
+msg.0340	A world of wonders surely has people of wonder. In everything use your heart, go deep, act with care. Above all, persevere.
+msg.0341	You want to learn magic? It's not that I won't teach you; my magic suits only those with a water nature, and none of you have it. Sorry! Please go.
+msg.0342	Hmm.... Yiouni is just the one to inherit water magic. In truth, though it is called water, its power is not water itself; it borrows water's motion, soft as brocade, hard as mountain rock. Water's power can be light as down
+msg.0343	or shake the mountains. Water magic sets off the spirit of nature to reach the godlike state of the Three-Realm God and use the power of the three realms. But reaching the Three-Realm God takes fate and luck.
+msg.0344	In three thousand years only the Three-Realm Spirit has learned this art. But five hundred years ago he vanished like vapor. Alas! To learn the Three-Realm God.... alas....
+msg.0345	I have held nothing back. Go now!
+msg.0346	Sangdesi's father is a Wall Knight?! Then he must be Sangruike. Twenty years ago Bangpei was ruled by the good King Sigao. One day a fire dragon burst out from under the ground; it not only hurt
+msg.0347	the people of Bangpei but carried off the prince, who was only one year old. To save the prince, the king chose the twenty finest warriors in the land and formed the Wall Knights, led by himself. They chased the dragon
+msg.0348	the way it had come. When they had all gone underground, the king's brother Siting spread word that the king was dead and seized the throne. King Sigao hurried back, but Siting not only shut him out of the city, he even
+msg.0349	sent an army of a hundred and twenty thousand against him. Though the twenty Wall Knights stood against hundreds of thousands, in the end they were too few: killed, wounded, scattered. King Sigao too
+msg.0350	was never heard from again. One story says he died in the dragon's jaws; another says he was killed saving Queen Ailun. But who knows the truth!
+msg.0351	I am Jianuo. I'm no one, just a commoner disgusted with people's greed. I remember I once gave a Demon-Seal Sword to a Wall Knight. I wonder how he is now? Sigh...
+msg.0352	This Demon-Seal Sword belongs to Sangruike. You're his son?! After the Battle of the Full Moon he fell underground and met the fire dragon.... I never thought he'd escape. How wonderful!
+msg.0353	All these years I've lived on in shame, waiting for this day. I want to see Siting's end with my own eyes. I'll do all I can for what your father asked. But this crippled body cannot
+msg.0354	go with you...... Here are three sets of Wall Gold Armor, my own weapon the Yabolasi Sword, and the Mirror of Truth. I give them to you to do heaven's justice.
+msg.0355	Do your best, Sangdesi!
+msg.0356	Hello, I am Yiouni, the water spirit. Nadi the Archmage has returned and uses the Heaven's Water to strengthen the beastmen; she will bring ruin upon our spirit realm and the human realm.
+msg.0357	I will go with you and give what little strength I have. Let us be companions and stand together!
+msg.0358	The Bangpei Empire
+msg.0359	Where's your Hero Card?
+msg.0360	Good day!
+msg.0361	Your Majesty!
+msg.0362	No one may enter the palace without a Hero Card.
+msg.0363	Come in!
+msg.0364	Your Majesty!
+msg.0365	Maybe you should go to the arena and win some Hero Cards.
+msg.0366	Come in!
+msg.0367	Your Majesty!
+msg.0368	Welcome! Welcome! I am King Siting. Going underground through the secret passage? You may, you may, but....
+msg.0369	Heh! Heh! Wonderful! This is just the potion of youth I've dreamed of. The key is in the chest; take it yourself!
+msg.0370	The secret room is in the last room. I'm not lying! The Stone Key really is the key to going underground. How to use it is your own problem.
+msg.0371	Throwing gold coins here, what a waste!
+msg.0372	I am the Left Chancellor. If you give the king a medicine to make him young again, the king will give you the key to the secret door underground.
+msg.0373	Hee! Hee! Hee! Hee!.... You have the Stone Key, but there's another secret to the passage. Hee! Hee! Hee!
+msg.0374	In the Altar of Heaven a Light Sword is stuck in the ground. Whoever can pull it out takes heaven's mandate and the throne of Bangpei.
+msg.0375	So Sangdesi is King Sigao's son. You were a prince all along, and now you have drawn the Light Sword: heaven's mandate is clearly yours. Your Majesty, I hope you will soon seal away Nadi, lady of Mount Wuta,
+msg.0376	and restore the glory of the Bangpei Empire. Rest assured, Your Majesty, I will keep who you are secret, so you can move freely. They say Nadi has appeared on Rose Island; Your Majesty may go and rid us of her.
+msg.0377	Hello! I am the historian of Bangpei. On the table is the Short History of the Bangpei Empire I am writing.
+msg.0378	Short History of the Bangpei Empire: the empire was founded twenty-three thousand years ago by Hongteluo, son of the heavenly folk and the high humans; its lands covered two-thirds of Hongqi.
+msg.0379	In the fountain before the palace is a yellow gem called the Moon-in-Water. Legend says placing it in the Spirit Pool calls a spirit. The arena was once the Theater of the Gods.
+msg.0380	The fighting stage was once the stage of the national theater, where the king and the people held council......
+msg.0381	No idlers may enter the Altar of Heaven!
+msg.0382	Come in and try!
+msg.0383	Hello, Your Majesty!
+msg.0384	For some reason, a while ago someone who should be a high human, yet spoke for the beastmen, came to see the king. And the king actually joined them! Beastmen are brutal and break their word;
+msg.0385	dealing with them is asking a tiger for its skin. Sigh! The Battle of Mount Mata happened because people trusted beastmen too much, and the world fell apart!
+msg.0386	Our king always likes to keep one more move after the last. It stands for going on without end.
+msg.0387	I'd love to try to pull out the Light Sword!
+msg.0388	They say there's a Rose Island under the sea that Nadi made with her own hands, an island all of roses.
+msg.0389	To show off his might, the king brought in a horde of beastmen and set up the arena, luring people to fight with the promise of free access to the palace. It entertains foreign guests and also
+msg.0390	brings in entry fees. Sigh! All the king thinks about all day is this kind of nonsense; people struggle to get by and complain everywhere. It's bad luck for the country.
+msg.0391	Sigh! I don't know why you go along with this Hero Card system. For vanity? Or out of real ignorance?!
+msg.0392	Hello there!
+msg.0393	Legend says the world of Hongqi had five great temples, of heaven, earth, sun, moon and star. But three thousand years ago Dakelitan, empress of Zhunaer, and four warriors, to seal Nadi the Archmage and pen in the beastmen,
+msg.0394	turned the world upside down and broke it. Of the five temples, all but the Altar of Heaven in our country vanished in the shifting of the earth.
+msg.0395	They say King Sigao's ghost has appeared, and King Siting and the Left Chancellor fled in fright to Wugeer. Now the Bangpei Empire has no ruler.
+msg.0396	They say the new king is the son of the former king, Sigao!
+msg.0397	Legend says whoever gathers the five temples rules the world. So the king built and built, using old writings and legends as blueprints, trying to raise the five temples again in Bangpei and win the right to rule the world.
+msg.0398	The last room seems to be inside the arena. Once you free the Right Chancellor you'll surely know everything.
+msg.0399	The Right Chancellor proclaims: (1) Hero Cards are abolished and the beastmen expelled. (2) Whoever can draw the Light Sword, treasure of the realm, shall inherit the throne.
+msg.0400	They say our new king is a young and handsome warrior.
+msg.0401	A while ago one of the old Wall Knights came home. Sadly, the king betrayed him.
+msg.0402	What you don't know is that this King Siting is the younger brother of the former King Sigao. For the throne, Siting heartlessly killed his brother, his brother's wife, and the one-year-old Prince Desi.
+msg.0403	About the siege twenty years ago.... after so long, the king shouldn't still hold a grudge.
+msg.0404	Twenty years ago Siting plotted with the people of Wugeer and used the fire dragon to burn the city, killing his own brother. An evil man like that will get what he deserves one day.
+msg.0405	Whatever you say, the high humans should stand together, not court the beastmen of Mount Wuta.
+msg.0406	They say some of the Wall Knights who fought twenty against a hundred thousand in the siege are still alive. A few days ago a knight came to see the old seer Weier; people guess he may be..
+msg.0407	Hello! I am the seer Weier. Let me read your fortune.... Ah! There are two kinds of people I can't read: the utterly wicked, and those above all others.... but you seem....
+msg.0408	to go beyond both, as if above even them. I truly don't know who could be worse than the worst, or nobler than the noblest. You've really stumped me.
+msg.0409	A few days ago a knight named Sangruike did come to see me. He asked where the old king was, and I told him: in the City of the Star River. I don't know the exact place, but my prophecies are never wrong.
+msg.0410	You must defeat every beastman in the beast cave to earn a Hero Card.
+msg.0411	They say the ignorant boy Kawen used star-demon sorcery to lock the space-time coordinates of Heart-of-Heaven Cave, both to call Nadi back to life and to shut the cave's door, so the ultimate art of the Five-Direction Warriors cannot return.
+msg.0412	This is your Hero Card, the sign of your courage. With it you may come and go in the palace.
+msg.0413	Hello!
+msg.0414	All idlers, leave at once!
+msg.0415	Since the king allowed you here, come in.
+msg.0416	The jail is gone; this is now the theater's lounge.
+msg.0417	I am the Right Chancellor! I opposed the king building the arena and raising taxes, so he locked me up here... and he threw the Black Iron Key away in the Waiyinka Empire. Sigh! He clearly means to keep me here for life.
+msg.0418	This is the arena's last room. Going by Siting's way of thinking.. the last room is the room after the last; so the tunnel underground must be in the room after this one.
+msg.0419	Twenty-four thousand years before the Ya Era, the year 5 of the Tian Era, Gede of the heavenly folk and four companions helped the high humans drive out the beastman invaders from the planet Yalemeng. When the task was done,
+msg.0420	Gede had to go back to his land of the gods, a solar system at the far east of the universe. Against an unknowable future, Gede left the five great arts, Sky Change, Hongqi, War God, Dragon Rise and Ethereal,
+msg.0421	with five ways as the keys to open them......
+msg.0422	This is a cave of tangled, twisting paths, with many stone rooms, most of them abandoned and marked by burns.
+msg.0423	Comrades! The prince has been found; tell my king not to worry.   Ruike
+msg.0424	I am Daini, held captive by Nadi. Please save me.
+msg.0425	Sang, my son: the nightmare of three thousand years ago ---- Nadi the Archmage has truly been reborn. Quickly, find the legendary Warriors of the Five Directions....
+msg.0426	Ignorant fools: stand in my way and die
+msg.0427	Hateful Siting, if my son dies.... I will never forgive you
+msg.0428	Take care, my king. If you die, I dare not live; and on whom would the people rely? How can the prince be without a father? Take care, my king!   Your servant, Wei....
+msg.0429	The keys to the War God art: the dragon's breath, the fish's footstep.
+msg.0430	The War God's command calls the Three-Realm Spirit
+msg.0431	Evil dragon! Evil dragon, why have you brought me to this.... I, Sigao, have a clear conscience; why am I punished so?
+msg.0432	Space Drive No. 1: straight to the Hongteluo continent.
+msg.0433	Space Drive No. 2: straight to the Akemu continent.
+msg.0434	The underground continent ---- the World of Anda
+msg.0435	Wugeer, Land of the Divine Dragon
+msg.0436	Did you come from up above? Good luck to you! A while ago a man named Zhou came here, and he wasn't so lucky: on his second day Dageng ate him. Sigh! Not only outsiders; even our own
+msg.0437	people are often eaten by the fire dragon. If you're willing, please rid us of it.
+msg.0438	The flower gate opens with the Petal Shears, of course! How dumb! You can just buy them.
+msg.0439	You are taking on the all-powerful lady of Mount Wuta. I think with the help of the mage Hetu and the guard captain Kaisalin, you'd surely make an invincible team!
+msg.0440	Our country is called the Land of the Divine Dragon, and its fame is a burden. The dragon is a real dragon, but no god; it's a stupid, foolish, evil, demonic dragon. Twenty years ago it was used to attack
+msg.0441	your world above, and now the beastmen use it to slaughter us high humans at will. Sigh! We want nothing more than to be rid of it!
+msg.0442	They say Naya of Xiangbala is working hard to earn money to build, on his own, a church with only five windows.
+msg.0443	The records show that our Zhunaer people had writing seventy thousand years ago. Fifty thousand years ago, using the simplest radio waves, they made contact with the heavenly folk in a solar system tens of thousands of light-years away.
+msg.0444	So the heavenly folk sent down Dageng the fire dragon, and Hongqi has had fire ever since; only then could people cook their food. So though the dragon is hateful, it is a treasure of human history,
+msg.0445	and must be cherished.
+msg.0446	They say Yada has locked up the flower fairy in his private garden. The prison is a ring of the purple roses Yada loves most, but the lively fairy can no longer chase butterflies among the flowers. How sad!
+msg.0447	Naya of Xiangbala builds bridges that cross any sea of fire. But getting him to build one for you won't be easy!
+msg.0448	Human society is often held back by tolerance, compromise and nostalgia, so its flaws go on forever. We can't let the mistake go on. We must slay the dragon!
+msg.0449	Your city of Liezhidun surely sells Petal Shears for pruning flowers.
+msg.0450	The Divine Dragon's Cave is in a cavern surrounded by mountains. I think no one but the royal family knows where.
+msg.0451	They say the mage Hetu, who went to Yisite Island to worship at the Earth Spirit Temple, will soon be back.
+msg.0452	Young man, our world has changed color! Twenty years ago it was peaceful here, with flowers everywhere. But now the earth quakes and the mountains shake, and every plant has withered. It seems Nadi is reborn.... but..
+msg.0453	but what of the Dakelitan Curse?.. Will Dakelitan, queen of the earth, be reborn again.... Sigh! No.... never again..
+msg.0454	The gods said.. when the gods' wrong power comes, heaven and earth will show four signs: the white head without equal, the red shift of death, the child with a devil's heart, the seven dragon stars going out. When all four appear, the world must end.
+msg.0455	Now the white-headed demon Kawen has appeared, and two of the seven dragon stars have gone out.... If this goes on, it's too dreadful to think of. Heroes, please stop them!
+msg.0456	This is the land of dragons; maybe a jar would hold the dragon's breath. The fish's footstep.... that's a hard one.. As for the root of stone, you could try your luck on Yisite Island.
+msg.0457	Don't be silly; you think you can face the fire dragon like this? Wasn't the legendary Phantom Shield of the Five-Direction Warriors lost in the tunnel to the underworld?!
+msg.0458	With just a Phantom Shield and some broken armor, how can you kill Dageng? To kill the fire dragon you need a weapon that pierces steel and armor. The royal family has controlled the dragon for generations; they must have a way.
+msg.0459	Some say Dageng the fire dragon guards a super armor. Only by getting rid of it can you get that armor.
+msg.0460	I am Yilifu, the flower spirit. Yada locked me up here. If you meet him, don't believe a word he says; he's a big liar.
+msg.0461	I don't know if you know of the four signs; you must stop that woman quickly. When I came from the sky, the Children's Village in the sky had already been cursed. If the curse isn't deep, there may still be clues
+msg.0462	to find, so please hurry.... Also, I heard that the five great arts, Sky Change, Hongqi, War God, Dragon Rise and Ethereal, each have a sacred tool, the Heart, Heaven, God-Call, Dragon Lure and Mute, that helps open them.
+msg.0463	So please find them soon, and let the miraculous Five-Direction Warriors be reborn. To thank you for saving me, take this bottle of Crimson Incense. Not even the coolest woman can resist its charm!
+msg.0464	Though you are warriors from another land, it is our duty: we can't let you in. But I'll tell you something: the king is anxious to find Maple Down to make his beautiful Zenith Crown.
+msg.0465	You found Maple Down! Hmm! The king will be so pleased! Come in!
+msg.0466	Come in!
+msg.0467	Don't look down on our warriors. Our Captain Kaisalin is a heroine who yields nothing to any man!
+msg.0468	Come in; we'll have a match some time!
+msg.0469	Come in!
+msg.0470	Captain Kaisalin is not only brave but upright. She has been sent to the land of Xiangbala; with luck you may meet her.
+msg.0471	Come in!
+msg.0472	I am Aier, king of Wugeer. What is it?
+msg.0473	Thank you for the Maple Down! With it I can make the Zenith Crown needed to worship the sun god. When it's made, I can give you one.
+msg.0474	You scoundrels! Because you're strong, you think you can do whatever you like? Without the dragon, what is the Land of the Divine Dragon? You.. get out!....
+msg.0475	This Dragonslayer Orb is the bane of every dragon. What is Dageng to it!
+msg.0476	Y..you..you picked up the Dragonslayer Orb.. you..you..you're amazing!
+msg.0477	You killed the fire dragon! The dragon is the symbol of our country; what is Wugeer now? Saiou the sun god will never forgive you.
+msg.0478	The Kalan fish, also called the big-fin fish, has coarse, tough flesh, but the crest on its head raises life force. A Kalan fish lives over thirty thousand years, and its crest takes ten thousand years to grow,
+msg.0479	so it is hard to get, truly a delicacy of the immortals. Together with the redfish, which cures any poison, it is called the Twin Fish of Hongqi.
+msg.0480	These keys are no use; they just look nice. You can buy them if you like: 20 gold coins each.
+msg.0481	The keys with flowers on top are said to be for the doors of gardens or greenhouses. 20 gold coins each, all of them.
+msg.0482	These keys are no use; they just look nice. You can buy them if you like: 20 gold coins each.
+msg.0483	Dageng the Divine Dragon
+msg.0484	You must face Dageng with a reverent heart. Otherwise, if he gets angry, he may well eat you.
+msg.0485	Y..you..you killed Da..Da..Dageng! He.. he.. he... you have committed a monstrous crime!
+msg.0486	The Divine Dragon's Chamber
+msg.0487	Hello, I am Luoduoshi, servant of the dragon.
+msg.0488	Sigh! You are the stupidest people I have ever seen. Tens of thousands of years ago Gede the heaven god came from a distant solar system with Haosiping the moon god, Baye the earth god, Saiou the sun god and Lida the star god. When their task was done,
+msg.0489	only Gede went back. The other four stayed and married and had children on Hongqi. Haosiping had a son, Hongteluo, and a daughter, Litan. Grown up, Litan secretly loved Saiou; but Saiou
+msg.0490	fell in love with Liya, a woman of the high humans, and had a son with her, Dageng. Jealous and furious, Litan stole Dageng away and with a blood curse turned him into a fire dragon. Heartbroken, Liya
+msg.0491	wept for fifty years, and her tears became precious tear pearls. Though tens of thousands of years have passed, the heavenly folk have not died. You will need their power later, yet you have killed their son. Sigh....
+msg.0492	I, Luoduoshi the dragon's servant, have grown young again thanks to the Spring of Life. Thank you so much.
+msg.0493	This cave is my private property. Give me two hundred gold coins and it's yours.
+msg.0494	From now on this cave is yours.
+msg.0495	Xiangbala, Land of the Sea of Fire
+msg.0496	The young King Lede has suddenly died! They say he was killed for refusing the demands of Nadi, lady of Mount Wuta.
+msg.0497	They say whoever can pull out the Light Sword of the Bangpei Empire can be their king. That's easy: just put on the Light Gloves and you can pull it out! But they say not
+msg.0498	just anyone can wear them; they work only with the right nature.
+msg.0499	Though the Five-Direction Warriors have the powers of the heavenly folk, against Nadi's undying soul they can only treat the symptoms, not the cause. I wonder if the ageless Yueke knows a remedy.
+msg.0500	The magic of Wugeer's mage Hetu and the fighting of the woman warrior Kaisalin are strong, but in the end they were a step too slow. The mage is hurrying to Mount Mata, hoping to head off Nadi. Kaisalin was
+msg.0501	invited by the lady of the Glass Palace to teach the palace maids to fight.
+msg.0502	Legends, shaped by time, may be exaggerated, or may have lost something.
+msg.0503	Yada got hold of two pairs of gloves from somewhere that resist every poison and raise your strength. But he has hidden them.
+msg.0504	To get to Yisite Island you need a bridge built by Naya. But Naya lives on the shore beyond the cliffs, where ordinary people can't go.
+msg.0505	Time wears everything away: some is lost, some ruined, and some, though still here, is nothing like it was.
+msg.0506	Have you heard of a lock that opens by a difference in weight? I know Yada has a stone cave with a square hole glowing red. They say putting twenty gold coins in it does something.
+msg.0507	Only through Mount Mata can you reach Naya. They say Naya drank from the Spring of Life and cannot die. He has lived for more than three thousand years!
+msg.0508	There's a passage that is said to lead to the world under the sea. There the sky is the sea, and the clouds are swimming fish. Stranger still, below the sea is a sea; the sea below the sea leads to the underground sea. Oh! Unbelievable!
+msg.0509	Mount Mata is actually a mountain of pure white rock. At its foot is a stone gate, but the paths inside are tangled and very dangerous, hard to get through.
+msg.0510	You are not just people, but those who carry out the gods' will. You will live for Hongqi and die for Hongqi.
+msg.0511	In the White Rose War three thousand years ago, Meier, the first champion of the king of Zhunaer, beat the Mount Wuta legions again and again until Nadi was enraged. At the Battle of Mount Mata she turned him by magic
+msg.0512	into an undying goat, and set the spirits of strange trees to guard him. By the surviving records, Naya also seems to have been a great general in the Zhunaer army.
+msg.0513	Greetings, everyone!
+msg.0514	Sigh! I think the late King Lede will be buried in Mount Mata, the mountain of white marble, because the man he admired most of all was Xindeli, king of Zhunaer three thousand years ago.
+msg.0515	Xindeli not only raised Zhunaer's science and culture to the best on all Hongqi, but built the richest, safest empire in history. But after the affair of Prince Hudu's horn in the Bangpei Empire in the year 1682 of the Ya Era
+msg.0516	set off the White Rose War, the nightmare came. In the year 1863 of the Ya Era the war spread over all Hongqi. The Mount Wuta legions led by Nadi and the seven mages
+msg.0517	swept all before them everywhere, except in Zhunaer, where they never won a battle. So Nadi, in the name of peace talks, tricked King Xindeli and killed him at Mount Mata.
+msg.0518	King Lede often said that after he died he hoped to meet Xindeli where Xindeli's sword was buried. That is why he refused Nadi's demands.
+msg.0519	Ah! Two of the four signs have already appeared.. this.... The "wrong power of the gods" means someone using the power the gods gave to harm the high humans' world the gods meant to protect: the misuse of divine power.
+msg.0520	Sigh! The Seven Dragon Stars wane day by day, and the Five Heaven Stars have only just begun to shine; I fear help will come too late. If all four signs appear, Hongqi can only perish... Remember, when you find the Pearl Rod, come back quickly.
+msg.0521	I know Menggu of Junk City has spent all his time looking for the Pearl Rod.
+msg.0522	I see the light of the Five Heaven Stars, and the Seven Dragon Stars flickering with it.
+msg.0523	Take, I have waited for you a long time. Your heaven-thunder nature is just right for the magic of us Heaven-Direction Warriors. If fate is kind, you may reach the peak of the Heaven-Direction Warriors and become, of the Five-Direction Warriors,
+msg.0524	the Hongqi Warrior, their lord..... Take these two Magic Beads.
+msg.0525	Last night I watched the sky and found the Five Stars unusually bright, a sign not seen in three thousand years. They say when the five stars move, divine soldiers come down. By your bearing, you are fit for a great task.
+msg.0526	The road ahead is still long; be careful in all things.
+msg.0527	Walk the road you must!
+msg.0528	We receive no guests during the national mourning!
+msg.0529	Mount Mata
+msg.0530	Yiouni, long time no see.. you probably don't remember me; I'm Zhuier, the mountain spirit. I've been here over twenty years and seen many strange things. Like nineteen years ago, I saw King Sigao, who could barely
+msg.0531	protect himself, charge back into fifty thousand enemies with no thought for his safety, to rescue his wife. Love that deep I have seen only twice in more than three thousand years. The first time was three thousand years ago:
+msg.0532	a royal couple, deeply in love, who could not marry for reasons of state, and died together. That happened so suddenly I couldn't save them, but this time I did save King Sigao
+msg.0533	and his wife. So they would not be harmed again, I sent them to.. to.. oh dear! How did I forget where I sent them? Anyway, I sent them somewhere very far and very safe.
+msg.0534	I came here out of fear of the world's evil wars.... But a few days ago Nadi passed by with a man; luckily I hid fast enough not to be seen. Sigh! Do you know? When
+msg.0535	the four signs are complete, if Nadi is allowed to build a tower of the bones of fifty million dead to gather power, then heaven and earth will never see light again.
+msg.0536	They say Naya built a church from the blueprint in the oracle, and it is the safest place in the world, because the heavenly folk worked out where on Hongqi the forces of nature gather,
+msg.0537	and built that into the design. So once inside the church, nothing outside can harm you. Otherwise human strength is no match for nature. The numbers of those positions seem
+msg.0538	to be in that window blueprint.
+msg.0539	I am Hetu, mage of Wugeer. This is the sword of the greatest king of all time, King Xindeli: the Hanging Sky Sword. This cave is where he lies. You could say King Lede died for him...
+msg.0540	It's all because I was a step too late.... Lede and I were such good friends.... I must avenge him! Let me go with you! And please help me take revenge!.... I know that to reach Mount Wuta you must
+msg.0541	cross the Rainbow Bridge, and its entrance is in the sky. If I'm right, it must be behind the temple in the sky. Oh, and this bottle of Dragon's Breath may help Yiouni.
+msg.0542	The Goat Cave.... An evil goat within; whoever enters dies.
+msg.0543	Thank you for killing the tree spirits and freeing me. But first, find Xindeli's Hanging Sky Sword. Then I'll carry you to Naya.
+msg.0544	The door beside you is open; you can go and find Naya.
+msg.0545	First a question: the church window blueprint hides the numbers where nature's forces meet. What are they?
+msg.0546	Sigh! Another bunch of good-for-nothings. One bridge: let's say forty thousand gold coins.
+msg.0547	You could solve such deep mathematics; I truly admire you! All right! I'll give you a bridge as a reward!
+msg.0548	The bridge is built; you may go.
+msg.0549	I'm busy. Talk to my assistant about whatever it is!
+msg.0550	Whatever it is, talk to Naya!
+msg.0551	Don't bother people for nothing!
+msg.0552	With a Frozen Fire Clip you can freeze the lava of the Red Sea, but it only works if you put it into the fire freezer.
+msg.0553	Legend says that taking the five sacred tools into the inner cave of Heaven Star Cave gains the supreme sacred tool.
+msg.0554	Whoever reads this: I am Kaluolan the Rising Dragon, lord of the Sun-Direction Warriors of the Five Directions. When my companions had destroyed Nadi's body, penned the beastmen in the Wuta mountains, and won Hongqi three thousand years of peace,
+msg.0555	Dakelitan, the Heaven-Calling Warrior of the earth direction, worn out by battle and grieving for her husband, died at last. In our grief we went our separate ways. We left our armor with Meilani and agreed that in any
+msg.0556	time or place, with the Heaven-Calling Charm, the Heart Device, the Dragon Lure Orb, the War God's Token or the Mute Bell, we could be called, and we or our heirs would come at once to set things right. After I left the others
+msg.0557	I chose to sail alone on the red sea. Life on the voyage was so pleasant that I reached the end of my days without an heir, failing the mandate of a Rising Dragon Warrior. Now
+msg.0558	all I can do is leave the Dragonslayer Shield on the green ship, and the Quantum Gun with the Fen family in the city of Limuya, for a destined Sun-Direction Warrior, who I hope will soon become a Rising Dragon Warrior.   Ya Era 1753
+msg.0559	Ha! Ha! Ha! That's right, I am Nadi, the Archmage who has bound her soul to Daini, also called the Queen of Mount Wuta. Heh! Heh! Heh! With your little skill, you dare stand against me!
+msg.0560	Don't be silly; the world is destined to be mine.. God! I am God! Hmph! You don't know your place. When the four signs are complete, I'll deal with you clowns! Ha! Ha. ha. ha..
+msg.0561	Gate of the Red Sea ---- the Red-Shift Death Point
+msg.0562	The mistress knew you'd come. Heh! Heh! Well done getting here, but your luck ends now. I am Nidehek, lord of Despair!
+msg.0563	Ya Era 2764, 11th month, 7th day, cloudy... In Rose Village I happened to buy an old book, "Wonders of Sorcery". It has an ancient way of calling up mage-priests. They say mage-priests
+msg.0564	were godlike people with supreme magic, but after the White Rose War two thousand years ago the office was abolished, and people slowly lost their magic. I wonder if the method still works.
+msg.0565	Ya Era 2765, 17th month, 41st day, rain.. We're four months late on the way back. Last night I dreamed the mage-priests all have undying souls and can come back to life when called. But it costs a life.
+msg.0566	Ya Era 2765, 20th month, 1st day, rain.. That engineer Zhou Wei is hateful; he doesn't take me seriously at all. Sigh! The sea lanes here are really like a maze. If.. if only I had magic......
+msg.0567	Ya Era 2765, 21st month, 7th day, rain.. Wonderful! With a mage's guidance we were soon out of that Devil's Sea. He said he'll grant me three wishes.... what, that sounds like the first mate screaming....
+msg.0568	Ya Era 2763, 25th month, 1st day, clear.. Found a green ship with no one aboard; its goods put in the hold. .............................
+msg.0569	Ya Era 2764, 11th month, 6th day, cloudy.. At space-time coordinates 25917 found a small island planted with roses of every color; named it Rose Island. .................
+msg.0570	Ya Era 2764, 19th month, 42nd day, cloudy.. Orders received: return home next year on the day the sun and moon meet. All hands overjoyed. ..............................
+msg.0571	Ya Era 2765, 13th month, 13th day, cloudy.. The ship strayed into the legendary Devil's Sea, full of reefs, its lanes a riddle. ...........................
+msg.0572	Ya Era 2765, 20th month, 3rd day, cloudy.. Nearly seven months now, and the ship is still trapped in the Devil's Sea; the lanes all around are still like fog. ................
+msg.0573	The City of Limuya
+msg.0574	They say around 2770, Yemengjiade, the witch lord of the Great Serpent, sent the witch Lisha, whose stony gaze turned the people of Yisite Island to stone. When she found the last group trying to flee into the castle's
+msg.0575	secret cave, Mengda, lord of Yisite Island, blocked the cave's mouth with no thought for himself to save his people, and was turned to stone as well. The furious Lisha gouged out his eyes.
+msg.0576	Later Mengda's stone body became the door sealing the secret cave, and his eyes became two gems joined by a red thread.
+msg.0577	Hello!
+msg.0578	Welcome to the City of Limuya! After Zhunaer, this is the most advanced place in science. After the White Rose War Zhunaer was completely destroyed, but Limuya was lucky enough to
+msg.0579	keep part of its civilization. They say at the end of the White Rose War three thousand years ago, Keleisi, Limuya's father of science, invented a device that turns electric power into attack power and magic:
+msg.0580	the Power Converter. They say it could raise one's powers a hundredfold, but it was wrecked before it was ever used. What's left of it is still in the city center.
+msg.0581	They say there's a tunnel on Yisite Island to the Yatelan Empire beyond the mountains. Hmph! Yatelan's king betrays his people, deals with the Mount Wuta horde, and even gathers sea fungus for the beastmen to eat. Disgraceful!
+msg.0582	A brave heart walks with good luck!
+msg.0583	A thousand years ago the Fen family was a great house here. Later, they say, Nidehek the witch lord of Despair hunted them, and they moved away.
+msg.0584	They say they changed their name too!
+msg.0585	Bring plenty of food to Junk City; you can't eat just anything there!
+msg.0586	The darkness goes farther and farther; the sun will return at last!
+msg.0587	Kind ladies and gentlemen, could you spare me a hundred gold coins?
+msg.0588	Thank you! For your kindness, take this Blade Ring, please!
+msg.0589	Kindness is always rewarded!
+msg.0590	Thank you for getting rid of the people outside and freeing me! They were Siting, the king who fled Bangpei, and the Left Chancellor. They are in league, trying to seize the Spring of Wisdom. Luckily I found them out,
+msg.0591	and quickly locked them outside. But if you hadn't saved me, I'm afraid I couldn't have held out. These treasures should be yours!
+msg.0592	Ten thousand sheep cannot trap one fox. So only by growing strong can we save Hongqi!
+msg.0593	It has no effect! Throw it away?
+msg.0594	Do you really want to quit the game?
+msg.0595	Save to which slot (0-10)?
+msg.0596	You killed the divine dragon, a monstrous crime; luckily you brought it back to life. Don't make trouble again.
+msg.0597	You brought the divine dragon back to life! The dragon is our country's symbol. Thank you so much.
+msg.0598	Yisite Island
+msg.0599	I'm Gealun, Evil Water! Heh! Yisite is a dead, cursed city. The mistress knew you'd seek the Divine Cave. Forget it!
+msg.0600	Hello, I am Yueke. This city is cursed; everyone has become a mindless stone. If I hadn't fled fast, I think more than my two feet would have turned to stone.
+msg.0601	I am Yueke. I do not age because I once received Gede's grace. He gave us the Spring of Life, so I have eternal life.
+msg.0602	Children are the hope of the future! Don't make enemies of them; they are not born, do not grow, do not die. Listen to them; what is left of them will show you the way! Don't board the drifting star; it has the devil's voice.
+msg.0603	Don't board the drifting star! Heh! Heh! That gives the game away.... The devil's voice must of course be joined with the Magic Crystal to release its power and break the curse.
+msg.0604	"Love" is the source of strength; "jealousy" is the cause of ruin. Both are tied to women, for "fragility" is woman's nature.
+msg.0605	I am Yueke. Don't bother me; let me pray!... O God! Ten thousand years ago, when the Yalemeng people invaded, you came from a distant solar system... Three thousand years ago, when the world broke and the Archmage spread ruin,
+msg.0606	you worked a miracle and sent the five divine warriors to quell the chaos.... Now the source of chaos rises again; grant us another miracle and give heaven and earth peace! O God....
+msg.0607	I am Yueke. Of all the passions, only "love" and "jealousy" are famous for bewitching and beguiling. Both carry burning desires; both easily turn into delusions and illusions;
+msg.0608	both show easily in what people do. This is the root of the troubles of the world of Hongqi.
+msg.0609	I am Yueke. When the five heavenly ones decided never again to meddle in the world of Hongqi, they left five suits of armor with wisdom of their own, which change size and shape to fit whoever wears them.
+msg.0610	Yes, ten years ago I sent Sigao and his wife to the Land of Heaven.... All right! Put this Sky Wing on the upside-down slide in the Children's Village, and you can go to the Land of Heaven.
+msg.0611	Let's go!!!
+msg.0612	To escape Lisha's eyes, our people seal ourselves away. May it be as the ageless Yueke said: the five heavenly warriors will come across space and time, and the world of Hongqi will begin a new age.
+msg.0613	The Divine Cave
+msg.0614	Heaven: the Heaven-Calling Warrior.. Luokete
+msg.0615	Earth: the Hongqi Warrior.. Dakelitan
+msg.0616	Sun: the Dragon Rise Warrior.. Kaluolan
+msg.0617	Heaven: the War God Warrior.. Nidu
+msg.0618	Heaven: the Ethereal Warrior.. Meilani
+msg.0619	The Glass Palace
+msg.0620	Our lady is not here; you can't stay?
+msg.0621	Glass is clear and beautiful, but it breaks easily. Be careful not to get cut.
+msg.0622	The Glass Palace has always kept strictly neutral. So it was three thousand years ago, and so it will stay. There is nothing here for you; go.
+msg.0623	A rose has no thorns; its thorns exist only because others intrude. I advise you not to act rashly.
+msg.0624	Ah! This fragrance, lovely as a spring of a thousand colors, this bewitching temptation, what shall I do?... All right! I'll let you into the Red Glass Plaza below, but you must keep
+msg.0625	your promise never to take or break anything.
+msg.0626	Glass is fragile and breaks easily; broken glass easily hurts people. So it is with the human heart; and women are not the only fragile ones!
+msg.0627	Hetu, grief cannot comfort the dead. You four, with my sun-fire nature, match the legendary pattern of the Five-Direction Warriors. Let me join the party and follow heaven's will!
+msg.0628	This Blood Jade is the blood Dakelitan coughed up when her strength was spent, pressed in ice for three thousand years into hard jade. It is rare and precious. And I have news for Sangdesi,
+msg.0629	both happy and sad.. your father Sangruike is recovering from his wounds in the inner room.
+msg.0630	Sang.. Sangdesi.. I.. sigh! King Sigao is your real father. I.. should call you... Your Highness. Forgive me for not rising to bow.... I know the room inside hides the Mirror Shield;
+msg.0631	that shield is very important to you. You.. you must find the Amethyst Key and open the door sealed by ice that has not melted in ten thousand years.
+msg.0632	So Wugeer was once the Zhunaer Empire.
+msg.0633	Your Highness should finish your mission quickly, not be swayed by feelings... Here I.. I will be quite safe!
+msg.0634	Temple of Kalusi, God of the Sea
+msg.0635	The Birth of Kalusi
+msg.0636	The Gate under the Sea
+msg.0637	Redfish Pond
+msg.0638	See the flower, yet no flower; see the pond, yet no pond.
+msg.0639	Junk City
+msg.0640	Could you give me something to eat?
+msg.0641	The waste of human civilization; if waste can be used, don't waste it. Oh! I love anything made of pearl. Do you have any?
+msg.0642	P..the Pearl Rod.. oh! The treasure I've looked for all my life.. how.. how can I repay you?.. Oh! I know! With these Light Gloves, as a small token.
+msg.0643	The gloves are a bit old and may be weaker, but they're more than enough to pull out the Light Sword!.... Don't look at me so doubtfully! That's right, I don't want any throne.
+msg.0644	When the realm of heaven comes, thrones and power are mere dung! Dear friends, perhaps we will never meet again; may I bless you!
+msg.0645	Hello, I'm Rendao Zhigang. Rendao is the family name, Zhigang the given name. If you don't mind the mess, come in and sit!
+msg.0646	The beggar you met in Limuya is my father.... I've finally waited for you! The crystal in the chest is the key to the control room of the Power Converter.... Wonderful,
+msg.0647	the family mission of a thousand years can at last be done by my hand!
+msg.0648	So good to see you!
+msg.0649	It stinks here! Wonderful, it smells so good!
+msg.0650	Comfy, isn't it?! Stinky enough, isn't it!?
+msg.0651	The Yatelan Empire
+msg.0652	Golden Feather Hall
+msg.0653	Around the year 2765 of the Ya Era, two lines of verse went around: when the two bright moons light up Mengda's eyes, the rest of the stones will rebuild the house of stone.
+msg.0654	Luckily the beastmen aren't our enemies, or else.... Sigh! That's only because the king made a deal with them. A king's heart is unfathomable. Not long ago he swore he would march on
+msg.0655	Mount Wuta and let the great sun shine on the Yatelan Empire. Yet in a mere five years he forgot his oath, and forgot how Princess Yala was killed by the beastmen!
+msg.0656	Sea fungus is the beastmen's favorite food, and our Yatelan waters have the most of it. So Nadi sent her greatest general, Luoqi the witch lord of Wickedness, to force and bribe our country
+msg.0657	into harvesting sea fungus for the beastmen. Who'd have thought the king, who once hated beastmen bitterly, would agree to Luoqi's demands! Sigh! The king is famous for siding with invaders, and rightly so.
+msg.0658	This is an orrery of the Great Red Galaxy. The rainbow-like planet is Hongqi; the pair of yellow gems joined beside it are the two bright moons Nilun and Nidu, which legend says can be seen from the ground.
+msg.0659	The young men here have all been called up by the king to Mount Kakalong to harvest the sea fungus the beastmen love. They were told two years and they could come back; now four years have almost passed,
+msg.0660	and there's still no sign of them. Sigh!....
+msg.0661	You surely know of the Sigaiya continent in the sky! But I bet you didn't know the way there is in our undersea world. But that way is like a riddle: only legends, no answers.
+msg.0662	Congratulations on reaching the sky! Have you ever seen the Pearl Rod, strung from tear pearls? They say you can trade it to Menggu for the Light Gloves, and with them pull out the Light Sword
+msg.0663	and become king of Bangpei.
+msg.0664	The beastmen may be brutal and hateful, but with us women they behave very properly. They say Luoqi's father was a beastman who fell in love with Luoqi's mother. Because from childhood
+msg.0665	he suffered scorn and strange looks, he came to hate it bitterly, and forbids every kind of feeling between beastmen and high humans.
+msg.0666	I hear Bangpei up on the surface has proclaimed that whoever pulls out the Light Sword shall be king. Hmm! The Light Sword is the earth warrior's ultimate weapon!
+msg.0667	The king siding with invaders and pressing people into labor is nothing but cowardice and madness. Hmph! Without courage and will, he's at best a beast in noble clothes.
+msg.0668	Legend says Golden Feather Hall leads to the Sigaiya flying land, where heaven was worshiped in ancient times. The key is the Power Lock and the Flight Key.
+msg.0669	The First Metal Shop
+msg.0670	My daddy hasn't been home in so long; Mommy cries every day missing him! Mister, miss, could you please help me find my daddy?
+msg.0671	This is the First Metal Shop. Can I help you?
+msg.0672	Thank you. This really was my father-in-law's. But my husband was called up by the king to harvest sea fungus almost three years ago.... The shop makes nothing now. We live on
+msg.0673	what little savings are left. Sigh!... Oh, my husband Poyi is the finest maker of locks and weapons in the world. This is the Smith's Lock he left before he went.
+msg.0674	Hello!
+msg.0675	Mount Kakalong -->
+msg.0676	Do not disturb the drills!
+msg.0677	The king bears the charge of siding with invaders; what is our small sacrifice next to that?
+msg.0678	Have we been here almost four years? It doesn't feel that long to me. But for our country, I think we'd go on even for forty.
+msg.0679	We come from many different lands, but our goal is the same. When you need us, don't hesitate to tell us.
+msg.0680	Death is not frightening; what's frightening are the cares you know and the fears you don't before you die.
+msg.0681	I am Poyi the smith. Sigh! For my country I must give up my own comforts and put my heart into its cause. Please keep, for me.. no, for us, the secret of these drills.
+msg.0682	Here are three weapons I made specially; I hope they help your plans.
+msg.0683	Let us all do our best together!
+msg.0684	Hello, I am the king of Yatelan. This is my secret training ground. To destroy the hateful beastmen of Mount Wuta and avenge Princess Yala and the dead of Yatelan, I have borne the charge
+msg.0685	of siding with invaders and trained troops here in secret. But most precious are these brave Yatelan warriors, who left their homes to train hard, hoping soon to master the skills to wipe out
+msg.0686	the beastmen. Now the training is nearly done; together we can strike straight at Mount Wuta and destroy Nadi and her seven devil mages. When you attack Mount Wuta, be sure to tell us.
+msg.0687	In a little while our army will be fully trained. Please wait patiently!
+msg.0688	Rose Island
+msg.0689	Young man, no outsiders may enter Rose Island. If the witch lord comes back, she won't spare you!
+msg.0690	Hmph! Five fools who don't know when they're beaten, opposing me again and again! Heh! heh! heh! With some old armor and old weapons you think you're gods!....
+msg.0691	Princess Daini!?
+msg.0692	Ah! You.. thank you for saving me!
+msg.0693	That has no use here!
+msg.0694	Heh! heh! heh! Ha! ha! ha! ha! ha...
+msg.0695	The Temple of Aidefu
+msg.0696	Gede, God of Heaven
+msg.0697	To get the Laji Staff you must pass the Magic Crystal's laser barrier. It's a deadly beam; without the Mirror Shield, getting through the first sanctuary is all but impossible.
+msg.0698	The Laji Staff is in the second sanctuary. Put the Divine Cave's treasure map on the wall; once the staff fires Hongqi's beam onto it, you can read it.
+msg.0699	A miracle three thousand years in coming... I hope you can end the romance between Hongqi and the devil!
+msg.0700	The Children's Village
+msg.0701	The upside-down slide goes up to heaven.
+msg.0702	Don't board the drifting star; it has the devil's voice!
+msg.0703	Altar of Earth Prayer
+msg.0704	Thank you for breaking the time-sealing curse! Looking back on a life where we couldn't control our minds or our actions, it was truly terrible.
+msg.0705	The Children's Village was once a small village near Bangpei. After the Battle of Mount Mata, Dakelitan, warrior of the earth god, heartbroken at her husband's death, cast the Dakelitan Curse, and heaven fell and the earth split.
+msg.0706	So the Children's Village floated up into the sky. The Dakelitan Curse uses a multiplier to raise the Hongqi Strike a hundredfold before releasing it: a spell of unmatched destruction.
+msg.0707	You came from the world below?! Twenty years ago a man and a woman also came from the surface. They say they came from our mother country, Bangpei. They were always Yadeni's honored guests.
+msg.0709	Waah! Waah! Waah! I want my mommy! Waah....
+msg.0710	Lost and found again; found and lost again. All cause and effect: just go with fate!
+msg.0711	The bewildered heart has come back as it was, but what was lost will never return.
+msg.0712	We have woken at last from three thousand years of nightmare! Some seem to know nothing of what happened, still like children of three thousand years ago.
+msg.0713	Mister, miss! Do you know where my daddy and mommy went?
+msg.0714	In the White Rose War three thousand years ago, Nadi killed the grown-ups of the Children's Village who fought to protect their children, then cursed us, planting a devil in the children's hearts and sealing our time,
+msg.0715	so that we would never have minds of our own, never grow up, never die. I am the only one who kept my mind. I don't know why I'm not fully under the curse.
+msg.0716	I may look like a child, but I've lived three thousand years.... As long as the curse lasts, I won't die or grow up. They say the sage Yueke is the wisest man on this planet; he should
+msg.0717	know how to break the seal.... Here, take the Old Ship Key with you!
+msg.0718	Thank you for breaking the seal on the Children's Village!
+msg.0719	You are King Sigao's child! Oh! This is heaven's will. Yes! Thirty years ago a thick fog brought a couple here: the king and queen of Bangpei who vanished after the siege.
+msg.0720	After three thousand unchanging years, seeing descendants of our old country was the greatest joy! We wanted to keep them as honored guests forever, but ten years ago the king's old wound opened and his life hung by a thread. We
+msg.0721	had to ask Yueke, who is mad about crystals, to send them to the land without death, the Land of Heaven. Here we live forever because of Nadi's curse; only the Land of Heaven is
+msg.0722	truly eternal. With the Rainbow Crystal you can ask him the way up to the Land of Heaven.
+msg.0723	I wish Sangdesi luck in finding his parents! And may you live up to the mission on your shoulders.
+msg.0724	The Land of Heaven
+msg.0725	A place of deep peace: underfoot are endless snow-white clouds; the buildings on the clouds are white halls, solemn but not stiff, splendid but not vulgar.
+msg.0726	Welcome to the land of the gods; boundless joy will walk with you!
+msg.0727	Here you will find peace, eternal life and contentment!
+msg.0728	The mortal world passes in a toss of the head; all one gains is a single white cloud.
+msg.0729	Human rage does not bring about the justice of the gods! Meet everything with a calm heart.
+msg.0730	To come here from the mortal world without divine power, you must be the heavenly ones of legend. The life or death of Hongqi is your charge to bear!
+msg.0731	You.. you are my son.... The traitors have been destroyed... Your mother and I are old. Here our lives never end, but once back in the mortal world, time would wear us down and we would not last.
+msg.0732	Besides, after all these years we two have seen through the world.... What Bangpei's people need now is a young, kind, wise new king. That you could come here shows your wisdom.
+msg.0733	If you treat the people as you treat me, the country will surely thrive. Besides drawing the Light Sword to rule Bangpei, you five have the mission of saving Hongqi's future. Give it all your heart!
+msg.0734	Oh! My son! Thanks to Sangruike for raising you; thanks to the gods for making you so strong; thanks to your four friends for standing by you in hardship. Sangdesi, your real name is Side.
+msg.0735	A few days ago bad news came from the Glass Palace: Sangruike has died of his wounds.... Sangruike did our royal house a great kindness.. so I think you need not take back your real name, Side; go on
+msg.0736	as Sangdesi in memory of Sangruike.... Are you wondering if Sangruike will go to the Land of Heaven after death? No. Only the living can come to the Land of Heaven. The souls of the dead,
+msg.0737	if they can drift to a distant solar system, may be reborn. So... sigh! Let us pray from afar that Sangruike's spirit is reborn!
+msg.0738	Congratulations! Sangdesi's life force has grown.
+msg.0739	Wow! Wonderful! Yiouni's life force is stronger.
+msg.0740	Ha! Ha! Take can take more hits now.
+msg.0741	Congratulations! Hetu has become tougher.
+msg.0742	Whoo! Ha! Kaisalin's life force has risen.
+msg.0743	There are five different windows in the drawing.
+msg.0744	The City of Maiya
+msg.0745	Money or items
+msg.0746	Space Drive No. 3: straight to the Liya continent.
+msg.0747	A big iron pot.
+msg.0752	Sir! We're working hard on our show; please don't disturb us.
+msg.0753	The heart of the heaven stars lies in purity, serenity and stillness, in the ethereal power of doing nothing! The height of doing nothing, the peak of doing. The night star is in the void, in the spirit! Hetu.... now let me teach you the magic of the stars........
+msg.0754	Rolling on for all ages, unbroken for ten thousand ages. Hello! I am Jieyushi, the legendary Three-Realm God! Yiouni, water magic once peaked at "Spirit Change"; later, having grasped the secrets of the three realms,
+msg.0755	I created the ultimate art, the Three-Realm God. I hope you will carry it further!.........
+msg.0756	The sun god's magic flourished in the hands of Guolun of the dragon folk, so sun spells are mostly named after dragons.. Kaisalin.... when the dragon leaps to the sun, the sun will lose its light and the land change color.... the dragon that leaps the sun becomes king.
+msg.0757	Take.... for three thousand years only the warriors of heaven have been passed down by true guardians of the realm.. you have truly lived up to heaven's mandate, facing your mission with great boldness and courage. Now let me teach you
+msg.0758	Saiou's magic.... the magic of heaven uses the spirit power of all under heaven... the final magic of heaven is only to call upon heaven!
+msg.0759	At last you've come, warrior of the earth!.... Ten days later and I might have returned to the origin.... The center of earth magic is Baye, and its end is Baye too. Long ago Baye saved Hongqi with a kind heart,
+msg.0760	and so created the life-saving spell, the Heart of Baye. Later heirs built on it the Hongqi Strike, and the Dakelitan Curse, whose attack is supreme. But remember: a person is made human by kindness....
+msg.0761	Wind, flowers, snow and moon, yet the clouds and mist will not part! The witch lord lives forever; how can she be made to die.... Magic is only for the balance of the world; "the Heart of Baye" is the life of Hongqi.....
+msg.0762	The divine dragon lives again! You are amazing, great heroes!
+msg.0763	Legend says the arena of the Bangpei Empire is the way to the underground continent, and the fireball in the mouth of the dragon god picture and the Bone Key are an important key.
+msg.0764	The Fire Freezer
+msg.0765	I am Li Cheng, physician to the old Bangpei court. Sangdesi, first get the Blood Jade from the outer room, then come see me.
+msg.0766	Trade the Blood Jade to the king of Waiyinka for the Sure-Win Charm, then gamble with Adaer of Liyinka to win the secret of the Plunge Tunnel into the undersea continent. Then you can get the Sky Wing,
+msg.0767	find the Amethyst Key on the sky continent, and break the four signs of the devil child's heart, and so free the world of Hongqi.. As for.. Sangruike, rest easy, I'll look after him!
+msg.0768	The Mirror Shield is the tool for entering the Temple of Aidefu. The Hongqi Star, taken from the Tomb of Xigula in Waiyinka after opening it with the Diamond Cross, is the key to reading the Divine Cave's treasure map.
+msg.0769	Everyone's hopes are on you. Keep at it!

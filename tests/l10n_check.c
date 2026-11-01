@@ -11,6 +11,20 @@
 static const char *const TABLES[] = {"messages", "fields", "items", "spells", "code", "pictures"};
 static int problems = 0;
 
+/* Messages shown in boxes that do not wait, where a translation gets one box of three rows: the sellers' and askers' talks
+ * (tools/l10n_nowait.py on the shipped and the new game's __1.NOW) and the system's prompts (walk.c: 9, 593, 594, 595, 745). */
+static const unsigned NO_WAIT[] = {9,   54,  142, 143, 148, 151, 154, 155, 161, 164, 167, 177, 181, 182, 183, 226, 241,
+                                   242, 257, 270, 545, 562, 593, 594, 595, 599, 745};
+
+static int no_wait(const char *id)
+{
+    unsigned n = (unsigned)atoi(id + 4);
+    for (size_t i = 0; i < sizeof NO_WAIT / sizeof *NO_WAIT; i++)
+        if (NO_WAIT[i] == n)
+            return 1;
+    return 0;
+}
+
 static void problem(const char *id, const char *what, const char *text)
 {
     printf("%s: %s: %s\n", id, what, text);
@@ -68,7 +82,7 @@ static unsigned room(const char *id, const char *bytes, int *narrow_ok)
         return 112;
     if (!strcmp(id, "gameover"))
         return 93;
-    *narrow_ok = starts(id, "item.") || starts(id, "spell.") || starts(id, "member.");
+    /* drawn by battle_text_pic, which turns to the narrow font when the normal one does not fit */
     return 8u * (unsigned)atoi(bytes);
 }
 
@@ -139,10 +153,25 @@ int main(int argc, char **argv)
                     snprintf(what, sizeof what, "%u pixels (%u narrow) in %u", w, wn, limit);
                     problem(id, what, text);
                 }
-                if ((starts(id, "item.") || starts(id, "spell.")) && l10n_width(text, len, L10N_FONT_NARROW) / 6 > 16)
+                unsigned chars = 0;
+                for (const char *s = text; l10n_next(&s);)
+                    chars++;
+                if ((starts(id, "item.") || starts(id, "spell.")) && chars > 16)
                     problem(id, "more than 16 characters", text);
             } else {   /* a message: how many boxes of three 320-pixel rows */
                 unsigned n = l10n_wrap(text, 320, L10N_FONT_NORMAL, NULL, 0), b = (n + 2) / 3;
+                unsigned msg = (unsigned)atoi(id + 4);
+                if (msg >= 1 && msg <= 6 && l10n_width(text, len, L10N_FONT_NARROW) > 320) {   /* a shop's greeting: one strip */
+                    char what[64];
+                    snprintf(what, sizeof what, "%u pixels narrow in the shop's 320-pixel strip",
+                             l10n_width(text, len, L10N_FONT_NARROW));
+                    problem(id, what, text);
+                }
+                if (n > 3 && no_wait(id)) {
+                    char what[64];
+                    snprintf(what, sizeof what, "%u rows in a box that does not wait (3)", n);
+                    problem(id, what, text);
+                }
                 boxes += b;
                 if (b > longest) {
                     longest = b;
