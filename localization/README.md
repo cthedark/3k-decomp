@@ -95,8 +95,9 @@ are not words, nor the empty 708), every item (219) and spell (50), every field 
 the inn's and healer's price rows) and the programs' own strings: 1,065 texts each, all passing `l10n_check`. Drafted from the
 Chinese by Kiro; to be read through by the operator while playing.
 - Names follow the rule (pinyin; Korean readings), listed in `glossary.tsv`. Some Korean readings are also ordinary words (娜蒂
-  나체 "nude", 莎坦 사탄 "Satan", 貝倫 패륜 "immorality", 卡文 가문 "family") and some names are Norse names in Chinese (耶夢加得
-  Jormungandr, 芬麗絲 Fenrir, 尼德赫克 Nidhogg, 赫拉 Hel, 洛奇 Loki): marked "(?)" there, for the operator to decide.
+  나체 "nude", 莎坦 사탄 "Satan", 貝倫 패륜 "immorality", 卡文 가문 "family"): marked "(?)" there, for the operator to
+  decide. The Norse names spelled in Chinese take each language's form (operator): 耶夢加得 Jormungandr / 요르문간드, 芬麗絲
+  Fenrir / 펜리르, 尼德赫克 Nidhogg / 니드호그, 赫拉 Hel / 헬, 洛奇 Loki / 로키.
 - Spells: English by meaning, Korean by the Sino-Korean reading of the characters.
 - Strings the game puts together (the coins F3 shows, a sale's prices) are translated piece by piece: `battle_text_pic` takes the
   ASCII as it is and each run of Chinese by its own entry (`code.coins`, `code.price`, `code.half`, `code.sell`).
