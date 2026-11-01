@@ -22,8 +22,10 @@ from unicorn import UC_HOOK_CODE  # noqa: E402
 from unicorn.x86_const import UC_X86_REG_BP, UC_X86_REG_SS  # noqa: E402
 
 # loop top -> its number (the port's record carries the same number); 0x10603 is the first scene's end
-TOPS = {0x1042D: 1, 0x10603: 2, 0x106D1: 3, 0x108D0: 4}
-NAMES = {1: 'scene 1', 2: 'scene 1 ended', 3: 'scene 2', 4: 'scene 2 ended'}
+TOPS = {0x1042D: 1, 0x10603: 2, 0x106D1: 3, 0x108D0: 4, 0x10968: 5, 0x10BA1: 6, 0x10CD1: 7, 0x10D2A: 8, 0x10D58: 9,
+        0x10EA0: 10}
+NAMES = {1: 'scene 1', 2: 'scene 1 ended', 3: 'scene 2', 4: 'scene 2 ended', 5: 'scene 3', 6: 'scene 3 ended',
+         7: 'scene 4 shake', 8: 'scene 4 shake ended', 9: 'scene 4 strobe', 10: 'scene 4 ended'}
 FRAME = 1 + 64000 + 768
 
 
@@ -47,7 +49,7 @@ def oracle(n, keep, probe):
             ss, bp = emu.r(UC_X86_REG_SS), emu.r(UC_X86_REG_BP)
             loc = lambda o: struct.unpack('<H', bytes(uc.mem_read(ss * 16 + ((bp - o) & 0xFFFF), 2)))[0]  # noqa: E731
             print('probe at the first loop top: ' + ' '.join(f'[bp-{o:#x}] {loc(o):#06x}' for o in (0x48, 0x3e, 0x40, 0x42)))
-        rec.append((TOPS[address], bytes(uc.mem_read(VGA, 64000)), bytes(emu.pal)))
+        rec.append((TOPS[address], bytes(uc.mem_read(VGA, 64000)), bytes(emu.pal), emu.ticks))
 
     for top in TOPS:
         emu.uc.hook_add(UC_HOOK_CODE, cb, None, top, top)
@@ -62,6 +64,7 @@ def main():
     ap.add_argument('--port', default='build/ending_dump')
     ap.add_argument('--keep', default='work/ending_check')
     ap.add_argument('--probe', action='store_true')
+    ap.add_argument('--pace', action='store_true', help='print each loop\'s passes and BIOS ticks in the original')
     a = ap.parse_args()
     Path(a.keep).mkdir(parents=True, exist_ok=True)
     rec = None
@@ -73,6 +76,13 @@ def main():
         rec = oracle(a.n, a.keep, a.probe)
         if a.cache:
             Path(a.cache).write_bytes(zlib.compress(pickle.dumps(rec), 1))
+    if a.pace and len(rec[0]) > 3:
+        spans = {}
+        for (k, *_, t0), (_, *_, t1) in zip(rec, rec[1:]):
+            n, t = spans.get(k, (0, 0))
+            spans[k] = (n + 1, t + t1 - t0)
+        for k, (n, t) in spans.items():
+            print(f'{NAMES.get(k)}: {n} passes in {t} ticks, {t * 54.925 / n:.1f} ms a pass')
     import subprocess
     out = Path(a.keep) / 'port.bin'
     r = subprocess.run([a.port, 'original_bin', str(len(rec)), str(out)], capture_output=True, text=True)
@@ -82,7 +92,7 @@ def main():
     pb = out.read_bytes()
     prec = [(pb[i], pb[i + 1:i + 64001], pb[i + 64001:i + FRAME]) for i in range(0, len(pb) - FRAME + 1, FRAME)]
     bad = 0
-    for i, (k, scr, pal) in enumerate(rec):
+    for i, (k, scr, pal, *_) in enumerate(rec):
         if i >= len(prec):
             print(f'record {i}: the port stopped after {len(prec)} records ({NAMES.get(k)} in the original)')
             return 1
@@ -105,7 +115,7 @@ def main():
     if bad:
         return 1
     counts = {}
-    for k, _, _ in rec:
+    for k, *_ in rec:
         counts[NAMES.get(k)] = counts.get(NAMES.get(k), 0) + 1
     print(f'all {len(rec)} records identical (' + ', '.join(f'{v} {k}' for k, v in counts.items()) + ')')
     return 0

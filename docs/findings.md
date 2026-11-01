@@ -4251,3 +4251,56 @@ player already loops.
 **Checked:** all 890 records of the two scenes identical (388 + 1 + 500 + 1). `tools/mutate_ending.py`: 34 mutations (16 for this
 scene), all caught. ASan / UBSan clean. The voice is not compared: the emulator has no Sound Blaster. The port plays the blocks with the
 `_1_.LOC` bank the world uses (`ending_set_voice`, `src/main.c`), cutting the sound before each and after each picture's 100 passes.
+
+## ENDING.SL step 4: the third scene (`0x108d0` .. `0x10b99`), 2026-11-01
+
+READ from the code (`work/e1/ending.asm`; `0x11917`), built in C and CONFIRMED by the comparison (loop top `0x10968`, its end
+`0x10ba1`: 103 records more, 993 in all).
+
+**Set-up:** `ending3.lcz` unpacked: at 0 two 151 x 192 pictures of her with headers (at 0 and 0x7144) into `[bp-0x22]`; at 0x3e6b the
+red sky and at 0x4a52 the sparks, each 320 x 200 with a header, into `[bp-0x36]` and `[bp-0x46]`. Her place `[bp-0x48]` 0xa46 (70, 8),
+`[bp-0x14]` 0, `[bp-0x1a]` 0.
+
+**A pass (`0x10968`):** with a Sound Blaster and the voice idle (`[0x15e]` 0), the sound cut and `_1_.loc` 0x37a3 played (so it
+repeats through the scene). The sky drifts on every second pass (the byte `[bp-0x3e]` toggles; it is 0 from the first scene, so it
+first drifts on the second pass), the sparks every pass. A drift: the rows turned a pixel left (`0x1252d` mode 1), the first row kept in
+the frame buffer, the picture moved up a row (`0x11917(pic, 1)`: from row 1, w x (h - 1) bytes), and the row put last. Then the sky into
+the frame; her picture at her place (`0x11ec6`, colour 0 clear), the two by turns; the sparks over everything (`0x12146`, colour 0 clear,
+0xfa00 bytes); she goes a row down and both pictures' heights (their header's low byte) become the first's less one, so her bottom
+stays at row 200 and she sinks out of sight. Past 0x88b8 (row 109) the loop ends at once (with a Sound Blaster the sound is cut) and the
+screen is cleared. Else every seventh pass she moves a pixel right, the frame is shown and the song is kept going.
+
+**Pace (SEEN in the emulator, `work/e1/run.log`):** the three scenes take 506, 164 and 282 BIOS ticks for 388, 500 and 102 passes:
+0.77, 3.05 and 0.36 passes a tick. Their passes do very different amounts of work (scene 2 moves a few small pictures, scene 3 two
+64 KB layers twice), so on one machine a scene-3 pass took about twice a scene-1 pass and eight times a scene-2 pass. At one fixed rate
+for all (35 a second) the scenes would last 11 s, 14 s and 2.9 s; at the emulator's rates 28 s, 9 s and 15.5 s, which the port now
+uses (a period per scene, `src/timing.h`).
+
+**Checked:** all 993 records identical. `tools/mutate_ending.py`: 14 new mutations (48 in all), all caught; two dropped (her pictures
+keeping their height: the rows that would show are below the frame's 200). ASan / UBSan clean. The repeating sound is not compared (no
+Sound Blaster in the emulator); the port plays it when no sound plays (`ending_set_voice`'s `busy`).
+
+## ENDING.SL step 5: the fourth scene (`0x10ba1` .. `0x10e9d`), 2026-11-01
+
+READ from the code (`work/e1/ending.asm`), built in C and CONFIRMED by the comparison (loop tops `0x10cd1` and `0x10d58`, the ends
+`0x10d2a` and `0x10ea0`: 382 records more, 1,375 in all). The girl in blue of step 1 is this scene's end: the villain, sitting on the
+grass, turns from red to blue.
+
+**Set-up:** `ending4.lcz` (0x45cc9 bytes) read in seven blocks one after the other through one handle (0xa5ec, 0x8788, 0x899c,
+0x8f1a, 0x913a, 0x8e56 and 0x853e bytes; together 0x3eaf8, the rest of the file is read by the next scene): the first unpacked straight
+onto the screen from row 1 (0xf780 bytes, 320 x 198, no header): her, sitting in red on the grass; the second unpacked into `[bp-0x22]`;
+the other five kept packed in `[bp-0x36]`, `[bp-0x46]`, `[bp-0xe]`, `[bp-0x1e]` and `[bp-0x32]` (over the voice). Each of those six is a
+320 x 165 picture without a header. The screen is copied into the frame.
+
+**The shake (`0x10cd1`, 80 passes, `si`):** the frame on the screen at row 0 and one row down by turns (`[bp-0x1a]`); the copy one row
+down runs 320 bytes past the screen into video memory nobody shows. Then (`0x10d2a`) the screen's rows 20 .. 184 into the frame.
+
+**The flicker (`0x10d58`):** the song kept going; for 49 passes the frame (the last picture) and `[bp-0x22]` (the next) by turns on rows
+20 .. 184, so one flickers into the other; on the 50th the next becomes the frame and the next block is unpacked into `[bp-0x22]`
+(`[bp-0x26]` 1 .. 5); after the sixth picture (300 passes) the loop ends. The six pictures turn her robe from red to blue a part at a
+time.
+
+**Pace:** 80 passes in 10 ticks and 300 in 37: about 7 ms a pass (`TK_ENDING_SCENE4_MS`), 2.7 s for the scene. `tools/ending_check.py
+--pace` now prints each loop's passes and ticks from the records (they carry the emulator's tick).
+
+**Checked:** all 1,375 records identical. `tools/mutate_ending.py`: 13 new mutations (61 in all), all caught. ASan / UBSan clean.

@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WORK = ROOT / 'work/mut_ending'
-CACHE = ROOT / 'work/ending_check/s2.rec'
+CACHE = ROOT / 'work/ending_check/s4.rec'
 M = []
 
 
@@ -58,10 +58,43 @@ m('s2: four pictures', '    if (e->face == 0x8FD4)\n        return ENDING_SCENE2
 m('s2: size not read again', '    e->which = 0;\n    return ENDING_SCENE2;\n}', '    e->which = 1;\n    return ENDING_SCENE2;\n}')
 m('s2: count of the next picture kept', '        e->which = 1;\n        e->wait = 0;', '        e->which = 1;')
 
+# the third scene (step 4)
+m('s3: sky from 0x3e6c', '    unpack(e->file + 0x3E6B, n - 0x3E6B, e->b36, BUF);', '    unpack(e->file + 0x3E6C, n - 0x3E6C, e->b36, BUF);')
+m('s3: she starts a row lower', '    e->swap = 0xA46;', '    e->swap = 0xB86;')
+m('s3: sky drifts every pass', '    if (e->talk) {\n        drift(e, e->b36);', '    if (1) {\n        drift(e, e->b36);')
+m('s3: sky drifts on the other passes', '        e->talk = 0;\n    } else {\n        e->talk = 1;', '        e->talk = 1;\n    } else {\n        e->talk = 0;')
+m('s3: sparks still', '    drift(e, e->b46);\n', '')
+m('s3: drift without the wrap', '    memcpy(pic + 0xF8C4, e->file, 0x140);', '    (void)0;')
+m('s3: drift not up', '    memmove(pic + 4, pic + 4 + 0x140, 0xFA00 - 0x140);', '    (void)0;')
+m('s3: one picture of her', '    e->face = e->face ? 0 : 0x7144;', '    (void)0;')
+m('s3: she is opaque', '            if (v && o < BUF)\n                e->file[o] = v;\n        }\n    e->face', '            if (o < BUF)\n                e->file[o] = v;\n        }\n    e->face')
+m('s3: sparks opaque', '        if (e->b46[4 + i])\n            e->file[i] = e->b46[4 + i];', '        e->file[i] = e->b46[4 + i];')
+m('s3: sparks under her', '    for (unsigned i = 0; i < 0xFA00; i++)   /* 0x12146 */\n        if (e->b46[4 + i])\n            e->file[i] = e->b46[4 + i];\n', '')
+# Dropped: her pictures keeping their height (she goes a row down as they lose a row, so her bottom stays at row 200; the rows
+# below would fall past the frame's 200 rows, which are not shown).
+m('s3: ends a row later', '    if (e->swap > 0x88B8) {', '    if (e->swap > 0x89F8) {')
+m('s3: last frame shown', '        memset(scr->pix, 0, sizeof scr->pix);\n        return ENDING_SCENE3_END;', '        memcpy(scr->pix, e->file, 0xFA00);\n        return ENDING_SCENE3_END;')
+m('s3: right every sixth pass', '    if (++e->which > 6) {', '    if (++e->which > 5) {')
+
+# the fourth scene (step 5)
+m('s4: first picture from row 0', '                scr->pix[0x140 + i] = pic[i];', '                scr->pix[i] = pic[i];')
+m('s4: blocks from the file start', '        at += m;', '        (void)0;')
+m('s4: frame not taken from the screen', '    memcpy(e->file, scr->pix, 0xFA00);\n    e->which = 0;\n    e->wait = 0;', '    e->which = 0;\n    e->wait = 0;')
+m('s4: no shake', '        memcpy(scr->pix + 0x140, e->file, 0xFA00 - 0x140);', '        memcpy(scr->pix, e->file, 0xFA00);')
+m('s4: shake starts high', '    e->which = 0;\n    e->wait = 0;\n    return ENDING_SCENE4_SHAKE;', '    e->which = 1;\n    e->wait = 0;\n    return ENDING_SCENE4_SHAKE;')
+m('s4: 79 shakes', '    return ++e->wait < 0x50 ?', '    return ++e->wait < 0x4F ?')
+m('s4: strobe frame from row 21', '    memcpy(e->file, scr->pix + 0x1900, 0xCE40);', '    memcpy(e->file, scr->pix + 0x1A40, 0xCE40);')
+m('s4: strobe starts with the next', '    e->rounds = 1;\n    e->which = 1;', '    e->rounds = 1;\n    e->which = 0;')
+m('s4: strobe at row 0', '            memcpy(scr->pix + 0x1900, e->b22, 0xCE40);', '            memcpy(scr->pix, e->b22, 0xCE40);')
+m('s4: 51 passes a picture', '    if (++e->face < 0x32) {', '    if (++e->face < 0x33) {')
+m('s4: next not kept', '    memcpy(e->file, e->b22, 0xCE40);\n    if (e->rounds', '    if (e->rounds')
+m('s4: blocks one late', '        unpack(keep[e->rounds - 1], BUF, e->b22, BUF);', '        unpack(keep[e->rounds > 1 ? e->rounds - 2 : 0], BUF, e->b22, BUF);')
+m('s4: five pictures', '    if (e->rounds == 6)\n        return ENDING_SCENE4_END;', '    if (e->rounds == 5)\n        return ENDING_SCENE4_END;')
+
 
 def main():
     if not CACHE.exists():
-        print('run tools/ending_check.py --n 3000 --cache work/ending_check/s2.rec first')
+        print('run tools/ending_check.py --n 3000 --cache work/ending_check/s4.rec first')
         return 2
     missed = bad = 0
     WORK.mkdir(parents=True, exist_ok=True)

@@ -1148,8 +1148,19 @@ static void ending_voice(void *ctx, unsigned off)
     sfx_play(ctx, SFX_LOC, off);
 }
 
+/* The period of ENDING.SL's next pass, by the loop it is in (a scene's set-up step goes at the pace of the scene it starts) */
+static uint32_t ending_period(int loop)
+{
+    switch (loop) {
+    case ENDING_SCENE1: return TK_ENDING_SCENE1_MS;
+    case ENDING_SCENE1_END: case ENDING_SCENE2: return TK_ENDING_SCENE2_MS;
+    case ENDING_SCENE2_END: case ENDING_SCENE3: return TK_ENDING_SCENE3_MS;
+    default: return TK_ENDING_SCENE4_MS;
+    }
+}
+
 /* ENDING.SL (ending.h) in real time, with the intro's song (ENDING.SL 0x102d5 starts the same block when there is an FM card). Its
- * loops wait for nothing, so they run at TK_ENDING_PASS_HZ. With a sound device the voice lines play (a Sound Blaster). Only the first
+ * loops wait for nothing; each scene runs at its own period (TK_ENDING_SCENE1_MS ..). With a sound device the voice lines play (a Sound Blaster). Only the first
  * scenes are built: after them the run stops and says so.
  * Returns 0, or 1 when the window was closed. */
 static int play_ending(screen_t *scr)
@@ -1162,7 +1173,7 @@ static int play_ending(screen_t *scr)
     music_t *song = song_start("ending");
     sfx_bank_t *bank = audio_enabled() ? sfx_bank_load() : NULL;   /* the voice lines are blocks of _1_.LOC */
     if (bank)
-        ending_set_voice(e, ending_voice, sfx_cut, bank);
+        ending_set_voice(e, ending_voice, sfx_cut, sfx_busy, bank);
     platform_present(scr);
     uint32_t next = platform_ticks_ms();
     int loop = ENDING_SCENE1, quit = 0;
@@ -1176,7 +1187,10 @@ static int play_ending(screen_t *scr)
             platform_sleep_ms(1);
             continue;
         }
-        next = next_due(next, now, TK_ENDING_PASS_HZ);
+        uint32_t period = ending_period(loop);   /* as next_due: at most one pass of lateness carried */
+        next += period;
+        if ((int32_t)(now - next) > (int32_t)period)
+            next = now;
         loop = ending_step(e, scr);
         platform_present(scr);
     }

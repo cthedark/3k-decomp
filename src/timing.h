@@ -107,10 +107,15 @@
  * menu and the intro. A choice, not a measurement; the operator found the idle world right by eye (2026-10-17). */
 #define TK_WALK_PASS_HZ 35
 
-/* ENDING.SL's loops (the first scene's 0x1042d: 388 passes, each turning a 320 x 200 picture a pixel and copying 64 KB twice) wait
- * for nothing either. 35 as for the other unpaced loops: the first scene lasts 11 s and each subtitle line 1.4 s. (The emulator, at
- * its arbitrary 250,000 instructions a tick, runs the scene at about 14 passes a second.) A choice, not a measurement. */
-#define TK_ENDING_PASS_HZ 35
+/* ENDING.SL's loops wait for nothing either, and their passes do very different amounts of work, so each scene has its own period:
+ * the time a pass took in tools/dosemu.py (250,000 instructions a BIOS tick of 54.9 ms; docs/findings.md "ENDING.SL step 4"):
+ * scene 1, 388 passes in 506 ticks; scene 2, 500 in 163; scene 3, 102 in 280; scene 4, 80 + 300 in 10 + 37 (tools/ending_check.py
+ * --pace). The scenes then last 28 s, 9 s, 15.4 s and 2.7 s and a subtitle line 3.4 s. The emulator's speed is a model of one machine, not a measurement of a real one: the proportions between the
+ * scenes are the original's, the overall speed is a choice. */
+#define TK_ENDING_SCENE1_MS 72
+#define TK_ENDING_SCENE2_MS 18
+#define TK_ENDING_SCENE3_MS 151
+#define TK_ENDING_SCENE4_MS 7
 /* The BIOS clock the world reads (rain strength, the dark specks, the villagers' direction choice) runs at
  * 1193182 / 65536 = 18.2065 ticks per second. */
 #define TK_BIOS_TICKS_PER_SEC_NUM 1193182ull

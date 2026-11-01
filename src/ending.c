@@ -32,6 +32,7 @@ struct ending {
      * and [bp-0x28] (count, at) its width and height, [bp-0x48] (swap) where it goes on the screen */
     void (*voice)(void *ctx, unsigned off);   /* ending_set_voice */
     void (*cut)(void *ctx);
+    int (*busy)(void *ctx);
     void *vctx;
 };
 
@@ -299,10 +300,168 @@ static int scene2(ending_t *e, screen_t *scr)
     return ENDING_SCENE2;
 }
 
-void ending_set_voice(ending_t *e, void (*play)(void *ctx, unsigned off), void (*cut)(void *ctx), void *ctx)
+/* 0x108d0 .. 0x10965: ENDING3.LCZ unpacked, at 0 two 151 x 192 pictures of her with headers (0 and 0x7144) into [bp-0x22], at 0x3e6b
+ * the red sky and at 0x4a52 the sparks, both 320 x 200 with headers, into [bp-0x36] and [bp-0x46]; her place [bp-0x48] 0xa46, (70, 8);
+ * the picture shown [bp-0x14] 0, the pass counter [bp-0x1a] 0. */
+static int scene3_begin(ending_t *e)
+{
+    size_t n = read_file(e, "ENDING3.LCZ");
+    if (n < 0x4A52)
+        return 0;
+    unpack(e->file, n, e->b22, BUF);
+    unpack(e->file + 0x3E6B, n - 0x3E6B, e->b36, BUF);
+    unpack(e->file + 0x4A52, n - 0x4A52, e->b46, BUF);
+    e->swap = 0xA46;
+    e->face = 0;
+    e->which = 0;
+    return ENDING_SCENE3;
+}
+
+/* A layer drifts (0x1252d mode 1, 0x11917): its rows turned a pixel left, then the whole moved up a row with the first row put last */
+static void drift(ending_t *e, uint8_t *pic)
+{
+    turn_rows(pic);
+    memcpy(e->file, pic + 4, 0x140);
+    memmove(pic + 4, pic + 4 + 0x140, 0xFA00 - 0x140);   /* 0x11917(pic, 1): w x (h - 1) from row 1 */
+    memcpy(pic + 0xF8C4, e->file, 0x140);
+}
+
+/* 0x10968 .. 0x10b69, a pass of the third scene. With a Sound Blaster and no sound playing, _1_.LOC 0x37a3 (the sound cut first). The
+ * red sky drifts every second pass ([bp-0x3e], left from the first scene), the sparks every pass; the sky into the frame; her picture
+ * (the two by turns, colour 0 clear) at her place; the sparks over all (colour 0 clear); she goes a row down and both pictures lose
+ * their last row, so she sinks; past 0x88b8 the loop ends before the frame is shown; every seventh pass she moves a pixel right; the
+ * frame shown. At its end (0x10b6c) the sound is cut and the screen cleared. */
+static int scene3(ending_t *e, screen_t *scr)
+{
+    if (e->busy && !e->busy(e->vctx))
+        e->voice(e->vctx, 0x37A3);
+    if (e->talk) {
+        drift(e, e->b36);
+        e->talk = 0;
+    } else {
+        e->talk = 1;
+    }
+    drift(e, e->b46);
+    memcpy(e->file, e->b36 + 4, 0xFA00);
+    const uint8_t *f = e->b22 + e->face;   /* 0x11ec6 */
+    unsigned fw = w16(f, 0), fh = w16(f, 2);
+    for (unsigned r = 0; r < fh; r++)
+        for (unsigned c = 0; c < fw; c++) {
+            size_t o = (size_t)e->swap + (size_t)r * 0x140 + c;
+            uint8_t v = f[4 + (size_t)r * fw + c];
+            if (v && o < BUF)
+                e->file[o] = v;
+        }
+    e->face = e->face ? 0 : 0x7144;
+    for (unsigned i = 0; i < 0xFA00; i++)   /* 0x12146 */
+        if (e->b46[4 + i])
+            e->file[i] = e->b46[4 + i];
+    e->swap += 0x140;
+    uint8_t h = (uint8_t)(e->b22[2] - 1);   /* [bp-0x2a]: the first picture's height less one, for both */
+    e->b22[0x7146] = h;
+    e->b22[2] = h;
+    if (e->swap > 0x88B8) {
+        if (e->cut)
+            e->cut(e->vctx);
+        memset(scr->pix, 0, sizeof scr->pix);
+        return ENDING_SCENE3_END;
+    }
+    if (++e->which > 6) {
+        e->which = 0;
+        e->swap++;
+    }
+    memcpy(scr->pix, e->file, 0xFA00);
+    return ENDING_SCENE3;
+}
+
+/* 0x10ba1 .. 0x10ccb: ENDING4.LCZ read in seven blocks one after another (0xa5ec, 0x8788, 0x899c, 0x8f1a, 0x913a, 0x8e56, 0x853e
+ * bytes): the first unpacked straight onto the screen from row 1 (320 x 198), the second unpacked into [bp-0x22], the other five kept
+ * packed in [bp-0x36], [bp-0x46], [bp-0xe], [bp-0x1e] and [bp-0x32] (over the voice); the screen copied into the frame. Each block is
+ * a 320 x 165 picture without a header but the first. */
+static int scene4_begin(ending_t *e, screen_t *scr)
+{
+    static const unsigned len[7] = {0xA5EC, 0x8788, 0x899C, 0x8F1A, 0x913A, 0x8E56, 0x853E};
+    uint8_t *keep[5] = {e->b36, e->b46, e->be, e->b1e, e->b32};
+    size_t n = 0, at = 0;
+    uint8_t *all = assets_read("ENDING4.LCZ", &n);
+    if (!all)
+        return 0;
+    for (int k = 0; k < 7; k++) {
+        size_t m = at < n ? (n - at < len[k] ? n - at : len[k]) : 0;
+        uint8_t *dst = k == 0 || k == 1 ? e->file : keep[k - 2];
+        memcpy(dst, all + at, m);
+        at += m;
+        if (k == 0) {
+            static uint8_t pic[0x10000];
+            size_t o = unpack(e->file, m, pic, sizeof pic);
+            for (size_t i = 0; i < o && 0x140 + i < sizeof scr->pix; i++)
+                scr->pix[0x140 + i] = pic[i];
+        }
+        if (k == 1)
+            unpack(e->file, m, e->b22, BUF);
+    }
+    free(all);
+    memcpy(e->file, scr->pix, 0xFA00);
+    e->which = 0;
+    e->wait = 0;
+    return ENDING_SCENE4_SHAKE;
+}
+
+/* 0x10cd1 .. 0x10d27, 80 passes: the frame on the screen at row 0 and at row 1 by turns (the copy one row down runs 320 bytes past the
+ * screen's end, which the port drops), so the picture shakes. */
+static int scene4_shake(ending_t *e, screen_t *scr)
+{
+    if (e->which) {
+        memcpy(scr->pix, e->file, 0xFA00);
+        e->which = 0;
+    } else {
+        memcpy(scr->pix + 0x140, e->file, 0xFA00 - 0x140);
+        e->which = 1;
+    }
+    return ++e->wait < 0x50 ? ENDING_SCENE4_SHAKE : ENDING_SCENE4_SHAKE_END;
+}
+
+/* 0x10d2a .. 0x10d55: the screen's rows 20 .. 184 into the frame; the pass count [bp-0x14] 0, the next block [bp-0x26] 1, [bp-0x1a] 1 */
+static int scene4_strobe_begin(ending_t *e, screen_t *scr)
+{
+    memcpy(e->file, scr->pix + 0x1900, 0xCE40);
+    e->face = 0;
+    e->rounds = 1;
+    e->which = 1;
+    return ENDING_SCENE4_STROBE;
+}
+
+/* 0x10d58 .. 0x10e9d, a pass: the song kept going; for 49 passes the frame (the picture before) and [bp-0x22] (the next) by turns on the
+ * screen's rows 20 .. 184, so the one flickers into the other; on the 50th the next becomes the frame and the next block is unpacked
+ * into [bp-0x22]; after the sixth picture the loop ends. */
+static int scene4_strobe(ending_t *e, screen_t *scr)
+{
+    uint8_t *keep[5] = {e->b36, e->b46, e->be, e->b1e, e->b32};
+    if (++e->face < 0x32) {
+        if (e->which) {
+            memcpy(scr->pix + 0x1900, e->file, 0xCE40);
+            e->which = 0;
+        } else {
+            memcpy(scr->pix + 0x1900, e->b22, 0xCE40);
+            e->which = 1;
+        }
+        return ENDING_SCENE4_STROBE;
+    }
+    e->face = 0;
+    memcpy(e->file, e->b22, 0xCE40);
+    if (e->rounds >= 1 && e->rounds <= 5)
+        unpack(keep[e->rounds - 1], BUF, e->b22, BUF);
+    if (e->rounds == 6)
+        return ENDING_SCENE4_END;
+    e->rounds++;
+    return ENDING_SCENE4_STROBE;
+}
+
+void ending_set_voice(ending_t *e, void (*play)(void *ctx, unsigned off), void (*cut)(void *ctx), int (*busy)(void *ctx), void *ctx)
 {
     e->voice = play;
     e->cut = cut;
+    e->busy = busy;
     e->vctx = ctx;
 }
 
@@ -312,6 +471,12 @@ int ending_step(ending_t *e, screen_t *scr)
     case ENDING_SCENE1: e->loop = scene1(e, scr); break;
     case ENDING_SCENE1_END: e->loop = scene2_begin(e, scr); break;
     case ENDING_SCENE2: e->loop = scene2(e, scr); break;
+    case ENDING_SCENE2_END: e->loop = scene3_begin(e); break;
+    case ENDING_SCENE3: e->loop = scene3(e, scr); break;
+    case ENDING_SCENE3_END: e->loop = scene4_begin(e, scr); break;
+    case ENDING_SCENE4_SHAKE: e->loop = scene4_shake(e, scr); break;
+    case ENDING_SCENE4_SHAKE_END: e->loop = scene4_strobe_begin(e, scr); break;
+    case ENDING_SCENE4_STROBE: e->loop = scene4_strobe(e, scr); break;
     default: e->loop = 0; break;
     }
     return e->loop;

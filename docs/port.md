@@ -1522,3 +1522,25 @@ After the first scene, five pictures over a scrolling background build up a coll
   dummy drivers.
 - **Not compared:** the voice (the emulator has no Sound Blaster); the five blocks decode (0.33 .. 0.67 s each).
 - **Pace:** 100 passes a picture, 2.9 s at `TK_ENDING_PASS_HZ`.
+
+## Milestone 10c: ENDING.SL, the third scene (C), built 2026-11-01
+After the collage, her figure sinks into a dark red sky that drifts up and to the left, with a layer of sparks drifting faster over it,
+and a sound repeating (`_1_.LOC` 0x37a3) when there is a sound device (`docs/findings.md` "ENDING.SL step 4").
+
+- **Code:** `src/ending.c` (`scene3_begin`, `scene3`, `drift`); `ending_set_voice` takes a `busy` callback; `tools/ending_check.py`
+  (loop tops `0x10968`, `0x10ba1`).
+- **Checked:** all 993 records of the three scenes identical; 48 mutations, all caught, two dropped with a note; ASan / UBSan clean.
+- **Pace (also 2026-11-01):** each scene now has its own period, the time a pass took in the emulator (`TK_ENDING_SCENE1_MS` 72,
+  `..2_MS` 18, `..3_MS` 152 in `src/timing.h`): the scenes last 28 s, 9 s and 15.5 s, a subtitle line 3.4 s. This replaces the one rate
+  of 35 passes a second of 10a and 10b. The proportions are the original's; the overall speed (the emulator's machine) is a choice, not
+  yet judged by eye.
+
+## Milestone 10d: ENDING.SL, the fourth scene (C), built 2026-11-01
+After the red sky, the villain sits on the grass in red; the picture shakes, then six pictures flicker into each other and her robe
+turns blue (`docs/findings.md` "ENDING.SL step 5").
+
+- **Code:** `src/ending.c` (`scene4_begin`, `scene4_shake`, `scene4_strobe_begin`, `scene4_strobe`); `src/timing.h`
+  (`TK_ENDING_SCENE4_MS`, 7); `tools/ending_check.py` (four more loop tops; `--pace`).
+- **Checked:** all 1,375 records of the four scenes identical; 61 mutations, all caught; ASan / UBSan clean; a real-time run under SDL's
+  dummy drivers (59 s for the four scenes).
+- **Note:** at 7 ms a pass the flicker runs faster than most screens refresh, so on screen it looks steadier than each pass would.
