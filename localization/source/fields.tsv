@@ -1,0 +1,29 @@
+# Fixed fields in MES_TXT.LCC: the shop strip (0x306), the button labels (0x386, 4 bytes = 2 characters = 32 pixels), the members' names (0x6a06), the card game's lines (0x17586).
+id	bytes	zh	big5
+shop.prices	10	謝謝惠顧 !	c1c2c1c2b466c5552021
+label.00	4	交談	a5e6bdcd
+label.01	4	觀看	c65bacdd
+label.02	4	取物	a8faaaab
+label.03	4	施法	ac49aa6b
+label.04	4	物品	aaabab7e
+label.05	4	裝備	b8cbb3c6
+label.06	4	使用	a8cfa5ce
+label.07	4	地圖	a661b9cf
+label.08	4	位置	a6ecb86d
+label.09	4	資料	b8eaaec6
+label.10	4	音樂	adb5bcd6
+label.11	4	音效	adb5aec4
+label.12	4	儲存	c078a673
+label.13	4	離開	c2f7b67d
+member.0	6	桑得斯	aee1b16fb4b5
+member.1	6	伊歐妮	a5ecbcdaa967
+member.2	6	 塔克	20b6f0a74a
+member.3	6	 賀圖	20b650b9cf
+member.4	6	凱薩琳	b3cdc2c4b559
+member.5	6	######	232323232323
+member.6	6	######	232323232323
+member.7	6	######	232323232323
+card.0	20	先生!請先下注,否則..	a5fda5cd21bdd0a5fda455aa602ca75fab682e2e
+card.1	20	謝謝!請選擇一張牌吧!	c1c2c1c221bdd0bfefbedca440b169b550a76121
+card.2	18	你輸了 ! 哈 ! 哈 !	a741bfe9a446202120aba2202120aba22021
+card.3	18	你贏了 ! 嗚 ! 嗚 !	a741c4b9a446202120b6e3202120b6e32021

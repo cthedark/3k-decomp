@@ -99,6 +99,8 @@ What is left (2026-11-01; `port.md` "Current state", "Known differences"):
 1. Play the whole story in the port, or forward from each shipped save, keeping stderr for any `walk: not built:` or
    `battle: not built:` report. Every part was compared from starts built for it; one play through has not been done.
 2. Compare the Sound Blaster's output by ear with a real or emulated card (the oracle has none), the ending's voice lines first.
+3. English and Korean (`localization/README.md`): the inventory of every on-screen text is done; next the language mode, then the
+   translations and the redrawn pictures.
 
 The world's list, in the order the operator and Kiro agreed to work (all done):
 1. The keys of `WALK.SL`'s main loop: the F-key actions, 1-4 and A (sliding) are built (`port.md` 9a to 9o), and Space (shots) (7f).

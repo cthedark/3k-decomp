@@ -1,0 +1,254 @@
+# OBJECT.LCC item names: 12 bytes (96 pixels) of each 30-byte record (item n at (n - 1) x 30).
+id	bytes	zh	big5
+item.001	12	塔塔樹果子	b6f0b6f0bef0aa47a46c
+item.002	12	鐵鑰匙	c54bc65fb0cd
+item.003	12	十層鋼刀	a451bc68bffba44d
+item.004	12	地之徽章	a661a4a7c0b2b3b9
+item.005	12	封魔劍	abcac55dbc43
+item.006	12	碎石刀	b848a5dba44d
+item.007	12	瘋狂俱樂部票	bac6a867add1bcd6b3a1b2bc
+item.008	12	圍城臂章	b3f2abb0c175b3b9
+item.009	12	結晶水	b5b2b4b9a4f4
+item.010	12	蔬菜球	bdadb5e6b279
+item.011	12	綜合便當	baeea658ab4bb7ed
+item.012	12	橡皮手套	bef3a5d6a4e2ae4d
+item.013	12	氣墊靴	aef0b9d4b975
+item.014	12	皮帽子	a5d6b455a46c
+item.015	12	銅鑰匙	bbc9c65fb0cd
+item.016	12	珍寶飯	acc3c45fb6ba
+item.017	12	山海包	a473aefca55d
+item.018	12	堅果精	b0edaa47baeb
+item.019	12	魔視鏡	c55db5f8c3e8
+item.020	12	恢復液	abecb45fb247
+item.021	12	清丸	b24da459
+item.022	12	力丸	a44fa459
+item.023	12	魔法珠	c55daa6baf5d
+item.024	12	鋼鋸	bffbbff7
+item.025	12	不銹鋼鑰匙	a4a3f9d7bffbc65fb0cd
+item.026	12	拉那鐵鎧	a9d4a8bac54bf15a
+item.027	12	川源護甲	a474b7bdc540a5d2
+item.028	12	探龍珠	b1b4c073af5d
+item.029	12	解碼器	b8d1bd58beb9
+item.030	12	魔法牌	c55daa6bb550
+item.031	12	火燄箭	a4f5bf56bd62
+item.032	12	化銀水	a4c6bbc8a4f4
+item.033	12	金匠鎚	aaf7a64bc2f1
+item.034	12	白銀鑰匙	a5d5bbc8c65fb0cd
+item.035	12	袖珍猴	b353acc3b555
+item.036	12	精算器	baebbae2beb9
+item.037	12	散花針	b4b2aae1b077
+item.038	12	銅合金頭盔	bbc9a658aaf7c059b2af
+item.039	12	落花鑰匙	b8a8aae1c65fb0cd
+item.040	12	鈽合金頭盔	b95aa658aaf7c059b2af
+item.041	12	金銀盾	aaf7bbc8acde
+item.042	12	珍珠盾	acc3af5dacde
+item.043	12	玄鐵鑰匙	a5c8c54bc65fb0cd
+item.044	12	小紙條	a470afc8b1f8
+item.045	12	虹奇巨星	ad69a95fa5a8ac50
+item.046	12	名匠劍	a657a64bbc43
+item.047	12	高壓蔬果液	b0aac0a3bdadaa47b247
+item.048	12	菁華肉籤	b5d7b5d8a6d7c5d2
+item.049	12	花香酒	aae1adbbb073
+item.050	12	虎皮手套	aaeaa5d6a4e2ae4d
+item.051	12	銀線護甲	bbc8bd75c540a5d2
+item.052	12	橡皮頭盔	bef3a5d6c059b2af
+item.053	12	追雷斧	b06cb970a9f2
+item.054	12	急風飛刀	abe6adb7adb8a44d
+item.055	12	青銅劍	ab43bbc9bc43
+item.056	12	小說	a470bba1
+item.057	12	髮夾	be76a7a8
+item.058	12	酒杯	b073aa4d
+item.059	12	玩具	aab1a8e3
+item.060	12	拖鞋	a9ecbe63
+item.061	12	工具	a475a8e3
+item.062	12	陳年香醋	b3afa67eadbbbe4c
+item.063	12	珍珠項鍊	acc3af5db6b5c1e5
+item.064	12	獸涎晶	c37eb243b4b9
+item.065	12	卡文的相片	a564a4e5aabaacdba4f9
+item.066	12	卡不提藍酒	a564a4a3b4a3c2c5b073
+item.067	12	陳麥釀	b3afb3c1c643
+item.068	12	百花釀	a6caaae1c643
+item.069	12	金城酒	aaf7abb0b073
+item.070	12	飛天茅	adb8a4d1ad54
+item.071	12	人骨鑰匙	a448b0a9c65fb0cd
+item.072	12	幻眼鏡	a4dbb2b4c3e8
+item.073	12	披風槍	a9dcadb7ba6a
+item.074	12		
+item.075	12		
+item.076	12	黃金戰靴	b6c0aaf7bed4b975
+item.077	12	鉻鋼頭盔	bbccbffbc059b2af
+item.078	12	天絲手套	a4d1b5b7a4e2ae4d
+item.079	12	邁亞通行令	c1daa8c8b371a6e6a54f
+item.080	12	天晨露	a4d1b1e1c553
+item.081	12	生命葉	a5cda952b8ad
+item.082	12	維生粉	bafba5cdafbb
+item.083	12	紅月劍	acf5a4ebbc43
+item.084	12	飛雲刀	adb8b6b3a44d
+item.085	12	殘花剪	b4ddaae1b0c5
+item.086	12	童顏水	b5a3c343a4f4
+item.087	12	圍城金甲	b3f2abb0aaf7a5d2
+item.088	12	金甲戰盔	aaf7a5d2bed4b2af
+item.089	12	亞伯拉斯劍	a8c8a742a9d4b4b5bc43
+item.090	12	水中月寶石	a4f4a4a4a4ebc45fa5db
+item.091	12	石鑰匙	a5dbc65fb0cd
+item.092	12	英雄牌	ad5eb6afb550
+item.093	12	淬煉丸	b266b7d2a459
+item.094	12	超補液	b657b8c9b247
+item.095	12	養生丹	be69a5cda4a6
+item.096	12	日照盾	a4e9b7d3acde
+item.097	12	紫星盾	b5b5ac50acde
+item.098	12	綠魔盾	baf1c55dacde
+item.099	12	珊瑚鑰匙	acc0b7e4c65fb0cd
+item.100	12	月之徽章	a4eba4a7c0b2b3b9
+item.101	12	天之徽章	a4d1a4a7c0b2b3b9
+item.102	12	日之徽章	a4e9a4a7c0b2b3b9
+item.103	12	星之徽章	ac50a4a7c0b2b3b9
+item.104	12	光能劍	a5faafe0bc43
+item.105	12	三界戰斧	a454acc9bed4a9f2
+item.106	12	邁亞天弓	c1daa8c8a4d1a47d
+item.107	12	量子槍	b671a46cba6a
+item.108	12	拉吉法杖	a9d4a64eaa6ba7fa
+item.109	12	幻魔盾	a4dbc55dacde
+item.110	12	飛雲盾	adb8b6b3acde
+item.111	12	屠龍盾	b14fc073acde
+item.112	12	生之盾	a5cda4a7acde
+item.113	12	鏡面盾	c3e8adb1acde
+item.114	12	龍鱗甲	c073c5eca5d2
+item.115	12	飛雲護鎧	adb8b6b3c540f15a
+item.116	12	靈力鎧甲	c646a44ff15aa5d2
+item.117	12	三界戰衣	a454acc9bed4a6e7
+item.118	12	水晶戰甲	a4f4b4b9bed4a5d2
+item.119	12	雲絲手套	b6b3b5b7a4e2ae4d
+item.120	12	光能手套	a5faafe0a4e2ae4d
+item.121	12	量子手套	b671a46ca4e2ae4d
+item.122	12	兵神手套	a74cafaba4e2ae4d
+item.123	12	冰晶手套	a642b4b9a4e2ae4d
+item.124	12	龍鱗頭盔	c073c5ecc059b2af
+item.125	12	飛雲頭盔	adb8b6b3c059b2af
+item.126	12	靈力頭盔	c646a44fc059b2af
+item.127	12	三界頭盔	a454acc9c059b2af
+item.128	12	水晶頭盔	a4f4b4b9c059b2af
+item.129	12	耀星劍	c4a3ac50bc43
+item.130	12	天翼刀	a4d1c16ca44d
+item.131	12	地動斧	a661b0caa9f2
+item.132	12	百花蜜	a6caaae1bb65
+item.133	12	錯花莖	bff9aae1b2f4
+item.134	12	楓花絮	b7acaae1b5b6
+item.135	12	龍眠曲	c073af76a6b1
+item.136	12	千紅香	a464acf5adbb
+item.137	12	卡藍魚翅	a564c2c5b3bdafcd
+item.138	12	屠龍珠	b14fc073af5d
+item.139	12	紫玫瑰鑰匙	b5b5aab4bac0c65fb0cd
+item.140	12	黃菊花鑰匙	b6c0b5e2aae1c65fb0cd
+item.141	12	良心鏡	a87da4dfc3e8
+item.142	12	神力丸	afaba44fa459
+item.143	12	金匠鎖鑰	aaf7a64bc2eac65f
+item.144	12	人刀戒子	a448a44da7d9a46c
+item.145	12		
+item.146	12	雙月寶石	c2f9a4ebc45fa5db
+item.147	12	秋原劍	aceeadecbc43
+item.148	12	烈陽刀	af50b6a7a44d
+item.149	12	風雪杖	adb7b3b7a7fa
+item.150	12	靈幻靴	c646a4dbb975
+item.151	12	龍動靴	c073b0cab975
+item.152	12	飛雲靴	adb8b6b3b975
+item.153	12	兵神鞋	a74cafabbe63
+item.154	12	水晶靴	a4f4b4b9b975
+item.155	12	必贏法器	a5b2c4b9aa6bbeb9
+item.156	12	裡印卡貴賓證	b8cca64ca564b651bbabc3d2
+item.157	12	扶手鑰匙	a7dfa4e2c65fb0cd
+item.158	12	沉冰錐	a849a642c040
+item.159	12	晶體鑰匙	b4b9c5e9c65fb0cd
+item.160	12	凍火釦	ade1a4f5b3a7
+item.161	12	十字鑽	a451a672c670
+item.162	12	多倫之鑰	a668addba4a7c65f
+item.163	12	王者之鍊	a4fdaacca4a7c1e5
+item.164	12	天翼	a4d1c16c
+item.165	12	姆指鑰匙	a969abfcc65fb0cd
+item.166	12	黑金鑰匙	b6c2aaf7c65fb0cd
+item.167	12	血紅鑰匙	a6e5acf5c65fb0cd
+item.168	12	秋水鑰匙	aceea4f4c65fb0cd
+item.169	12	紅魚鑰匙	acf5b3bdc65fb0cd
+item.170	12	天水劍	a4d1a4f4bc43
+item.171	12	水晶鍊墜	a4f4b4b9c1e5bc59
+item.172	12	七彩水晶	a443b16da4f4b4b9
+item.173	12	魔笛	c55db2c3
+item.174	12	貝倫之鑰	a8a9addba4a7c65f
+item.175	12	玻璃鑰匙	acc1bcfec65fb0cd
+item.176	12	血玉	a6e5a5c9
+item.177	12	古船鑰匙	a56ab2eec65fb0cd
+item.178	12	紅鑽石	acf5c670a5db
+item.179	12	綠鑽石	baf1c670a5db
+item.180	12	藍鑽石	c2c5c670a5db
+item.181	12	黃鑽石	b6c0c670a5db
+item.182	12	白鑽石	a5d5c670a5db
+item.183	12	魔水晶	c55da4f4b4b9
+item.184	12	紫水晶之鑰	b5b5a4f4b4b9a4a7c65f
+item.185	12	百神草	a6caafabaff3
+item.186	12	動力鎖	b0caa44fc2ea
+item.187	12	飛行之鑰	adb8a6e6a4a7c65f
+item.188	12	珍珠棒	acc3af5db4ce
+item.189	12	紅花魚乾	acf5aae1b3bdb0ae
+item.190	12	智慧之泉	b4bcbc7aa4a7ac75
+item.191	12	神窟藏寶圖	afabb85dc2c3c45fb9cf
+item.192	12	龍的氣息	c073aabaaef0aea7
+item.193	12	石頭的根	a5dbc059aabaaeda
+item.194	12	魚的腳步	b3bdaabab87da842
+item.195	12	黑月白日	b6c2a4eba5d5a4e9
+item.196	12	七彩玫瑰	a443b16daab4bac0
+item.197	12	陽光的風	b6a7a5faaabaadb7
+item.198	12	羊頭要匙	a6cfc059ad6eb0cd
+item.199	12	狼牙鎚	af54a4fac2f1
+item.200	12	重鐵劍	adabc54bbc43
+item.201	12	顯心符	c5e3a4dfb2c5
+item.202	12	叩天鏡	a56ea4d1c3e8
+item.203	12	喚神鈴	b3eaafabb961
+item.204	12	誘龍珠	bba4c073af5d
+item.205	12	啞口瓶	b0d7a466b27e
+item.206	12	藍鑰匙	c2c5c65fb0cd
+item.207	12		
+item.208	12		
+item.209	12		
+item.210	12		
+item.211	12	水之戰甲	a4f4a4a7bed4a5d2
+item.212	12	土行甲	a467a6e6a5d2
+item.213	12	風之戰盔	adb7a4a7bed4b2af
+item.214	12	岩之盔	a9a5a4a7b2af
+item.215	12		
+item.216	12		
+item.217	12		
+item.218	12		
+item.219	12		
+item.220	12	古典鑰匙	a56aa8e5c65fb0cd
+item.221	12	魚形鑰匙	b3bda7cec65fb0cd
+item.222	12	天垂劍	a4d1ababbc43
+item.223	12		
+item.224	12		
+item.225	12		
+item.226	12		
+item.227	12		
+item.228	12		
+item.229	12		
+item.230	12	松樹鑰匙	aa51bef0c65fb0cd
+item.231	12	水仙鑰匙	a4f4a550c65fb0cd
+item.232	12	木雕鑰匙	a4ecc04ac65fb0cd
+item.233	12	大理石鑰匙	a46ab27aa5dbc65fb0cd
+item.234	12	陶瓷鑰匙	b3b3b2a1c65fb0cd
+item.235	12	紅土鑰匙	acf5a467c65fb0cd
+item.236	12	黃泥巴鑰匙	b6c0aa64a4dac65fb0cd
+item.237	12		
+item.238	12		
+item.239	12		
+item.240	12		
+item.241	12	生命之泉	a5cda952a4a7ac75
+item.242	12	冰鑽	a642c670
+item.243	12		
+item.244	12		
+item.245	12		
+item.246	12		
+item.247	12		
+item.248	12		
+item.249	12		
+item.250	12		
+item.251	12		
+item.252	12		

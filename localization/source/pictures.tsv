@@ -1,0 +1,131 @@
+# Text drawn into pictures, TRANSCRIBED by eye from renders of the data (work/l10n/textpics.py, 2x, and the port's screens), 2026-11-01.
+# Not extracted: re-check a line against its picture before relying on a character. "?" after a name marks a calligraphic character I
+# read with low confidence. bytes: the picture's size (W x H pixels) instead of a byte count.
+id	bytes	zh
+story0.1	320x15	在遙遠的、遙遠的;如瞳孔般深的宇宙裡,
+story0.2	320x15	懸掛著,似紅唇般的美麗世界。
+story0.3	320x15	那是傳說中的希望世界...
+story0.4	320x15	是隱藏在巨紅星系裡由優人類、
+story0.5	320x15	獸人類與大自然精靈三界交合的虹奇世界。
+story0.6	320x15	傳說,誰能夠到虹奇世界,
+story0.7	320x15	就能夠得到智慧、財富、生命與力量...
+story1.1	320x15	故事的發生,該由亞紀元 1660 年,
+story1.2	320x15	統治一半以上虹奇星球的邦沛帝國開始。
+story1.3	320x15	邦沛帝國十一歲的英俊王子卡洛安,
+story1.4	320x15	在王室狩獵中,為了追趕一隻巨大的太格虎,
+story1.5	320x15	不慎摔落山谷。摔成重傷奄奄一息的卡洛安,
+story1.6	320x15	幸好由居住山谷的尼古多救起。
+story1.7	320x15	在尼古多的女兒娜蒂,兩個月的辛苦照料下,
+story1.8	320x15	卡洛安的傷勢慢慢恢復,終於離開尼古多的家。
+story2.1	320x15	然而,娜蒂已經無法自拔的愛上了王子。
+story2.2	320x15	因為身分的差距,無法再見到心愛的王子,
+story2.3	320x15	王子也一直記得這位救命恩人。
+story3.1	320x15	十年後老王去世,邦沛帝國由卡洛安繼任國王。
+story3.2	320x15	在遴選主持祭祀的神監官大會上,
+story3.3	320x15	卡洛安看到了娜蒂........
+story3.4	320x15	原來,娜蒂為了再見到卡洛安,勤修法術,
+story3.5	320x15	並學會了神監官必修的天鏡術。
+story3.6	320x15	娜蒂並沒有讓卡洛安失望,
+story3.7	320x15	她憑著超絕的法術成為巫士之主。
+story3.8	320x15	然而,斷情的神監官,
+story3.9	320x15	讓相見、相處,卻不能相愛的娜蒂倍感痛苦。
+story3.10	320x15	由於過去的恩情,卡洛安更加以禮對待娜蒂。
+story4.1	320x15	亞紀元 1680 年,
+story4.2	320x15	卡洛安娶了亞特蘭帝國的公主為妻,
+story4.3	320x15	第二年產下一子,取名胡都。
+story4.4	320x15	單戀二十年的娜蒂,將滿腔的幽怨化做妒火,
+story4.5	320x15	深藏在她狹小的胸襟中。
+story5.1	320x15	王子胡都竟然在週歲生日的慶祝會上,
+story5.2	320x15	從額上長出了獸人才有的犄角。
+story5.3	320x15	事發的現場,除了娜蒂已無第二目擊者了。
+story5.4	320x15	因為,原本仁慈的國王卡洛安,
+story5.5	320x15	為了掩護皇后"可能"與獸人私通的消息,
+story5.6	320x15	而將在座的賓客全部殺死。
+story5.7	320x15	而巫士之主娜蒂,也在屠戮中遭受顏面的傷害,
+story5.8	320x15	而毀掉美麗的面孔。
+story6.1	320x15	為了復仇,巫士之主娜蒂,
+story6.2	320x15	帶領最強的七名巫士結合巫塔山的獸人,
+story6.3	320x15	出師討伐卡洛安。
+story6.4	320x15	第五天,國王和皇后雖然一起自殺了,
+story6.5	320x15	卻沒有讓娜蒂停止攻擊,
+story6.6	320x15	反而更加深她的殘暴,
+story6.7	320x15	她不但以毀滅人類為目的,
+story6.8	320x15	更利用巫術與超科技顛倒世界,改變生態。
+story6.9	320x15	娜蒂最後被五名如神般的戰士封印,
+story6.10	320x15	犄角事件卻也重新被人考慮、猜測,
+story6.11	320x15	而成了無頭公案。
+ending1t.1	236x15	哼!你們這些不知死活的戰士。
+ending1t.2	236x15	一而再的與我作對,嘿!嘿!嘿!
+ending1t.3	236x15	靠幾件舊鎧甲,舊武器。
+ending1t.4	236x15	就以為自己是天了嗎!...
+ending4t.1	220x15	黛妮公主!?
+ending4t.2	220x15	啊!你們..謝謝你們救了我!
+shout.0	136x14	嚐嚐我法術的威力!
+shout.1	136x14	看我的法術厲害!
+shout.2	136x14	納命來!
+shout.3	136x14	覺悟吧!
+shout.4	136x14	送你們下地獄!
+shout.5	136x14	接招!小心了!
+shout.6	136x14	算你們倒霉!
+shout.7	136x14	哈!哈!受死吧!
+shout.8	136x14	小子!找死!
+shout.9	136x14	別想過我這關!
+shout.10	136x14	很痛吧!
+shout.11	136x14	哈!哈!你死路一條!
+menu.0	label	新遊戲開始
+menu.1	label	取一舊進度
+menu.2	label	製作群介紹
+menu.3	label	回到 DOS
+title.line	112x24	邦沛之謎
+title.logo	art	三界諭
+gameover	93x26	全體陣亡
+credits.01	120 wide	出品
+credits.02	120 wide	第三波文化事業
+credits.03	120 wide	發行人
+credits.04	120 wide	王振容
+credits.05	120 wide	製作人
+credits.06	120 wide	蘇蔭萬?
+credits.07	120 wide	執行製作
+credits.08	120 wide	謝幸子
+credits.09	120 wide	產品經理
+credits.10	120 wide	陳明哲
+credits.11	120 wide	創意企劃
+credits.12	120 wide	李超羣
+credits.13	120 wide	王青方
+credits.14	120 wide	史羽平
+credits.15	120 wide	陳志全
+credits.16	120 wide	程式設計
+credits.17	120 wide	李超羣
+credits.18	120 wide	劇本編寫
+credits.19	120 wide	王青方
+credits.20	120 wide	美術指導
+credits.21	120 wide	史羽平
+credits.22	120 wide	音樂創作
+credits.23	120 wide	小葉
+credits.24	120 wide	片頭配音
+credits.25	120 wide	劉小芸
+credits.26	120 wide	技術支援
+credits.27	120 wide	陳志全
+credits.28	120 wide	創意支援
+credits.29	120 wide	吳明泉
+credits.30	120 wide	鄭君偉
+credits.31	120 wide	商品設計
+credits.32	120 wide	曾煥揚
+credits.33	120 wide	顏明勳
+credits.34	120 wide	連美鈴
+credits.35	120 wide	造型設計
+credits.36	120 wide	陳凌楓
+credits.37	120 wide	封面設計
+credits.38	120 wide	劉俊良
+credits.39	120 wide	行政支援
+credits.40	120 wide	陳麗鳳
+credits.41	120 wide	遊戲測試
+credits.42	120 wide	吳明泉
+credits.43	120 wide	鄭君偉
+credits.44	120 wide	沈廷浩
+credits.45	120 wide	陳明哲
+credits.46	120 wide	陳麗鳳
+credits.47	120 wide	謝幸子
+credits.48	120 wide	林偉甫
+credits.49	120 wide	諮詢服務
+credits.50	120 wide	沈廷浩
