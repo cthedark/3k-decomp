@@ -59,14 +59,14 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
 - Code analysis started with `MARK.EXE` (see `code.md`): plain mode 13h
   (the Mode X routines in the programs are never called), DOS file wrappers,
   mouse and palette helpers identified.
-- Native port (`port.md`), as of 2026-10-18. `make` builds `build/3k`; `--scene game` chains title -> intro -> title -> menu -> (new game) world,
-  (credits) -> menu. Every scene below is compared with the original's code run in `tools/dosemu.py`, frame by frame or pass by pass, and has a
+- Native port (`port.md`, "Current state"), as of 2026-11-01: every program of the game is ported. `make` builds `build/3k`; `--scene game`
+  chains title -> intro -> title -> menu -> (new game or load) world -> ending, (credits) -> menu, (back to DOS) the end. Every scene below is compared with the original's code run in `tools/dosemu.py`, frame by frame or pass by pass, and has a
   `tools/check_*.sh` and a mutation script:
   - **Title** (`MARK.EXE`, milestones 1-2) and **intro** (`STORY2.SL`, milestone 3: seven slides, voice-over, subtitles), with the **FM music**
     (milestone 5/5b: the player writes the same OPL registers as the original's driver for all 25 songs of `MUC.ALL`, rhythm mode included).
   - **Menu** (`WALK0.SL`, milestone 6): opening animation, the four items by key and mouse, the choice transition, the load-game slot picker.
   - **Credits** (`CAST.SL`): wipe, scrolling names with the reflected floor, song 0 with drums.
-  - **World** (`WALK.SL`, milestone 7, scene 0 only): the start-up scene loader (7a), the idle world (animated tiles, palette cycle, the
+  - **World** (`WALK.SL`, milestone 7, at first scene 0 only; all 53 scenes since the doors, 9q): the start-up scene loader (7a), the idle world (animated tiles, palette cycle, the
     hour-long weather clock, villagers walking, 7b), the hero walking with the arrow keys with collision, bump shake and party trail (7c), the
     roof of the first house coming off and going back (7d), the scene's song (7e), and shots, enemies and coins (7f, scene 1).
   - **Battle** (`WALK.SL`, milestone 8a, 2026-10-18): touching an enemy hands over to the battle's first screen (the doubled, perspective
@@ -80,7 +80,7 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
     9c (2026-10-20): the dark scenes (map header byte 5: the view zoomed in, darkened, a lit oval round the hero; 24 scenes);
     9d: the world's start zoom (the view comes in from its middle in 13 steps before the first pass). Milestone 8h (2026-10-21): story
     enemies, keys 1 and 2 in the fight, the picker face's flash, the game-over screen's mouse; 8i (2026-10-22): the Sound Blaster's
-    sounds (`SND_EF.1`, `_1_.LOC`). The battle (milestone 8) is complete. Milestone 9e (2026-10-24): F2, looking at signs (`SPIC.LCZ`); 9f: F3, taking items and coins; 9g: F4, casting outside a battle; 9h: F5, the item list outside a battle; 9i: F6, the equipment screen; 9j (2026-10-26): F7, using items and coins; 9k: F8, the map; 9l (2026-10-27): F9, the party's order; 9m: F10, the party's data; 9n (2026-10-28): F7 at a sell counter; 9o: keys 1 to 4 and A (music, sounds, saving, leaving, sliding round corners); 9p (2026-10-30): loading a save from the menu's slot picker; 9q: doors to other scenes; 9r (2026-10-31): shops; 9s: boat rides and scene 3's snow; 9t: number locks and scripted talks; 9u: warps; 9v: the card game; 9w: the ending's record (ENDING.SL itself is not built); 9x: a sell counter stepped on; 10a to 10g: ENDING.SL, whole.
+    sounds (`SND_EF.1`, `_1_.LOC`). The battle (milestone 8) is complete. Milestone 9e (2026-10-24): F2, looking at signs (`SPIC.LCZ`); 9f: F3, taking items and coins; 9g: F4, casting outside a battle; 9h: F5, the item list outside a battle; 9i: F6, the equipment screen; 9j (2026-10-26): F7, using items and coins; 9k: F8, the map; 9l (2026-10-27): F9, the party's order; 9m: F10, the party's data; 9n (2026-10-28): F7 at a sell counter; 9o: keys 1 to 4 and A (music, sounds, saving, leaving, sliding round corners); 9p (2026-10-30): loading a save from the menu's slot picker; 9q: doors to other scenes; 9r (2026-10-31): shops; 9s: boat rides and scene 3's snow; 9t: number locks and scripted talks; 9u: warps; 9v: the card game; 9w: the ending's record; 9x: a sell counter stepped on; 10a to 10g: ENDING.SL, whole; 10h: the new game's files.
   - The operator has confirmed by eye or ear: the title, intro pacing, voice and subtitle sync, the music balance, the menu and its opening,
     the credits' pace, the first screen of the world, the idle animation, and walking with collision (2026-10-17).
 - **Not built in the world:** a reached unbuilt case is printed on stderr (`walk: not built: ...`, `battle: not built: ...`). The
@@ -93,7 +93,14 @@ Unicorn; every tool's header says how to use it). Output derived from the game g
 
 ## Next steps (ordered)
 The earlier list (formats, chaining, `TAB.TAB`, `TV.EXE`, the speed class) is done or folded into the port; the save format (`SAVEnn.000/.001/.002`)
-is known for writing (`findings.md` step 37) and reading ("WALK0.SL: loading a save", `port.md` 9p). For the world, in the order the operator and Kiro agreed to work:
+is known for writing (`findings.md` step 37) and reading ("WALK0.SL: loading a save", `port.md` 9p).
+
+What is left (2026-11-01; `port.md` "Current state", "Known differences"):
+1. Play the whole story in the port, or forward from each shipped save, keeping stderr for any `walk: not built:` or
+   `battle: not built:` report. Every part was compared from starts built for it; one play through has not been done.
+2. Compare the Sound Blaster's output by ear with a real or emulated card (the oracle has none), the ending's voice lines first.
+
+The world's list, in the order the operator and Kiro agreed to work (all done):
 1. The keys of `WALK.SL`'s main loop: the F-key actions, 1-4 and A (sliding) are built (`port.md` 9a to 9o), and Space (shots) (7f).
 2. The scene record block `0x172f0` .. `0x18b82` (a dispatch on the record's kind) (step 39 says what each kind is): all built (a kind 0x14 record stepped on, `port.md` 9x, cannot be reached in the shipped scenes). Kind 5, the shops and the inn (`port.md` 9r), kind 8, the boat
    rides (9s), kinds 7, 0x11 and 0x12, the number locks and scripted talks (9t), kind 0, the warps (9u), kind 0xe, the card game

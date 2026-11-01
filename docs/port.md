@@ -5,6 +5,27 @@ C99 program written from observed behaviour (see `findings.md`, `formats.md`,
 `code.md`), not from pasted decompiler output. It needs the user's own copy of the
 game data; no game files are in the repository.
 
+## Current state (2026-11-01)
+Every program of the game is ported: `MARK.EXE` (title, game-over screen), `STORY2.SL` (intro), `WALK0.SL` (menu, new game, loading
+a save), `CAST.SL` (credits), `WALK.SL` (the world, every scene-record kind, the battle, every key) and `ENDING.SL`. `--scene game`
+runs them in the original's order, from the title to THE END. Not ported: `TV.EXE` (a CPU speed test the shipped `RPG.LCP` never
+runs) and `3K.EXE` (the installer).
+
+The milestone sections below are a log, oldest first. Their **Not built** lines say what was missing when that milestone was built;
+later milestones built most of it, and not every old line says so. What is still different from the original is in the latest
+milestones' **Not reproduced** and **Not compared** lines, and in "Known differences" below.
+
+**Known differences:**
+- At its end the original exits to DOS with THE END on the text screen; the port draws that screen and waits (milestone 10g).
+- The original's check of its own `WALK0.SL` against the copy in `ANI.LCP` after a load or a new game is not reproduced (9p, 10h).
+- Out-of-range data: where the original reads whatever memory follows (a tile or sprite number past its data, a cut-short save),
+  the port reads zeros. The shipped data does not do this.
+- The ending's song: the original stops keeping it going in the sunset scene; the port's player loops on (10f).
+- Not compared with the original: the Sound Blaster's output (the emulator has none; the sounds started are checked with a stub,
+  `sb_stub.py`), notably the ending's voice lines.
+- Never checked: one play through the whole story in the port. Each part was compared from starts built for it
+  (`tools/walk_scene_data.py`, the shipped saves).
+
 ## Build and run
     make            # builds build/3k (needs a C99 compiler, a C++14 compiler for ymfm, and sdl2-config)
     make test       # headless tests, uses original_bin/ if present
@@ -27,11 +48,16 @@ game data; no game files are in the repository.
 | `src/assets.[ch]` | Finds and reads data files; case-insensitive lookup. |
 | `src/screen.[ch]` | 320x200 8-bit framebuffer plus 6-bit VGA palette; RGB conversion (`v*255/63`); PPM writer. |
 | `src/platform.h`, `src/platform_sdl.c` | The only code that uses SDL: window, present, events, time. |
-| `src/main.c` | Entry point. Currently shows `gmain.lcz` with the `rpg.lcp` palette. |
+| `src/main.c` | Entry point: the `--scene` modes, real time and stepped, and `--scene game`, the whole chain. |
 | `src/opl.h`, `src/opl.cpp` | C interface to the OPL2 chip (the only C++ in the project, apart from ymfm). |
 | `src/music.[ch]` | CMF song to OPL2 register writes, rendered with ymfm; loops. See "Milestone 5". |
 | `third_party/ymfm/` | ymfm, unmodified, BSD-3-Clause; `PINNED.txt` names the commit. |
 | `tests/test_core.c` | Headless tests: synthetic chunk, malformed chunks, palette scaling, chunk counts and sizes of three real files. |
+
+This table lists the first files. Later ones, each described in its milestone: `title`, `gfx`, `slide`, `subs`, `voice`, `voc`,
+`audio`, `cmf`, `intro0` .. `intro6` (the intro), `menu`, `credits`, `walkscene` and `walk` (the world), `battle`, `msgbox`, `sfx`,
+`gameover`, `ending`, `tkrand`, `timing.h`; `tests/platform_null.c` (the headless build) and one `tests/test_*.c` or `*_dump.c` per
+part.
 
 The game logic never touches SDL; `screen_t` is the boundary. That keeps the
 logic testable without a window and replaceable if SDL is ever dropped.
@@ -42,9 +68,11 @@ logic testable without a window and replaceable if SDL is ever dropped.
 - **Chained programs become modes of one program.** The original replaces itself with
   `execl`; the port will switch mode inside one process. The one-byte message that
   `MARK` leaves in `ANI.LCP` (byte `0x2ff`) becomes an ordinary variable. Never write
-  to the user's data files.
-- **Fixed-rate timing** is planned instead of the original's machine-speed class
-  (`code.md`, speed class). Not built yet.
+  to the user's data files. (Changed in milestone 9p: the game writes what the original writes, the saves and the state files
+  `__1.NOW` and `MAN_INFO.NOW`, into the data directory, as the original writes into its own; `--write-dir DIR` sends them
+  elsewhere. Play on a copy of the data, or with `--write-dir`: many checks start from the shipped `__1.NOW`.)
+- **Fixed-rate timing** instead of the original's machine-speed class (`code.md`, speed class): built, the rates are in
+  `src/timing.h`.
 
 ### Timing policy (decided 2026-10-15, user's choice)
 The port uses **fixed durations**, never a CPU-speed or emulator cycle setting.
@@ -99,8 +127,8 @@ The port uses **fixed durations**, never a CPU-speed or emulator cycle setting.
 `build/3k` (default scene) now plays the real title: a 64-step palette fade-in, the three
 brush characters 三 界 諭 as textured windows scrolling upward, the 邦沛之謎 line sliding
 along the orange bars, and a fade-out after 699 passes (to the intro) or when Space, Enter
-or a mouse button is pressed (to the menu). At the end it prints which scene would come next;
-those scenes are not built yet, so the program then exits.
+or a mouse button is pressed (to the menu). At the end it prints which scene would come next
+and exits (`--scene game` goes on to it).
 
 Source: `src/title.[ch]` (the scene), `src/gfx.[ch]` (drawing routines). The scene advances
 one pass per call with the clock and input passed in, so it runs in real time or stepped.
@@ -615,8 +643,8 @@ pass rate (about 2.3 passes per tick in the oracle at 500,000 instructions per t
 `build/3k --scene menu --data original_bin` runs the menu in a window; `--scene game` goes title -> menu
 when a key or click leaves the title. A confirmed choice prints what the original would do and ends the
 program: new game (reads the new-game files, starts `WALK.SL`), load (the slot picker), credits
-(`CAST.SL`), quit. None of those four is built yet, nor the opening animations or the 33-step closing
-transition, so the menu appears at once and a choice returns at once.
+(`CAST.SL`), quit. None of those four was built then, nor the opening animations or the 33-step closing
+transition, so the menu appeared at once and a choice returned at once. (All built since: 4d to 4f, 6, 7, 9p, 10h; quit ends the game.)
 
 **Input rules (all checked against the original, see below):**
 - **Keyboard** is read as the keyboard PORT, not as key events: the last scancode the keyboard sent. The
@@ -1102,8 +1130,8 @@ battle can be played with it alone (`docs/findings.md` "WALK.SL step 18").
 ## Milestone 8g: the world's mouse buttons (C), built 2026-10-19
 
 In the world the left button walks the hero towards the pointer (a held press keeps walking, also over the buttons) and the right one
-shoots; a press on an on-screen button is that button's key (F1 .. F10, 1 .. 4, A), whose action is not built yet, as with the keys
-(`docs/findings.md` "WALK.SL step 19").
+shoots; a press on an on-screen button is that button's key (F1 .. F10, 1 .. 4, A), whose action was not built then, as with the
+keys (built since, 9a to 9o) (`docs/findings.md` "WALK.SL step 19").
 
 - **Code:** `walk_mouse_key` and the mouse part of `walk_keys` in `src/walk.c` (`walk.h`), the pointer placed with the shake.
 - **Checked:** `tools/check_battle.sh`, eight new starts (pure walks, walks into battles and back, a drag onto the buttons, a release), all identical;
@@ -1483,8 +1511,8 @@ record says (`docs/findings.md` "WALK.SL step 45").
 
 ## Milestone 9w: the ending's record (kind 0x13) (C), built 2026-10-31
 Stepping on scene 52's ending record with its flag set ends WALK.SL as the original does before it starts `ENDING.SL`: the music and
-the sounds stop and the walk returns (`walk_ended`; `play_walk` gives 4). `ENDING.SL` is not built, so the game stops there with
-"game: the end (ENDING.SL is not built yet), stopping" (`--scene walk`: "walk: ended") (`docs/findings.md` "WALK.SL step 46").
+the sounds stop and the walk returns (`walk_ended`; `play_walk` gives 4). `ENDING.SL` was not built then, so the game stopped there
+(`--scene walk`: "walk: ended") (`docs/findings.md` "WALK.SL step 46"). Since 10a to 10g `--scene game` plays the ending next.
 
 - **Code:** `src/walk.c` (kind 0x13 in `hit_record`, `walk_ended`, `WALK_KIND_ENDED` = 21); `src/main.c`; `tools/battle_check.py`
   (the run stops at `0x18634`, the `execl`, and the port's end pass must be that pass); `tests/test_walk.c` (its unbuilt-kind example

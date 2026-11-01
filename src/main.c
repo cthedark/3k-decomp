@@ -592,7 +592,7 @@ static int run_intro0(screen_t *scr, int scale, int ndump, const int *dump_pass,
     /* Real time. Fade steps and loop passes run at the fixed rates in timing.h; the 56-tick
      * hold of a subtitle line is paced by the real clock, as in the original. */
     rt_intro0(t, scr);
-    printf("slide 0 finished: the next slide is not built yet\n");
+    printf("slide 0 finished (--scene intro plays all seven)\n");
     intro0_free(t);
     shutdown_platform();
     return 0;
@@ -713,8 +713,8 @@ static void song_stop(music_t *m)
 
 /* The menu in real time, on an already initialised platform (WALK0.SL). Returns the item the player
  * confirmed (0..3, see menu.h), or MENU_NONE if the window was closed or the menu could not start.
- * The original now runs a closing transition of 33 steps and then the action; neither is built, so
- * this returns at the confirmation. The original's mouse driver reports positions in a virtual
+ * After the choice it runs the closing transition and, for a load, the slot picker; the caller does
+ * the action (run_game). The original's mouse driver reports positions in a virtual
  * range it may have doubled; here the pointer maps 1:1 to screen pixels (docs/port.md). The song is
  * the menu's own (WALK0.SL reads MUC.ALL at 0x2bad9). */
 static menu_result play_menu(screen_t *scr, int *slot)
@@ -1032,7 +1032,6 @@ static int play_walk(screen_t *scr)
     unsigned scene_changes = walk_scene_changes(w), inn_nights = walk_inn_nights(w);
     const uint32_t start = platform_ticks_ms();
     uint32_t next = start;
-    int event_reported = 0;
     /* A touched enemy starts the battle (battle.h): its first screen at once, then its passes at the world's pace (the original
      * paces neither). The scene's song stops and the battle's starts: MUC.ALL 0x2bad9, the menu's song, which the loader had read
      * (the original's register writes match the player for 3,119 song ticks). The battle does not end yet. */
@@ -1120,7 +1119,7 @@ static int play_walk(screen_t *scr)
             result = 3;
             break;
         }
-        if (walk_ended(w)) {   /* a kind 0x13 record: the sounds and the music stopped, then ENDING.SL (not built) */
+        if (walk_ended(w)) {   /* a kind 0x13 record: the sounds and the music stopped, then ENDING.SL (run_game) */
             printf("walk: the game's end (the original starts ENDING.SL)\n");
             platform_present(scr);
             result = 4;
@@ -1128,10 +1127,6 @@ static int play_walk(screen_t *scr)
         }
         /* Esc closes the window in the world, but F3's wait, F4's picker and list take it (they give up or end on it) */
         platform_escape_quits(walk_kind(w) == 0);
-        if ((got & WALK_PASS_VILLAGER_EVENT) && !event_reported) {
-            fprintf(stderr, "walk: a villager reached the case where the original starts an event (not built)\n");
-            event_reported = 1;
-        }
         if ((got & WALK_PASS_UNBUILT) && walk_unbuilt(w))
             fprintf(stderr, "walk: not built: %s\n", walk_unbuilt(w));
         platform_present(scr);
@@ -1361,16 +1356,16 @@ static int run_intro(screen_t *scr, int scale, int faithful, int last)
         return 1;
     int rc = play_intro(scr, faithful, last);
     if (rc == 0 && last == NSLIDES)
-        printf("the intro is over: the original now starts the title again (not chained here yet)\n");
+        printf("the intro is over: the original now starts the title again (--scene game goes on to it)\n");
     else
-        printf("%s: the next slide is not built yet\n", last > 0 ? slides[last - 1]->name : "intro0");
+        printf("the intro stopped after %s\n", last > 0 ? slides[last - 1]->name : "intro0");
     shutdown_platform();
     return rc;
 }
 
 /* The program chain as the original runs it, in one process: MARK.EXE's title; after its timeout
- * STORY2.SL's intro, then MARK.EXE again; after a key or click WALK0.SL's menu (not built, so the
- * game ends there). Each original program is started fresh by `exec`, so each scene here starts
+ * STORY2.SL's intro, then MARK.EXE again; after a key or click WALK0.SL's menu, and from it CAST.SL's
+ * credits, WALK.SL's world (a new game or a load) and ENDING.SL, or the end ("back to DOS"). Each original program is started fresh by `exec`, so each scene here starts
  * from its own initial state. The one-byte message that MARK leaves in ANI.LCP is 0x3f in every
  * hand-over that STORY2.SL takes part in, and STORY2.SL does not change it, so it is not modelled. */
 static int run_game(screen_t *scr, int scale, int faithful)
@@ -1432,7 +1427,7 @@ static int run_game(screen_t *scr, int scale, int faithful)
                         again = 1;
                         break;
                     }
-                    if (q == 4) {   /* the game's end: ENDING.SL, then (when it is all built) DOS */
+                    if (q == 4) {   /* the game's end: ENDING.SL, which ends at the DOS prompt (play_ending: THE END) */
                         printf("game: the end (ENDING.SL)\n");
                         rc = play_ending(scr);
                         break;
@@ -1440,9 +1435,8 @@ static int run_game(screen_t *scr, int scale, int faithful)
                     rc = q < 0 ? 1 : 0;
                     break;
                 }
-                if (slot != MENU_NONE)
-                    printf("game: slot %d picked\n", slot);
-                printf("game: the menu chose %s; that part is not built yet, stopping\n", menu_item_name(c));
+                /* MENU_QUIT, "back to DOS" (a load always picks a slot: its picker has no way out but closing the window) */
+                printf("game: %s\n", menu_item_name(c));
                 stop = 1;
             }
             if (again) {
@@ -1788,7 +1782,7 @@ int main(int argc, char **argv)
     if (r == TITLE_RUNNING)
         printf("title: stopped before it finished\n");
     else
-        printf("title finished: next scene would be the %s (not built yet)\n",
+        printf("title finished: next scene would be the %s (--scene game goes on to it)\n",
                r == TITLE_TO_MENU ? "menu" : "intro slideshow");
     shutdown_platform();
     return 0;
