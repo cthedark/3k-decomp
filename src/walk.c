@@ -79,6 +79,14 @@ struct walk {
     /* a number lock (kind 7) or a scripted talk (kind 0x11) while its number box or message boxes run: the kind, the record, the
      * talk's next entry in the map buffer ([bp-0x96]) */
     unsigned rec_kind, rec_si, rec_k;
+    /* the card game of a kind 0xe record (0x24962, talking 16 its betting loop, 17 its wait, 18 its last message box): the deck
+     * ([bp-0x14], one byte more that rand / 0xccd can reach), the bet ([bp-0x1e]), the coins while betting ([bp-6]), the lit card
+     * ([bp-0xe]) and the one lit last ([bp-0x18]; in the wait the two dealer pictures), the dealer's card ([bp-0x24]), the way to win
+     * ([bp-0x2e]), the card picked ([bp-4]), the key and button latches ([bp-0x22], [bp-0xc]), the repeat counters ([bp-8],
+     * [bp-0x1c]), the palette count ([bp-0x1a]), the strip shown ([bp-0x16]) */
+    uint8_t cg_deck[11];
+    unsigned cg_bet, cg_coins, cg_cur, cg_last, cg_shown, cg_dir, cg_pick, cg_latch, cg_mlatch, cg_rep, cg_repc, cg_pal, cg_strip;
+    unsigned cg_si;
     uint8_t yn_pic[3][47 * 20];         /* the buttons' place as it was, with "yes" pressed, with "no" pressed */
     unsigned yn_shown, yn_sel;          /* [bp-4], [bp-0xc]: 1 yes, 0 no (2: none shown yet) */
     uint8_t ask_art[0x284 + 94 * 16];   /* RPG.LCP 0x1643b decoded: ten 8 x 8 digits, then the 94 x 16 number box after a 4-byte header */
@@ -132,6 +140,8 @@ enum { WALK_USE_ASK_COUNT = 0x16 };
 enum { WALK_SAVE_ASK_COUNT = 0xE8 };
 /* A number lock's (kind 7): 0xee in scene 4's lock (SEEN, docs/findings.md step 43; any value from 0x16 up acts the same) */
 enum { WALK_LOCK_ASK_COUNT = 0xEE };
+/* The card game's palette count ([bp-0x1a], never set before its first use): 0x19 at the first round (SEEN, docs/findings.md step 45) */
+enum { WALK_CARDS_PAL = 0x19 };
 /* F8's map: the rows it keeps; the byte of its frame that says whether the first row widens ([bp-0xc], never set there: 0xc6, the low
  * byte of a segment number, in every start probed, docs/findings.md step 33) */
 enum { WALK_MAP_UNDER_H = 102, WALK_MAP_TOGGLE = 0xC6 };
@@ -850,6 +860,7 @@ static void door(walk_t *w, unsigned si);
 static void shop_open(walk_t *w, screen_t *scr, unsigned si);
 static void boat(walk_t *w, unsigned si);
 static void warp(walk_t *w, unsigned si);
+static void cards_open(walk_t *w, screen_t *scr, unsigned si);
 static void frame_at(walk_t *w, unsigned x, unsigned y, int people);
 static int lock_open(walk_t *w, screen_t *scr, unsigned si);
 static void rec_talk_open(walk_t *w, screen_t *scr, unsigned si);
@@ -877,6 +888,10 @@ static void hit_record(walk_t *w, unsigned si)
     }
     if (kind == 8 && w->scr) {
         boat(w, si);
+        return;
+    }
+    if (kind == 0xE && w->scr) {   /* the card game: its loops run until it ends (cg_done) */
+        cards_open(w, w->scr, si);
         return;
     }
     if (kind == 0 && w->scr) {
@@ -912,7 +927,8 @@ static void hit_record(walk_t *w, unsigned si)
             s->weather -= 3;
             walk_sfx_play(w, SFX_EF, 0x127D);   /* 0x17c2a */
         }
-    } else if ((kind == 0 && !w->scr) || (kind == 7 && !w->scr) || kind == 8 || kind == 0xE || kind == 0x11 || kind == 0x13 || kind == 0x14) {
+    } else if ((kind == 0 && !w->scr) || (kind == 7 && !w->scr) || kind == 8 || kind == 0xE || kind == 0x11 || kind == 0x13 ||
+               kind == 0x14) {
         char what[48];
         snprintf(what, sizeof what, "scene record kind 0x%x", kind);
         note_unbuilt(w, what, si / WS_RECORD_SIZE);
@@ -1548,6 +1564,9 @@ static void leave_answer(walk_t *w, screen_t *scr, int yes);
 static void lock_given(walk_t *w, screen_t *scr, unsigned value);
 static void rec_box_round(walk_t *w, screen_t *scr, unsigned port60);
 static void rec_end(walk_t *w);
+static void cg_bet_round(walk_t *w, screen_t *scr, unsigned port60);
+static void cg_wait_round(walk_t *w, screen_t *scr, unsigned port60);
+static void cg_box_round(walk_t *w, screen_t *scr, unsigned port60);
 
 /* The palette the yes / no buttons and the number step on: the dimmed copy in a talk, the palette itself in F7. */
 static void ask_step(walk_t *w, screen_t *scr)
@@ -1938,6 +1957,18 @@ static void talk_round(walk_t *w, screen_t *scr, unsigned port60)
     }
     if (w->talking == 15) {
         rec_box_round(w, scr, port60);
+        return;
+    }
+    if (w->talking == 16) {
+        cg_bet_round(w, scr, port60);
+        return;
+    }
+    if (w->talking == 17) {
+        cg_wait_round(w, scr, port60);
+        return;
+    }
+    if (w->talking == 18) {
+        cg_box_round(w, scr, port60);
         return;
     }
     int mx, my;
@@ -2832,7 +2863,7 @@ unsigned walk_look_entry(const uint8_t *party, const uint8_t *r)
 
 int walk_kind(const walk_t *w)
 {
-    static const int kind[16] = {0, 4, 8, 9, 4, 10, 4, 0, 12, 13, 14, 15, 17, 6, 18, 4};
+    static const int kind[19] = {0, 4, 8, 9, 4, 10, 4, 0, 12, 13, 14, 15, 17, 6, 18, 4, 19, 20, 4};
     if (w->boss_box)
         return 4;
     if (w->left)
@@ -4138,6 +4169,412 @@ static void rec_box_round(walk_t *w, screen_t *scr, unsigned port60)
         rec_talk_next(w, scr);
     else
         rec_end(w);
+}
+
+/* ---- the card game, kind 0xe (0x18181 .. 0x182f3, 0x24962 .. 0x25b52) ---- */
+
+/* The original's three far buffers as the game uses them, by their offsets: the world buffer [bp-0x8c] (B), [bp-0x20] (D) and the
+ * map buffer [bp-0xba] (M). The game reaches past what the port's own buffers hold (B to 0xea60), so it has its own; the world
+ * redraws its buffers on the next pass. */
+static uint8_t cg_B[0x10000], cg_D[0x10000], cg_M[0x10000];
+
+enum {
+    CG_STRIP = 0x60D2, CG_STRIP_N = 0x8C4,      /* B: four 160 x 14 strips with their texts, 0x8c4 apart */
+    CG_DEALER = 0x83D6, CG_DEALER_N = 0x1482,   /* B: five 70 x 75 pictures of the dealer */
+    CG_WORK = 0x1B58,                           /* B: the cards' row being turned; D: the ten backs (190 x 36 with its header) */
+    CG_SQUASH = 0x36B0,                         /* D: a row of cards squashed */
+    CG_ROW_AT = 0x84C1, CG_STRIP_AT = 0xD390, CG_BET_AT = 0xC24D, CG_DEALER_AT = 0x197D,
+    CG_CUR0 = 0xB301, CG_CUR9 = 0xB3AC, CG_SEL0 = 0x7E81, CG_SEL9 = 0x7F2C
+};
+
+/* 0x2723c: the screen's w x h at `at` into p with its header (width, height) */
+static void cg_grab(screen_t *scr, unsigned at, unsigned bw, unsigned bh, uint8_t *p)
+{
+    p[0] = (uint8_t)bw, p[1] = (uint8_t)(bw >> 8), p[2] = (uint8_t)bh, p[3] = (uint8_t)(bh >> 8);
+    grab(scr, at, bw, bh, p + 4);
+}
+
+/* 0x27371: a picture with its header on the screen, colour 0 clear */
+static void cg_put_nz(screen_t *scr, unsigned at, const uint8_t *p)
+{
+    blit_nz(scr->pix, sizeof scr->pix, SCREEN_W, at, p + 4, w16(p, 0), w16(p, 2), -1);
+}
+
+/* 0x26f72 into a picture with its header */
+static void cg_shrink(const uint8_t *src, uint8_t *dst, unsigned dw, unsigned dh)
+{
+    dst[0] = (uint8_t)dw, dst[1] = (uint8_t)(dw >> 8), dst[2] = (uint8_t)dh, dst[3] = (uint8_t)(dh >> 8);
+    battle_shrink(src + 4, w16(src, 0), w16(src, 2), dst + 4, dw, dh);
+}
+
+/* 0x24302 (five digits, colour 0 clear) after a 40 x 5 box of colour 0 (0x270e0): the bet */
+static void cg_show_bet(walk_t *w, screen_t *scr)
+{
+    fill(scr, CG_BET_AT, 0x28, 5, 0);
+    shop_number(w, scr, CG_BET_AT, w->cg_bet);
+}
+
+/* The mark under card place `at` (row 143) or over it (rows 101 .. 106): a 19 x 4 frame and the 17 x 2 inside */
+static void cg_mark(screen_t *scr, unsigned at, uint8_t frame, uint8_t inside)
+{
+    use_outline(scr, at, 0x13, 4, frame);
+    fill(scr, at + 0x141, 0x11, 2, inside);
+}
+
+/* the coins while betting written to party word 0x122 (0x15fe:0x11; nothing drawn) */
+static void cg_set_coins(walk_t *w)
+{
+    w->scene->tab_b[WALK_GOLD_AT] = (uint8_t)w->cg_coins;
+    w->scene->tab_b[WALK_GOLD_AT + 1] = (uint8_t)(w->cg_coins >> 8);
+}
+
+static void cg_show(walk_t *w, screen_t *scr)
+{
+    if (w->zoom_show)
+        w->zoom_show(w->zoom_ctx, scr);
+}
+
+/* The row of cards turned over (0x2563a .. 0x25786, 0x259e1 .. 0x25b21): `from` squashed from 36 rows to 2 in 18 steps, then `to`
+ * from 2 to 34 in 17, each step into a copy of B's 190 x 36 picture at its start (B + 0x1b58), centred, shown at (65, 106). */
+static void cg_turn(walk_t *w, screen_t *scr, const uint8_t *from, const uint8_t *to)
+{
+    unsigned at = 0x1B5C, n = 0x1AB8, h = 0x24;
+    for (; h > 0; h -= 2) {
+        memmove(cg_B + CG_WORK, cg_B, 0xD5E * 2);
+        cg_shrink(from, cg_D + CG_SQUASH, 0xBE, h);
+        memmove(cg_B + at, cg_D + CG_SQUASH + 4, n);
+        n -= 0x17C;
+        at += 0xBE;
+        put_pic(scr, CG_ROW_AT, cg_B + CG_WORK);
+        cg_show(w, scr);
+    }
+    n = 0x17C;
+    at -= 0xBE;
+    for (h = 2; h < 0x24; h += 2) {
+        memmove(cg_B + CG_WORK, cg_B, 0xD5E * 2);
+        cg_shrink(to, cg_D + CG_SQUASH, 0xBE, h);
+        memmove(cg_B + at, cg_D + CG_SQUASH + 4, n);
+        n += 0x17C;
+        at -= 0xBE;
+        put_pic(scr, CG_ROW_AT, cg_B + CG_WORK);
+        cg_show(w, scr);
+    }
+}
+
+/* A round's start (0x24dcd .. 0x25085): the ten backs shown; 20 swaps of two places of the deck at random (rand / 0xccd, which can
+ * be 10: one byte past the deck, 0 here, GUESS); the way to win at random (rand / 0x4000; 1: higher, the lit arrow at (197, 59)); a
+ * light running 20 .. 30 places along the marks over the cards, the dealer's picture and the palette stepping each place, where it
+ * stops is the dealer's card; the ten marks under the cards; the bet shown; then the betting loop. */
+static void cg_round(walk_t *w, screen_t *scr)
+{
+    put_pic(scr, CG_ROW_AT, cg_D + CG_WORK);
+    for (int k = 0; k < 20; k++) {
+        unsigned a = walk_rand(&w->rng) / 0xCCD, b = walk_rand(&w->rng) / 0xCCD;
+        uint8_t t = w->cg_deck[a];
+        w->cg_deck[a] = w->cg_deck[b];
+        w->cg_deck[b] = t;
+    }
+    w->cg_dir = (walk_rand(&w->rng) / 0x4000) & 0xFF;
+    use_outline(scr, w->cg_dir ? 0x4C85 : 0x6085, 0x1F, 0x10, 0xF);
+    use_outline(scr, w->cg_dir ? 0x6085 : 0x4C85, 0x1F, 0x10, 0x18);
+    unsigned a = CG_SEL0, b = CG_SEL9;
+    for (unsigned n = walk_rand(&w->rng) / 0xCCC + 0x14; n; n--) {
+        a += 0x13, b += 0x13;
+        palette_cycle(w, scr);
+        put(scr, CG_DEALER_AT, cg_B + CG_DEALER, 0x46, 0x4B);   /* 0x25b94 */
+        if (a > CG_SEL9)
+            a = CG_SEL0;
+        if (b > CG_SEL9)
+            b = CG_SEL0;
+        cg_mark(scr, a, 0x18, 0x10);
+        cg_mark(scr, b, 0x1F, 0x18);
+    }
+    w->cg_shown = w->cg_deck[(a - CG_SEL0) / 0x13];
+    for (unsigned at = CG_CUR0; at < 0xB3BF; at += 0x13)
+        cg_mark(scr, at, 0xBF, 0xB8);
+    w->cg_cur = CG_CUR0;
+    w->cg_last = CG_CUR0 + 0x13;
+    w->cg_mlatch = 0;
+    w->cg_latch = 0;
+    w->cg_coins = shop_coins(w);
+    cg_show_bet(w, scr);
+    w->cg_strip = 0;
+    w->talking = 16;
+}
+
+/* 0x24962: the window grabbed and shaded six times, each shown; the number box (RPG.LCP 0x1643b) at (49, 150) with a 46 x 10 box of
+ * colour 0 at (137, 153); the 160 x 14 at (80, 169) kept four times, with MES_TXT.LCC 0x17586's four 128-byte texts (20, 20, 18 and
+ * 18 characters, colour 0x78) centred in them; RPG.LCP 0x58f4: the ten 19 x 36 card faces, a card's back and the table
+ * (packed, shown at (71, 62), colour 0 clear); SHOP_PIC.LCC 0x1339e: the dealer's five pictures; the 190 x 36 at (65, 66) kept, the
+ * ten backs 19 apart in a copy of it; the deck 0 .. 9; the bet 0; then a round. */
+static void cg_open(walk_t *w, screen_t *scr)
+{
+    if (w->mouse_on) {   /* 0x249a4: the game's pointer at 0 with what is there kept */
+        w->talk_mprev = 0;
+        walk_mouse_grab(scr, 0, w->talk_mbg);
+    }
+    cg_grab(scr, 0x1440, 0xC0, 0xA8, cg_B);
+    for (int k = 0; k < 6; k++) {
+        shade(w, cg_B + 4, 0x7E00);
+        put_pic(scr, 0x1440, cg_B);
+        cg_show(w, scr);
+    }
+    if (assets_read_at("RPG.LCP", 0x1643B, cg_B, 0x4BE) != 0 || assets_read_at("MES_TXT.LCC", 0x17586, cg_M + 0x1000, 0x200) != 0 ||
+        assets_read_at("RPG.LCP", 0x58F4, cg_M + 0x2000, 0x1E83) != 0)
+        note_unbuilt(w, "the card game's pictures or texts that the data files do not have", w->cg_si / WS_RECORD_SIZE);
+    walk_rle_unpack(cg_B, 0x4BE, cg_M, 0x10000);
+    put_pic(scr, 0xBBF1, cg_M + 0x280);
+    fill(scr, 0xBFC9, 0x2E, 0xA, 0);
+    cg_grab(scr, CG_STRIP_AT, 0xA0, 0xE, cg_B + CG_STRIP);
+    for (int k = 1; k < 4; k++)
+        memmove(cg_B + CG_STRIP + k * CG_STRIP_N, cg_B + CG_STRIP, CG_STRIP_N);
+    memmove(cg_M, cg_M + 0x1000, 0x200);
+    for (unsigned k = 0; k < 4; k++) {   /* 0x243ec into D, then 0x26ad2 into the strip */
+        unsigned n = k < 2 ? 0x14 : 0x12;
+        uint8_t *d = cg_D;
+        memset(d + 3, 0, 8 * n * 15 + 1);   /* 0x243ec clears 15 rows and a byte from its header's byte 3 */
+        d[0] = (uint8_t)(8 * n), d[1] = 0, d[2] = 0xE;
+        if (battle_text_pic(w->font8, cg_M + 0x80 * k, n, 0x78, d + 4, &w->shop_gw))
+            note_unbuilt(w, "a character the font does not have", w->cg_si / WS_RECORD_SIZE);
+        blit_nz(cg_B + CG_STRIP + 4 + k * CG_STRIP_N, 0xA0 * 0xE, 0xA0, (0xA0 - 8 * n) >> 1, d + 4, 8 * n, 0xE, -1);
+    }
+    memmove(cg_M, cg_M + 0x2000, 0x1E83);
+    walk_rle_unpack(cg_M + 0x1D68, 0x1E83 - 0x1D68, cg_B, 0x10000);
+    cg_put_nz(scr, 0x4DC7, cg_B);
+    /* read after the strips were copied: the fourth strip's last 12 bytes (to 0x83e2) are the first dealer picture's first */
+    if (assets_read_at("SHOP_PIC.LCC", 0x1339E, cg_B + CG_DEALER, 0x668A) != 0)
+        note_unbuilt(w, "the card game's dealer pictures that SHOP_PIC.LCC does not have", w->cg_si / WS_RECORD_SIZE);
+    cg_grab(scr, 0x52C1, 0xBE, 0x24, cg_B);   /* over the table's picture, already shown */
+    uint8_t *backs = cg_D + CG_WORK;
+    backs[0] = 0xBE, backs[1] = 0, backs[2] = 0x24, backs[3] = 0;
+    const uint8_t *back = cg_M + 0x1AB8;   /* 0x26a88: a card's back with its header, opaque */
+    for (unsigned k = 0, at = 4; k < 10; k++, at += 0x13)
+        for (unsigned r = 0; r < w16(back, 2); r++)
+            memcpy(backs + at + r * 0xBE, back + 4 + r * w16(back, 0), w16(back, 0));
+    for (unsigned k = 0; k < 10; k++)
+        w->cg_deck[k] = (uint8_t)k;
+    w->cg_deck[10] = 0;
+    w->cg_bet = 0;
+    w->cg_pal = WALK_CARDS_PAL;
+    cg_round(w, scr);
+}
+
+/* The end (0x25b27): message 0xe1 (colour 0xb0, waiting, the palette itself), then the record's end */
+static void cg_close(walk_t *w, screen_t *scr)
+{
+    int r = msgbox_open(&w->box, scr, w->font8, w->table, cg_B + 0x7305, 0xE1, 0xB0, 1);
+    if (r < 0) {
+        note_unbuilt(w, "a message that MES_TXT.LCC does not have", 0xE1);
+        w->talking = 0;
+        return;
+    }
+    if (r > 0)
+        note_unbuilt(w, "a character the message font does not have", 0xE1);
+    w->talking = 18;
+}
+
+/* 0x18213 .. 0x182f3: after the game the party and the trail's places at (byte 3, 2 x byte 4), the roof flag cleared; the pointer's
+ * place 0 with the corner kept; the record loop again. */
+static void cg_done(walk_t *w, screen_t *scr)
+{
+    walk_scene_t *s = w->scene;
+    const uint8_t *rec = s->tab_a + 1000 + w->cg_si;
+    uint8_t x = rec[3], y = (uint8_t)(rec[4] * 2);
+    for (unsigned o = 0; o < 0xC8; o += WS_PARTY_SIZE) {
+        s->tab_b[o] = x;
+        s->tab_b[o + 1] = y;
+    }
+    for (unsigned k = 0; k < 13; k++) {
+        s->trail[3 * k] = x;
+        s->trail[3 * k + 1] = y;
+    }
+    w->alt[0] = 0;
+    walk_mouse_reset(w, scr);
+    w->talking = 0;
+    w->vbe = 0xE;
+    records_again(w, w->cg_si / WS_RECORD_SIZE);
+}
+
+/* Kind 0xe: the pointer off; with coins (party word 0x122) the game, else only the pointer's place 0 and the record loop again. */
+static void cards_open(walk_t *w, screen_t *scr, unsigned si)
+{
+    walk_mouse_hide(w, scr);
+    w->cg_si = si;
+    if (shop_coins(w) == 0) {
+        walk_mouse_reset(w, scr);
+        w->vbe = 0xE;
+        records_again(w, si / WS_RECORD_SIZE);
+        return;
+    }
+    cg_open(w, scr);
+}
+
+/* The card picked (0x25586 .. 0x258aa): the coins written; no bet ends the game. Else the faces drawn into the kept 190 x 36 (D), the
+ * row turned from the backs to the faces and the faces shown; a win (the card higher than the dealer's when the arrow says higher,
+ * lower else; equal loses) doubles the bet, a loss takes it; the dealer's pictures 1 and 2 (a win) or 3 and 4; the strip's third or
+ * fourth text; no bet and no coins ends the game; the bet shown, SND_EF.1 0x1bf5 (a win) or 0 played; then the wait. */
+static void cg_picked(walk_t *w, screen_t *scr)
+{
+    cg_set_coins(w);
+    if (w->cg_bet == 0) {
+        cg_close(w, scr);
+        return;
+    }
+    cg_D[0] = 0xBE, cg_D[1] = 0, cg_D[2] = 0x24, cg_D[3] = 0;
+    for (unsigned k = 0, at = 4; k < 10; k++, at += 0x13)   /* 0x26c04 */
+        inn_blit(cg_D, 0x10000, at, 0xBE, cg_M + w->cg_deck[k] * 0x2AC, 0x13, 0x24);
+    cg_turn(w, scr, cg_D + CG_WORK, cg_D);
+    put_pic(scr, CG_ROW_AT, cg_D);
+    int win = w->cg_dir ? w->cg_pick > w->cg_shown : w->cg_pick < w->cg_shown;
+    w->cg_bet = win ? (w->cg_bet << 1) & 0xFFFF : 0;
+    w->cg_last = win ? CG_DEALER + CG_DEALER_N : CG_DEALER + 3 * CG_DEALER_N;
+    put_pic(scr, CG_STRIP_AT, cg_B + CG_STRIP + (w->cg_bet ? 3 : 2) * CG_STRIP_N);
+    w->cg_cur = w->cg_last + CG_DEALER_N;
+    if (w->cg_bet == 0 && w->cg_coins == 0) {
+        cg_close(w, scr);
+        return;
+    }
+    cg_show_bet(w, scr);
+    walk_sfx_play(w, SFX_EF, w->cg_bet ? 0x1BF5 : 0);
+    w->cg_coins = shop_coins(w);
+    w->talking = 17;
+}
+
+/* A round of the betting loop (0x25088) */
+static void cg_bet_round(walk_t *w, screen_t *scr, unsigned port60)
+{
+    unsigned strip = w->cg_bet ? CG_STRIP + CG_STRIP_N : CG_STRIP;
+    if (w->cg_strip != strip) {
+        w->cg_strip = strip;
+        put_pic(scr, CG_STRIP_AT, cg_B + strip);
+    }
+    w->cg_pal = (w->cg_pal + 1) & 0xFF;
+    if (w->cg_pal > 0x1E) {
+        w->cg_pal = 0;
+        palette_cycle(w, scr);
+    }
+    if (w->cg_cur != w->cg_last) {
+        cg_mark(scr, w->cg_last, 0xBF, 0xB8);
+        cg_mark(scr, w->cg_cur, 0xB8, 0xB0);
+        w->cg_last = w->cg_cur;
+    }
+    unsigned key = port60 & 0xFF;
+    int mx, my;
+    unsigned mb = 0;
+    if (walk_mouse(w, &mx, &my, &mb)) {   /* 0x251b2 */
+        mb &= 0xFF;
+        if (mb == 0)
+            w->cg_mlatch = 1;
+        if (!w->cg_mlatch)
+            mb = 0;
+        if (mb)
+            w->cg_mlatch = 0;
+        unsigned pos = (unsigned)(my * SCREEN_W + mx) & 0xFFFF;
+        if (pos != w->talk_mprev) {
+            walk_mouse_put(scr, w->talk_mprev, w->talk_mbg, 0);
+            walk_mouse_grab(scr, pos, w->talk_mbg);
+            walk_mouse_put(scr, pos, w->mpic, 1);
+            w->talk_mprev = pos;
+        }
+        unsigned x = (unsigned)mx, y = (unsigned)my;
+        if (x > 0x70 && x < 0x83 && y > 0x95 && y < 0xA5 && mb == 1)
+            key = 0xD;
+        if (x > 0xBC && x < 0xCF && y > 0x95 && y < 0xA5 && mb == 1)
+            key = 0xC;
+        if (x > 0x40 && x < 0xFF && y > 0x6E && y < 0x84) {
+            w->cg_cur = (x - 0x41) / 0x13 * 0x13 + CG_CUR0;
+            if (mb == 1)
+                key = 0x1C;
+        }
+    }
+    if (key > 0x7F) {
+        w->cg_latch = 1;
+        w->cg_rep = 0xFA;
+        w->cg_repc = 0xFA;
+    }
+    if (!w->cg_latch)
+        key = 0x82;
+    if (key >= 0x7F)
+        return;
+    w->cg_latch = 0;
+    if (key == 0x4B) {
+        w->cg_cur -= 0x13;
+        if (w->cg_cur < CG_CUR0)
+            w->cg_cur = CG_CUR9;
+    }
+    if (key == 0x4D) {
+        w->cg_cur += 0x13;
+        if (w->cg_cur > CG_CUR9)
+            w->cg_cur = CG_CUR0;
+    }
+    for (int plus = 0; plus < 2; plus++) {   /* 0x4a or 0xc: one less; 0x4e or 0xd: one more; held, faster and faster */
+        if (plus ? key != 0x4E && key != 0xD : key != 0x4A && key != 0xC)
+            continue;
+        w->cg_mlatch = 1;
+        w->cg_latch = 1;
+        w->cg_repc = (w->cg_repc + 1) & 0xFF;
+        if (w->cg_repc > w->cg_rep) {
+            w->cg_repc = 0;
+            if (w->cg_rep)
+                w->cg_rep--;
+        }
+        if (w->cg_repc != 0)
+            continue;
+        if (!plus && w->cg_bet) {
+            w->cg_bet--;
+            w->cg_coins++;
+            w->cg_pal = 0x37;
+        }
+        if (plus && w->cg_coins && w->cg_bet < 0x1F4) {
+            w->cg_bet++;
+            w->cg_coins--;
+            w->cg_pal = 0x37;
+        }
+    }
+    if (w->cg_pal == 0x37) {
+        cg_show_bet(w, scr);
+        walk_draw_gold(scr, w->cg_coins, w->art + ART_DIGITS);   /* 0x1bd6e */
+    }
+    if (key == 0x39 || key == 0x1C) {
+        w->cg_pick = w->cg_deck[(w->cg_cur - CG_CUR0) / 0x13];
+        if (w->cg_pick != w->cg_shown)
+            cg_picked(w, scr);
+    }
+}
+
+/* A round of the wait after a card (0x258ad): the dealer's picture, the other of the two every 91st round; the palette every 6th; a
+ * make code or any button ends it: the coins written, the row turned from the faces back to the backs, a new round. */
+static void cg_wait_round(walk_t *w, screen_t *scr, unsigned port60)
+{
+    put(scr, CG_DEALER_AT, cg_B + w->cg_cur, 0x46, 0x4B);
+    w->cg_rep = (w->cg_rep + 1) & 0xFF;
+    if (w->cg_rep > 0x5A) {
+        w->cg_rep = 0;
+        unsigned t = w->cg_cur;
+        w->cg_cur = w->cg_last;
+        w->cg_last = t;
+    }
+    w->cg_pal = (w->cg_pal + 1) & 0xFF;
+    if (w->cg_pal > 5) {
+        w->cg_pal = 0;
+        palette_cycle(w, scr);
+    }
+    int mx, my;
+    unsigned mb = 0;
+    if ((port60 & 0xFF) >= 0x7F && !(walk_mouse(w, &mx, &my, &mb) && (mb & 0xFF)))
+        return;
+    cg_set_coins(w);
+    cg_turn(w, scr, cg_D, cg_D + CG_WORK);
+    cg_round(w, scr);
+}
+
+static void cg_box_round(walk_t *w, screen_t *scr, unsigned port60)
+{
+    int mx, my;
+    unsigned mb = 0;
+    int on = walk_mouse(w, &mx, &my, &mb);
+    if (msgbox_round(&w->box, scr, port60, on, mb, take_box_step, w))
+        cg_done(w, scr);
 }
 
 /* ---- keys 1 to 4 and A (0x143f7 .. 0x14d46) ---- */

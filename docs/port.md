@@ -1464,4 +1464,18 @@ slides the view to the warp's target without the people, and puts the whole part
   mutations, all caught, one dropped with a note; ASan / UBSan clean on three starts; a real-time run under SDL's dummy drivers.
 - **Guess:** the turning's round counter starts at 0 (a stack variable; 0 in every start compared).
 - **Choice:** the rounds go at the world's pass rate (`show_zoom_step`), as a door's picture; the original waits for nothing.
-- **Not built:** the record block's kinds 0xe and 0x13.
+- **Not built:** the record block's kinds 0xe and 0x13 (0xe since built, 9v).
+
+## Milestone 9v: the card game (kind 0xe) (C), built 2026-10-31
+Scene 22's card table: with coins, the player bets (keypad + and -, `=` and `-`, or the mouse on the buttons), the dealer's card is
+picked by a running light, an arrow says whether to go higher or lower, and the player picks one of the other nine; a right guess
+doubles the bet, a wrong one loses it. Enter with no bet (or no bet and no coins left) ends the game, and the party stands where the
+record says (`docs/findings.md` "WALK.SL step 45").
+
+- **Code:** `src/walk.c` (`cards_open`, `cg_open`, `cg_round`, `cg_bet_round`, `cg_picked`, `cg_wait_round`, `cg_turn`, `cg_close`,
+  `cg_done`; talking states 16 (betting), 17 (the wait) and 18 (the last message box); its own three 64 KB buffers laid out as the
+  original's); `tools/battle_check.py` (the loops `0x25088` and `0x258ad`, kinds 19 and 20, and the game's steps).
+- **Checked:** `tools/check_battle.sh`, 12 `cards_` starts, all identical at every pass and step; `tools/mutate_battle.py`: 43 card
+  mutations, all caught, five dropped with notes; ASan / UBSan clean on three starts; a real-time game under SDL's dummy drivers.
+- **Guesses:** the palette count's first value (0x19, SEEN once); the byte past the deck that a rare rand reaches (0).
+- **Not built:** the record block's kind 0x13 (the ending).

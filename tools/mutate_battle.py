@@ -1114,6 +1114,58 @@ m("walk.c", "boat: steps not shown", "        put_pic(scr, 0x1440, buf + 0x32C8)
 # written and the place taken, which are the door's scene_leave (its mutations cover both).
 m("walk.c", "boat: pointer kept", "    walk_mouse_hide(w, w->scr);\n    boat_ride", "    boat_ride")
 m("walk.c", "boat: pointer not reset", "    walk_mouse_reset(w, w->scr);\n    w->vbe = 8;", "    w->vbe = 8;")
+# the card game (step 45); RUNS="cards_"
+m("walk.c", "cards: not taken", "    if (kind == 0xE && w->scr) {", "    if (kind == 0xEE && w->scr) {")
+m("walk.c", "cards: no coins check", "    if (shop_coins(w) == 0) {\n        walk_mouse_reset(w, scr);", "    if (0) {\n        walk_mouse_reset(w, scr);")
+m("walk.c", "cards: shaded five times", "    for (int k = 0; k < 6; k++) {\n        shade(w, cg_B + 4, 0x7E00);", "    for (int k = 0; k < 5; k++) {\n        shade(w, cg_B + 4, 0x7E00);")
+m("walk.c", "cards: texts in 0x70", "if (battle_text_pic(w->font8, cg_M + 0x80 * k, n, 0x78, d + 4, &w->shop_gw))", "if (battle_text_pic(w->font8, cg_M + 0x80 * k, n, 0x70, d + 4, &w->shop_gw))")
+m("walk.c", "cards: text lengths swapped", "        unsigned n = k < 2 ? 0x14 : 0x12;", "        unsigned n = k < 2 ? 0x12 : 0x14;")
+# Dropped: the text pictures' extra cleared row (the faces drawn over it are opaque where it lies).
+m("walk.c", "cards: row kept into D", "    cg_grab(scr, 0x52C1, 0xBE, 0x24, cg_B);", "    cg_grab(scr, 0x52C1, 0xBE, 0x24, cg_D);")
+m("walk.c", "cards: dealer read first", "        note_unbuilt(w, \"the card game's dealer pictures that SHOP_PIC.LCC does not have\", w->cg_si / WS_RECORD_SIZE);", "        note_unbuilt(w, \"the card game's dealer pictures that SHOP_PIC.LCC does not have\", w->cg_si / WS_RECORD_SIZE);\n    else\n        memset(cg_B + CG_DEALER, 0, 12);")
+m("walk.c", "cards: no backs", "            memcpy(backs + at + r * 0xBE, back + 4 + r * w16(back, 0), w16(back, 0));", "            (void)at;")
+m("walk.c", "cards: 19 swaps", "    for (int k = 0; k < 20; k++) {\n        unsigned a = walk_rand", "    for (int k = 0; k < 19; k++) {\n        unsigned a = walk_rand")
+# Dropped: the swaps' rand / 0xccd as / 0xcce (they differ for 45 rand values of 32768; none came up).
+m("walk.c", "cards: arrows swapped", "    use_outline(scr, w->cg_dir ? 0x4C85 : 0x6085, 0x1F, 0x10, 0xF);", "    use_outline(scr, w->cg_dir ? 0x6085 : 0x4C85, 0x1F, 0x10, 0xF);")
+m("walk.c", "cards: win test the other way", "    int win = w->cg_dir ? w->cg_pick > w->cg_shown : w->cg_pick < w->cg_shown;", "    int win = w->cg_dir ? w->cg_pick < w->cg_shown : w->cg_pick > w->cg_shown;")
+m("walk.c", "cards: no running light rand", "    for (unsigned n = walk_rand(&w->rng) / 0xCCC + 0x14; n; n--) {", "    for (unsigned n = 0x14; n; n--) {")
+m("walk.c", "cards: light one place longer", "    for (unsigned n = walk_rand(&w->rng) / 0xCCC + 0x14; n; n--) {", "    for (unsigned n = walk_rand(&w->rng) / 0xCCC + 0x15; n; n--) {")
+m("walk.c", "cards: dealer's card from the dim light", "    w->cg_shown = w->cg_deck[(a - CG_SEL0) / 0x13];", "    w->cg_shown = w->cg_deck[(b - CG_SEL0) / 0x13];")
+m("walk.c", "cards: no palette in the light", "        a += 0x13, b += 0x13;\n        palette_cycle(w, scr);", "        a += 0x13, b += 0x13;")
+m("walk.c", "cards: Left does not wrap", "        if (w->cg_cur < CG_CUR0)\n            w->cg_cur = CG_CUR9;", "        if (w->cg_cur < CG_CUR0)\n            w->cg_cur = CG_CUR0;")
+m("walk.c", "cards: minus keeps the coins", "            w->cg_bet--;\n            w->cg_coins++;", "            w->cg_bet--;")
+m("walk.c", "cards: plus without coins", "        if (plus && w->cg_coins && w->cg_bet < 0x1F4) {", "        if (plus && w->cg_bet < 0x1F4) {")
+m("walk.c", "cards: repeat does not speed up", "            if (w->cg_rep)\n                w->cg_rep--;", "")
+m("walk.c", "cards: repeat from 0xf0", "        w->cg_rep = 0xFA;\n        w->cg_repc = 0xFA;", "        w->cg_rep = 0xF0;\n        w->cg_repc = 0xF0;")
+m("walk.c", "cards: palette count from 0x10", "enum { WALK_CARDS_PAL = 0x19 };", "enum { WALK_CARDS_PAL = 0x10 };")
+m("walk.c", "cards: palette every 30th", "    if (w->cg_pal > 0x1E) {", "    if (w->cg_pal > 0x1D) {")
+m("walk.c", "cards: bet not redrawn", "    if (w->cg_pal == 0x37) {\n        cg_show_bet(w, scr);", "    if (0) {\n        cg_show_bet(w, scr);")
+m("walk.c", "cards: coins not shown", "        walk_draw_gold(scr, w->cg_coins, w->art + ART_DIGITS);   /* 0x1bd6e */", "")
+m("walk.c", "cards: dealer's card can be picked", "        if (w->cg_pick != w->cg_shown)\n            cg_picked(w, scr);", "        cg_picked(w, scr);")
+m("walk.c", "cards: no bet does not end", "    cg_set_coins(w);\n    if (w->cg_bet == 0) {\n        cg_close(w, scr);", "    cg_set_coins(w);\n    if (0) {\n        cg_close(w, scr);")
+m("walk.c", "cards: coins not written on a card", "    cg_set_coins(w);\n    if (w->cg_bet == 0) {", "    if (w->cg_bet == 0) {")
+m("walk.c", "cards: win keeps the bet", "    w->cg_bet = win ? (w->cg_bet << 1) & 0xFFFF : 0;", "    w->cg_bet = win ? w->cg_bet : 0;")
+m("walk.c", "cards: win's pictures", "    w->cg_last = win ? CG_DEALER + CG_DEALER_N : CG_DEALER + 3 * CG_DEALER_N;", "    w->cg_last = win ? CG_DEALER + 2 * CG_DEALER_N : CG_DEALER + 3 * CG_DEALER_N;")
+m("walk.c", "cards: strips swapped", "(w->cg_bet ? 3 : 2) * CG_STRIP_N);", "(w->cg_bet ? 2 : 3) * CG_STRIP_N);")
+m("walk.c", "cards: no end when broke", "    if (w->cg_bet == 0 && w->cg_coins == 0) {", "    if (0) {")
+m("walk.c", "cards: always the win sound", "    walk_sfx_play(w, SFX_EF, w->cg_bet ? 0x1BF5 : 0);", "    walk_sfx_play(w, SFX_EF, 0x1BF5);")
+m("walk.c", "cards: blink every 92nd", "    if (w->cg_rep > 0x5A) {", "    if (w->cg_rep > 0x5B) {")
+m("walk.c", "cards: wait palette every 7th", "    if (w->cg_pal > 5) {", "    if (w->cg_pal > 6) {")
+m("walk.c", "cards: wait ignores the mouse", "    if ((port60 & 0xFF) >= 0x7F && !(walk_mouse(w, &mx, &my, &mb) && (mb & 0xFF)))", "    if ((port60 & 0xFF) >= 0x7F)")
+# Dropped: the coins written again after the wait (they were read just before it, so nothing changes).
+m("walk.c", "cards: turn 17 steps down", "    for (; h > 0; h -= 2) {", "    for (; h > 2; h -= 2) {")
+m("walk.c", "cards: turn not centred", "        n -= 0x17C;\n        at += 0xBE;", "        n -= 0x17C;\n        at += 0x17C;")
+# Dropped: the button latch (a button held from a card into the next round is held back by the key latch too, which the round
+# clears and only a key's release sets).
+m("walk.c", "cards: hover a pixel off", "            w->cg_cur = (x - 0x41) / 0x13 * 0x13 + CG_CUR0;", "            w->cg_cur = (x - 0x3E) / 0x13 * 0x13 + CG_CUR0;")
+m("walk.c", "cards: pointer not drawn", "            walk_mouse_put(scr, pos, w->mpic, 1);\n            w->talk_mprev = pos;\n        }\n        unsigned x", "            w->talk_mprev = pos;\n        }\n        unsigned x")
+m("walk.c", "cards: party stays", "    for (unsigned o = 0; o < 0xC8; o += WS_PARTY_SIZE) {\n        s->tab_b[o] = x;\n        s->tab_b[o + 1] = y;\n    }\n    for (unsigned k = 0; k < 13; k++) {\n        s->trail[3 * k] = x;\n        s->trail[3 * k + 1] = y;\n    }\n    w->alt[0] = 0;",
+  "    w->alt[0] = 0;")
+m("walk.c", "cards: y not doubled", "    uint8_t x = rec[3], y = (uint8_t)(rec[4] * 2);", "    uint8_t x = rec[3], y = rec[4];")
+# Dropped: the record loop not run again after the game (it sets no flag).
+m("walk.c", "cards: end message in 0xa8", "cg_B + 0x7305, 0xE1, 0xB0, 1);", "cg_B + 0x7305, 0xE1, 0xA8, 1);")
+m("walk.c", "cards: end pointer not reset", "    w->alt[0] = 0;\n    walk_mouse_reset(w, scr);", "    w->alt[0] = 0;")
+
 # warps (step 44); RUNS="warp_"
 m("walk.c", "warp: not taken", "    if (kind == 0 && w->scr) {\n        warp(w, si);", "    if (kind == 100 && w->scr) {\n        warp(w, si);")
 m("walk.c", "warp: flag ignored", "    if (!walk_flag_test(party, rec[3], rec[4]))\n        return;\n    unsigned x = party[0]", "    unsigned x = party[0]")

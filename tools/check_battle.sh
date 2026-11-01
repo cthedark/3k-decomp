@@ -802,6 +802,35 @@ run warp_s23_unset 23 94 39 120 --key 1:0x50 --key 60:0xd0
 DOPTS="--byte 0:240:2"; run warp_s23_set 23 94 39 120 --key 1:0x50 --key 60:0xd0; DOPTS=""
 run warp_s50 50 50 47 120 --key 1:0x50 --key 60:0xd0
 run warp_s50_back 50 190 50 120 --key 1:0x50 --key 60:0xd0
+# the card game (kind 0xe, step 45), scene 22 with 1000 coins: Enter with no bet (the end at once), then walking on from where it puts
+# the party; three bets of one by keypad +, a card, Space for the next round, another card, the end; Space and = and - and Left round
+# the row; + held (the repeat); the mouse on +, -, the cards and to end the wait; the Sound Blaster; no coins (no game); one coin
+DOPTS="--word 7:10:1000"
+CIN="--key 1:0x4d --key 12:0xcd"
+run cards_quit 22 168 48 160 $CIN --key 20:0x1c --key 22:0x9c --key 40:0x1c --key 42:0x9c --key 60:0x50 --key 80:0xd0
+CG1="--key 20:0x4e --key 22:0xce --key 24:0x4e --key 26:0xce --key 28:0x4e --key 30:0xce --key 34:0x4d --key 36:0xcd --key 40:0x1c --key 42:0x9c"
+CG2="--key 60:0x39 --key 62:0xb9 --key 70:0x4d --key 72:0xcd --key 80:0x1c --key 82:0x9c --key 100:0x39 --key 102:0xb9 --key 110:0x1c"
+CG3="--key 112:0x9c --key 120:0x1c --key 122:0x9c --key 130:0x1c --key 132:0x9c"
+run cards_game 22 168 48 160 $CIN $CG1 $CG2 $CG3
+run cards_game_sb 22 168 48 160 $CIN $CG1 $CG2 $CG3 --sb
+run cards_keys 22 168 48 200 $CIN --key 20:0x0d --key 22:0x8d --key 24:0x0d --key 26:0x8d --key 28:0x0c --key 30:0x8c \
+    --key 34:0x4b --key 36:0xcb --key 38:0x4b --key 40:0xcb --key 44:0x39 --key 46:0xb9 --key 70:0x1c --key 72:0x9c --key 90:0x1c \
+    --key 92:0x9c --key 110:0x4a --key 112:0xca --key 116:0x1c --key 118:0x9c --key 140:0x1c --key 142:0x9c
+run cards_hold 22 168 48 700 $CIN --key 20:0x4e --key 600:0xce --key 610:0x4a --key 690:0xca
+run cards_mouse 22 168 48 200 $CIN --mouse 0:300:190:0 --mouse 20:120:157:1 --mouse 22:120:157:0 --mouse 24:120:157:1 \
+    --mouse 26:120:157:0 --mouse 28:197:157:1 --mouse 30:197:157:0 --mouse 34:138:120:0 --mouse 40:138:120:1 --mouse 42:138:120:0 \
+    --mouse 60:200:60:1 --mouse 62:200:60:0 --key 90:0x1c --key 92:0x9c --key 110:0x1c --key 112:0x9c --key 130:0x1c --key 132:0x9c
+# the dealer's card (at place 9 in the first round here) picked first, then place 0; a long wait (the dealer's pictures, the palette)
+run cards_shown 22 168 48 400 $CIN --key 20:0x4e --key 22:0xce --key 34:0x4b --key 36:0xcb --key 40:0x1c --key 42:0x9c \
+    --key 50:0x4d --key 52:0xcd --key 60:0x1c --key 61:0x9c --key 300:0x39 --key 302:0xb9 --key 320:0x1c --key 322:0x9c \
+    --key 340:0x1c --key 342:0x9c --key 360:0x1c --key 362:0x9c
+# the button held from a card through the next round (it must be let go first); the pointer left over the number box at the end
+run cards_mouse_held 22 168 48 200 $CIN --mouse 0:300:190:0 --mouse 20:120:157:1 --mouse 22:120:157:0 --mouse 40:138:120:1 \
+    --mouse 90:138:120:0 --mouse 100:138:120:1 --mouse 102:138:120:0 --key 130:0x1c --key 132:0x9c --key 150:0x1c --key 152:0x9c
+run cards_mouse_end 22 168 48 120 $CIN --mouse 0:50:152:0 --key 20:0x1c --key 22:0x9c --key 40:0x1c --key 42:0x9c --mouse 60:20:20:0
+DOPTS="--word 7:10:0"; run cards_nocoins 22 168 48 60 $CIN
+DOPTS="--word 7:10:1"; run cards_one 22 168 48 200 $CIN --key 20:0x4e --key 22:0xce --key 30:0x4e --key 32:0xce --key 40:0x1c --key 42:0x9c --key 60:0x39 \
+    --key 62:0xb9 --key 80:0x1c --key 82:0x9c --key 100:0x1c --key 102:0x9c --key 120:0x1c --key 122:0x9c; DOPTS=""
 # walking on after the warp (the party and the trail put at the arrival)
 run warp_s23_walk 23 80 39 160 --key 1:0x50 --key 40:0xd0 --key 60:0x4b --key 90:0xcb --key 100:0x48 --key 130:0xc8
 # shops (kind 5, step 40): scene 0's food shop (type 0) entered from outside its door: purchases by the hero, the second member and the

@@ -49,11 +49,14 @@ ORDER_TOP = 0x1B834
 # F10's party data (0x1a122): screen, palette and rand
 DATA_TOP = 0x1A641
 SHOP_TOP, INN_TOP = 0x23386, 0x240EC
+# the card game of a kind 0xe record (0x24962): its betting loop and its wait after a round
+CARDS_TOP, CARDS_WAIT = 0x25088, 0x258AD
 KIND = {WORLD_TOP: 0, BATTLE_TOP: 1, REWARDS_TOP: 3, DIALOG_TOP: 4, MAGIC_TOP: 5, PICK_TOP: 6, ITEMS_TOP: 7, YESNO_TOP: 8,
-        NUMBER_TOP: 9, TAKE_TOPS[0]: 10, TAKE_TOPS[1]: 10, EQUIP_TOP: 11, USE_TOP: 12, MAP_TOP: 13, ORDER_TOP: 14, DATA_TOP: 15, SHOP_TOP: 17, INN_TOP: 18}
+        NUMBER_TOP: 9, TAKE_TOPS[0]: 10, TAKE_TOPS[1]: 10, EQUIP_TOP: 11, USE_TOP: 12, MAP_TOP: 13, ORDER_TOP: 14, DATA_TOP: 15, SHOP_TOP: 17, INN_TOP: 18,
+        CARDS_TOP: 19, CARDS_WAIT: 20}
 KIND_NAME = {0: 'world', 1: 'battle', 2: 'lost', 3: 'rewards', 4: 'message box', 5: 'magic list', 6: 'member picker',
              7: 'item list', 8: 'yes / no', 9: 'number', 10: 'take', 11: 'equipment', 12: 'use prompt', 13: 'map', 14: 'order', 15: 'data',
-             'flash': 'face flash and zoom steps', 'sounds': 'sounds', 'files': 'files written', 16: 'left', 17: 'shop', 18: 'inn'}
+             'flash': 'face flash and zoom steps', 'sounds': 'sounds', 'files': 'files written', 16: 'left', 17: 'shop', 18: 'inn', 19: 'cards', 20: 'cards end'}
 MON = 0x3C
 LOCALS = (0x52, 0x70, 0x44, 0x5E, 0x82, 0x72, 0x38, 0x42, 0x8C, 0x0C, 0x58, 0x14, 0x84, 0x36, 0x10, 0x78)
 BSTATE = 4 + MON + len(LOCALS) + 200 + 60
@@ -95,7 +98,8 @@ def oracle(a, n, keys):
             flash.append((emu.pass_count - 1, bytes(uc.mem_read(VGA, 64000))))
 
     # and the boat ride's steps (0x1c21a, after its window copy), a warp's turning and sliding rounds (0x17441, 0x17563)
-    for top in (0x17A00, 0x19A8E, 0x19B75, 0x1C21A, 0x17441, 0x17563):
+    # and the card game's steps: the window shaded (0x24a17) and a card dealt or taken back (0x256c6, 0x2576d, 0x25a66, 0x25b14)
+    for top in (0x17A00, 0x19A8E, 0x19B75, 0x1C21A, 0x17441, 0x17563, 0x24A17, 0x256C6, 0x2576D, 0x25A66, 0x25B14):
         emu.uc.hook_add(UC_HOOK_CODE, zoom_cb, None, top, top)
 
     def far(uc, ss, bp, off):

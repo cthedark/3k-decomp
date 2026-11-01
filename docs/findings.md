@@ -3867,6 +3867,7 @@ READ from the code (`work/b11/rec.asm`, `0x172f0` .. `0x18b82`), not run or comp
   Built and compared in step 42.
 - **Kind 0xe (1: scene 22):** if the party table's word at 0x122 is not 0: `0x24962` (it reads `RPG.LCP`, `MES_TXT.LCC` and
   `SHOP_PIC.LCC`; not read further), then the party and trail put at (byte 3, 2 x byte 4) and the roof flag `[bp-0x9e]` cleared.
+  Step 45: `0x24962` is a card game, built and compared.
 - **Kind 0x11, a scripted talk (2: scenes 22, 42), with kind 0x12 after it (1):** if flag (byte 3, bit byte 4) is set and byte 5 is not
   0: flag (byte 0xd, bit byte 0xe) set, byte 5 = 0, `0x1732:0xd8(map buffer, 0x14, 0)` (not read); bytes 6 .. 11, and when the next
   record is kind 0x12 its bytes 3 .. 14, are up to six (message word, sound byte) entries: for each, the sound (`0x1c5e2`) when not 0,
@@ -4079,3 +4080,57 @@ arrival (all 60 turning rounds), with the mouse, walking on after it; its record
 13 (the slide both ways). Starts from `work/b11/warpfind.py`. `tools/mutate_battle.py`: 16 warp mutations, all caught; one dropped (the
 record loop run again: a warp sets no flag). The picture door's key pattern, which the warp's duplicated, was repointed. ASan / UBSan
 clean on three starts; a real-time run under SDL's dummy drivers walked onto scene 23's warp with nothing reported unbuilt.
+
+## WALK.SL step 45: the card game (kind 0xe, `0x18181` .. `0x182f3`, `0x24962` .. `0x25b52`), 2026-10-31
+
+READ from the code (`work/b11/kinde.asm`, `work/b11/text.asm`), built and CONFIRMED by the comparison. Scene 22's record 12 at
+(172, 48) holds a higher-or-lower card game against a dealer. `tools/battle_check.py` now knows its two loops: the betting loop
+`0x25088` (kind 19, "cards") and the wait after a card `0x258ad` (kind 20, "cards end"); the window's shading and the cards' turning
+are compared as steps (`0x24a17`, `0x256c6`, `0x2576d`, `0x25a66`, `0x25b14`).
+
+**The record:** the pointer off; with coins (party word 0x122) the game; then (with coins or not) the party and the trail's x and y
+at (byte 3, 2 x byte 4), the roof flag cleared, the pointer's place 0 with its corner kept and the record loop again. Without coins
+only the pointer and the loop.
+
+**The buffers:** the game uses the world buffer `[bp-0x8c]` up to 0xea6b (the deck is at 0xea60), `[bp-0x20]` and the map buffer
+(digits at 0xd070), past what the port's own buffers hold, so the port gives it three 64 KB buffers of its own laid out as the
+original's. Two overlaps in that layout are visible: the fourth text strip ends at 0x83e2, 12 bytes into the first dealer picture at
+0x83d6, which is read after the strips were made (so the strip's last 12 pixels are the picture's); the 190 x 36 grab at (65, 66) goes
+over the table's picture (27 x 30, already shown) at the world buffer's start.
+
+**Opening (`0x24962`):** the window grabbed and shaded six times (`0x25dca`), each shown; `RPG.LCP` 0x1643b (the number box) unpacked
+and shown at (113, 150), a 46 x 10 box of colour 0 at (137, 153); the 160 x 14 at (80, 169) grabbed and copied three times;
+`MES_TXT.LCC` 0x17586: four 128-byte texts, drawn by `0x243ec` (arguments: text, picture, characters, colour, font; 20, 20, 18 and 18
+characters in colour 0x78) and centred in the four strips; `RPG.LCP` 0x58f4 (0x1e83 bytes): ten 19 x 36 card faces 0x2ac apart, a
+card's back with its header at 0x1ab8 and the table (packed at 0x1d68, 27 x 30, shown at (71, 62) with colour 0 clear);
+`SHOP_PIC.LCC` 0x1339e: five 70 x 75 dealer pictures, 0x1482 apart; the ten backs 19 apart in a 190 x 36 picture (`0x26a88`, opaque);
+the deck 0 .. 9; the bet 0.
+
+**A round (`0x24dcd`):** the backs shown at (65, 106); 20 swaps of two deck places at random (rand / 0xccd each, which reaches 10, one
+byte past the deck, for rand 0x7ff2 .. 0x7fff; the port keeps a 0 there, GUESS); the way to win at random (rand / 0x4000: 1 higher,
+the lit arrow at (69, 61), else lower, at (69, 77)); a light runs 20 .. 30 places (rand / 0xccc + 20) along the marks over the cards
+(two lights, 19 x 4 frames 19 apart from (65, 101)), the dealer's first picture and the palette stepping at each; where the bright
+light stops is the dealer's card. The ten marks under the cards; the bet (`0x24302`) at (141, 155).
+
+**Betting (`0x25088`):** the strip with text 1 (no bet) or 2; the palette every 31st round (`[bp-0x1a]`, a stack byte: 0x19 at the
+first round, SEEN); the lit card's mark; the keyboard port raw (and the BIOS buffer emptied); with a mouse: the pointer drawn, a
+button let go before it counts, + (113 .. 130, 150 .. 164) and - (189 .. 206) and a card (65 .. 254, 111 .. 131; hovering lights it,
+the left button picks it). A key counts after a release; Left and Right move round the ten; keypad - or `-` (0x4a, 0xc) and keypad + or
+`=` (0x4e, 0xd) take one from or add one to the bet (at most 500, from the coins), and held they repeat, the wait between repeats
+starting at 250 rounds and one shorter each time (`[bp-8]`, `[bp-0x1c]`); the bet and the coins drawn again after a change (and the
+palette steps in the next round). Space or Enter picks the lit card unless it is the dealer's; with no bet it ends the game.
+
+**A card:** the coins written; the faces drawn over the kept 190 x 36; the row turned over (the backs squashed from 36 rows to 2 in 18
+steps, the faces from 2 to 34 in 17, each centred in a copy of the grab and shown), the faces shown; the bet doubled when the card is
+higher (lower) than the dealer's as the arrow said, else lost (an equal card loses); text 3 (a win) or 4; with no bet and no coins
+the end; the bet drawn, `SND_EF.1` 0x1bf5 played on a win, 0 on a loss. **The wait (`0x258ad`):** the dealer's picture 1 or 3, the
+other of the two (2 or 4) every 91st round; the palette every 6th; a make code or any mouse button (no latch) ends it: the coins
+written, the faces turned back to the backs, the next round. **The end:** message 0xe1 (colour 0xb0, waiting); nothing puts the
+screen back (the window is drawn again on the next pass; the number box stays on the left).
+
+**Checked:** `tools/check_battle.sh`, 12 `cards_` starts with 1000 coins (one with none, one with one), all identical at every pass and
+step: the end at once and walking on; three rounds by keys (with the Sound Blaster); `=`, `-`, Left round the row and Space; + held
+for 580 rounds; the mouse on +, -, a card a pixel from its edge and to end the wait; the dealer's card tried first and a 240-round
+wait; a button held from a card into the next round; the pointer left over the number box at the end. `tools/mutate_battle.py`: 43
+card mutations, all caught (three after the starts were added); five dropped with notes (the text pictures' extra row, a rand range no start reaches, two that change
+nothing, the button latch the key latch covers). ASan / UBSan clean on three starts; a real-time game under SDL's dummy drivers.
