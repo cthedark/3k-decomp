@@ -1564,3 +1564,14 @@ palette of `ANI.LCP` over 12.8 s (`docs/findings.md` "ENDING.SL step 7").
 - **Checked:** all 13,001 records identical; 83 mutations in all, every one caught; ASan / UBSan clean; a real-time run.
 - **Not reproduced:** the original stops keeping its song going in this scene; the port's player loops on.
 - **Not built:** the credits (`cast2.lcz`, the last loop), then the exit to DOS.
+
+## Milestone 10g: ENDING.SL, the credits and THE END (C), built 2026-11-01
+After the sunset the credits rise at the left over it, with a black shadow, for 196 s; then the music stops and the text screen the
+original leaves at the DOS prompt shows THE END (`docs/findings.md` "ENDING.SL step 8"). ENDING.SL is now ported whole: the game runs
+from the menu to its end.
+
+- **Code:** `src/ending.c` (`scene7_begin`, `scene7`, `ending_text_end`); `src/main.c` (`play_ending` ends with the text screen,
+  until a key, a button or 20 s); `src/timing.h` (`TK_ENDING_CREDITS_US`); `tools/ending_check.py` (the last two record points).
+- **Checked:** all 14,863 records of the whole program identical; 96 mutations, all caught; ASan / UBSan clean; a real-time run.
+- **Choices:** the text screen drawn in 4 x 8 cells; the wait on it (the original returns to DOS and leaves it there).
+- **Not compared:** the voice and the repeating sound (no Sound Blaster in the emulator); the music.

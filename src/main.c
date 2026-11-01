@@ -1161,7 +1161,8 @@ static uint32_t ending_period_us(int loop)
     case ENDING_SCENE4_END: case ENDING_SCENE5_FACE: return TK_ENDING_SCENE5_FACE_US;
     case ENDING_SCENE5_FACE_END: case ENDING_SCENE5_EYES: return TK_ENDING_SCENE5_EYES_US;
     case ENDING_SCENE5_END: case ENDING_SCENE6_WIPE: return TK_ENDING_SCENE6_WIPE_US;
-    default: return TK_ENDING_SCENE6_FADE_US;
+    case ENDING_SCENE6_FADE: return TK_ENDING_SCENE6_FADE_US;
+    default: return TK_ENDING_CREDITS_US;
     }
 }
 
@@ -1202,9 +1203,27 @@ static int play_ending(screen_t *scr)
         }
         platform_present(scr);
     }
-    if (!quit)
-        printf("ending: the built scenes are over; the rest of ENDING.SL is not built yet\n");
-    song_stop(song);
+    song_stop(song);   /* 0x11397: the music stopped and its driver shut down */
+    if (!quit) {   /* the text screen it leaves on exit, until a key, a button or 20 s */
+        ending_text_end(scr);
+        platform_present(scr);
+        uint32_t until = platform_ticks_ms() + 20000u;
+        unsigned held = platform_port60();   /* a key still down from the game does not count: a new press does */
+        while ((int32_t)(platform_ticks_ms() - until) < 0) {
+            if (!platform_poll()) {
+                quit = 1;
+                break;
+            }
+            int mx, my;
+            unsigned b = 0;
+            platform_mouse(&mx, &my, &b);
+            unsigned k = platform_port60();
+            if ((k != held && (k & 0x80) == 0) || b)
+                break;
+            platform_sleep_ms(10);
+        }
+        printf("ending: THE END\n");
+    }
     if (bank)
         audio_stop();
     sfx_bank_free(bank);

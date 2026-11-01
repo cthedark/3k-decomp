@@ -600,6 +600,79 @@ static int scene6_fade(ending_t *e, screen_t *scr)
     return ++e->wait < 0x40 ? ENDING_SCENE6_FADE : ENDING_SCENE6_END;
 }
 
+/* 0x11218 .. 0x112be: CAST2.LCZ, the credits as a 1-bit picture 120 wide (15 bytes a row, 0x6144 bytes: 1,660 rows), unpacked into
+ * [bp-0x1e] after it is cleared (0xffdc bytes); the screen's 120 x 200 at (2, 0) grabbed with its header into the frame buffer
+ * (0x121dc); [bp-0x22] cleared (0x5dc4 bytes) and given the grab's header: the credits' own 120 x 200 picture; [bp-0x14] 0. */
+static int scene7_begin(ending_t *e, screen_t *scr)
+{
+    size_t n = read_file(e, "CAST2.LCZ");
+    if (!n)
+        return 0;
+    memset(e->b1e, 0, BUF);
+    unpack(e->file, n, e->b1e, BUF);
+    uint8_t *g = e->file;
+    g[0] = 0x78, g[1] = 0, g[2] = 0xC8, g[3] = 0;
+    for (unsigned r = 0; r < 0xC8; r++)
+        memcpy(g + 4 + r * 0x78, scr->pix + 2 + r * 320, 0x78);
+    memset(e->b22, 0, 0x5DC4);
+    memcpy(e->b22, e->file, 4);
+    e->face = 0;
+    return ENDING_SCENE7;
+}
+
+/* 0x112c1 .. 0x11381, a pass of the credits: their picture moves up a row (0x11917) and the next row of the credits comes in at the
+ * bottom (0x114a8: 15 bytes, the high bit first, set bits colour 0xf0, the others 0); the grab copied into [bp-0x36]; the credits put
+ * on it as colour 0 at (4, 1) and (5, 1) (0x11f05, a shadow) and as they are at (4, 0) (0x11ec6, colour 0 clear); that shown at (2, 0).
+ * After 1,861 passes (the rows past the credits' end are the cleared buffer's zeros, so they scroll away) the loop ends. */
+static int scene7(ending_t *e, screen_t *scr)
+{
+    uint8_t *c = e->b22;
+    memmove(c + 4, c + 4 + 0x78, 0x78 * 199);
+    for (unsigned b = 0; b < 0xF; b++)
+        for (unsigned k = 0; k < 8; k++)
+            c[0x5D4C + b * 8 + k] = (e->b1e[e->face + b] << k) & 0x80 ? 0xF0 : 0;
+    memcpy(e->b36, e->file, 0x5DC4);
+    static const unsigned shadow[2] = {0x7C, 0x7D};
+    for (int s = 0; s < 3; s++) {
+        unsigned at = s < 2 ? shadow[s] : 4;
+        for (unsigned r = 0; r < 0xC8; r++)
+            for (unsigned x = 0; x < 0x78; x++) {
+                uint8_t v = c[4 + r * 0x78 + x];
+                size_t o = (size_t)at + r * 0x78 + x;
+                if (v && o < BUF)
+                    e->b36[o] = s < 2 ? 0 : v;
+            }
+    }
+    e->face += 0xF;
+    show_hdr(scr, 2, e->b36);
+    return e->face > 0x6CFC ? ENDING_SCENE7_END : ENDING_SCENE7;
+}
+
+void ending_text_end(screen_t *scr)
+{
+    /* data segment 0xf4, 0x116, 0x138: 0xdb a full cell, 0xdf its upper half, 0xdc its lower half */
+    static const char *const line[3] = {
+        "\xdf\xdf\xdb\xdf\xdf \xdb  \xdb \xdb\xdf\xdf\xdf    \xdb\xdf\xdf\xdf \xdb\xdc \xdb \xdb\xdf\xdf\xdc",
+        "  \xdb   \xdb\xdf\xdf\xdb \xdb\xdf\xdf     \xdb\xdf\xdf  \xdb \xdb\xdb \xdb  \xdb",
+        "  \xdf   \xdf  \xdf \xdf\xdf\xdf\xdf    \xdf\xdf\xdf\xdf \xdf  \xdf \xdf\xdf\xdf "};
+    static const uint8_t colour[3] = {0xB, 9, 1};
+    static const uint8_t cga[16][3] = {{0, 0, 0}, {0, 0, 42}, {0, 42, 0}, {0, 42, 42}, {42, 0, 0}, {42, 0, 42}, {42, 21, 0},
+                                       {42, 42, 42}, {21, 21, 21}, {21, 21, 63}, {21, 63, 21}, {21, 63, 63}, {63, 21, 21},
+                                       {63, 21, 63}, {63, 63, 21}, {63, 63, 63}};
+    memset(scr->pix, 0, sizeof scr->pix);
+    screen_set_palette(scr, &cga[0][0], 0, 16);
+    for (int l = 0; l < 3; l++)
+        for (int i = 0; line[l][i]; i++) {
+            uint8_t ch = (uint8_t)line[l][i];
+            unsigned x0 = (20u + (unsigned)i) * 4, y0 = (4u + (unsigned)l) * 8;
+            for (unsigned y = 0; y < 8; y++) {
+                int on = ch == 0xDB || (ch == 0xDF && y < 4) || (ch == 0xDC && y >= 4);
+                if (on)
+                    memset(scr->pix + (y0 + y) * 320 + x0, colour[l], 4);
+            }
+        }
+}
+
 void ending_set_voice(ending_t *e, void (*play)(void *ctx, unsigned off), void (*cut)(void *ctx), int (*busy)(void *ctx), void *ctx)
 {
     e->voice = play;
@@ -627,6 +700,8 @@ int ending_step(ending_t *e, screen_t *scr)
     case ENDING_SCENE5_END: e->loop = scene6_begin(e); break;
     case ENDING_SCENE6_WIPE: e->loop = scene6_wipe(e, scr); break;
     case ENDING_SCENE6_FADE: e->loop = scene6_fade(e, scr); break;
+    case ENDING_SCENE6_END: e->loop = scene7_begin(e, scr); break;
+    case ENDING_SCENE7: e->loop = scene7(e, scr); break;
     default: e->loop = 0; break;
     }
     return e->loop;

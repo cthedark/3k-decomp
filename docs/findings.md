@@ -4356,3 +4356,32 @@ song going (`0x19c:0x102` is not called), so the original's song stops at its en
 
 **Checked:** all 13,001 records identical; `tools/mutate_ending.py`: 8 new mutations (83 in all; `ONLY=s6` runs a subset), all caught;
 ASan / UBSan clean on all six scenes; a real-time run under SDL's dummy drivers (78 s for the six scenes).
+
+## ENDING.SL step 8: the credits and the exit (`0x11218` .. `0x113ff`), 2026-11-01
+
+READ from the code (`work/e1/ending.asm`; `0x114a8`, `0x11f05`), built in C and CONFIRMED by the comparison (records at `0x112c1`, each
+pass, and `0x11384`, the end: 1,862 records more, 14,863 in all: the whole program up to its exit).
+
+**Set-up:** `cast2.lcz` unpacked into `[bp-0x1e]`, cleared first (0xffdc bytes): the credits as a 1-bit picture 120 pixels wide, 15
+bytes a row, 0x6144 bytes (1,660 rows). The screen's 120 x 200 at (2, 0) (the sunset's left part) grabbed with its header into the
+frame buffer (`0x121dc`); `[bp-0x22]` cleared (0x5dc4 bytes) and given the grab's header: the credits' 120 x 200 picture. `[bp-0x14]` 0.
+
+**A pass (`0x112c1`):** the credits' picture moved up a row (`0x11917`; its last row stays); the next 15 bytes of the credits into its
+last row (`0x114a8`: the high bit first, a set bit colour 0xf0, the others 0); the grab copied into `[bp-0x36]`; the credits put on it
+in colour 0 at (4, 1) and (5, 1) (`0x11f05`: a picture's set pixels in one colour), a shadow, and as they are at (4, 0) (`0x11ec6`,
+colour 0 clear); that shown at (2, 0). `[bp-0x14]` goes on by 15; past 0x6cfc (1,861 passes) the loop ends. The last 201 rows read are
+the cleared buffer's zeros, so the credits scroll off the top. The song is kept going.
+
+**The exit (`0x11384`):** with an FM card the music stopped and its driver shut down (`0x19c:0x12a`, `0x19c:0x152`); text mode 3;
+three lines of block characters (`0xdb`, `0xdf`, `0xdc`) at column 20, rows 4, 5 and 6, in colours 0xb, 9 and 1 (`0x14d:0xe`): THE END
+in light cyan over light blue over blue; then `0x144:0xc(8, 0)` and `exit(0)` to DOS. Nothing returns to MARK.EXE: the game ends at the
+DOS prompt.
+
+**Pace (emulator):** 1,861 passes in 3,576 ticks, 105.5 ms a row: the roll takes 196 s (`TK_ENDING_CREDITS_US`). The whole ending then
+lasts about 4 min 34 s in the port, against 4 min 27 s for the emulator's run (the fifth scene's chosen periods add 8 s).
+
+**The port's end:** `ending_text_end` draws the three lines as the text screen would show them (80 x 25 cells of 4 x 8 pixels, the
+text mode's 16 colours); `play_ending` shows it until a new key press, a mouse button or 20 s, then the game ends.
+
+**Checked:** all 14,863 records identical; `tools/mutate_ending.py`: 13 new mutations (96 in all), all caught; ASan / UBSan clean on
+the whole program; a real-time run under SDL's dummy drivers played it to "ending: THE END".

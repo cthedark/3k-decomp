@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WORK = ROOT / 'work/mut_ending'
-CACHE = ROOT / 'work/ending_check/s6.rec'
+CACHE = ROOT / 'work/ending_check/s7.rec'
 M = []
 
 
@@ -119,10 +119,25 @@ m('s6: fade only up', '        if (e->pal[i] > e->pal[0x300 + i])\n            e
 m('s6: fade two at a time', '        else if (e->pal[i] < e->pal[0x300 + i])\n            e->pal[i]++;', '        else if (e->pal[i] < e->pal[0x300 + i])\n            e->pal[i] = (uint8_t)(e->pal[i] + 2 > e->pal[0x300 + i] ? e->pal[0x300 + i] : e->pal[i] + 2);')
 m('s6: 63 fade steps', '    return ++e->wait < 0x40 ?', '    return ++e->wait < 0x3F ?')
 
+# the credits (step 8)
+m('s7: buffer not cleared', '    memset(e->b1e, 0, BUF);\n', '')
+m('s7: grab from x 3', '        memcpy(g + 4 + r * 0x78, scr->pix + 2 + r * 320, 0x78);', '        memcpy(g + 4 + r * 0x78, scr->pix + 3 + r * 320, 0x78);')
+m('s7: credits not cleared', '    memset(e->b22, 0, 0x5DC4);\n', '')
+m('s7: no scroll', '    memmove(c + 4, c + 4 + 0x78, 0x78 * 199);\n', '')
+m('s7: low bit first', '(e->b1e[e->face + b] << k) & 0x80', '(e->b1e[e->face + b] >> k) & 1')
+m('s7: colour 0xf1', '& 0x80 ? 0xF0 : 0;', '& 0x80 ? 0xF1 : 0;')
+m('s7: back not fresh', '    memcpy(e->b36, e->file, 0x5DC4);\n', '')
+m('s7: no shadow', '    for (int s = 0; s < 3; s++) {', '    for (int s = 2; s < 3; s++) {')
+m('s7: shadow one pixel', '    static const unsigned shadow[2] = {0x7C, 0x7D};', '    static const unsigned shadow[2] = {0x7C, 0x7C};')
+m('s7: credits a row down', '        unsigned at = s < 2 ? shadow[s] : 4;', '        unsigned at = s < 2 ? shadow[s] : 0x7C;')
+m('s7: two rows a pass', '    e->face += 0xF;', '    e->face += 0x1E;')
+m('s7: strip at x 3', '    show_hdr(scr, 2, e->b36);', '    show_hdr(scr, 3, e->b36);')
+m('s7: ends a row early', '    return e->face > 0x6CFC ?', '    return e->face > 0x6CED ?')
+
 
 def main():
     if not CACHE.exists():
-        print('run tools/ending_check.py --n 20000 --cache work/ending_check/s6.rec first')
+        print('run tools/ending_check.py --n 20000 --cache work/ending_check/s7.rec first')
         return 2
     missed = bad = 0
     WORK.mkdir(parents=True, exist_ok=True)

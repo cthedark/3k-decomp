@@ -30,11 +30,12 @@ from unicorn.x86_const import UC_X86_REG_BP, UC_X86_REG_SS  # noqa: E402
 # loop top -> its number (the port's record carries the same number); 0x10603 is the first scene's end
 TOPS = {0x1042D: 1, 0x10603: 2, 0x106D1: 3, 0x108D0: 4, 0x10968: 5, 0x10BA1: 6, 0x10CD1: 7, 0x10D2A: 8, 0x10D58: 9,
         0x10EA0: 10, 0x10FD6: 11, 0x1101A: 12, 0x11078: 13, 0x110C8: 14,
-        0x11129: 15, 0x1119F: 16, 0x11218: 17}
+        0x11129: 15, 0x1119F: 16, 0x11218: 17, 0x112C1: 18, 0x11384: 19}
 NAMES = {1: 'scene 1', 2: 'scene 1 ended', 3: 'scene 2', 4: 'scene 2 ended', 5: 'scene 3', 6: 'scene 3 ended',
          7: 'scene 4 shake', 8: 'scene 4 shake ended', 9: 'scene 4 strobe', 10: 'scene 4 ended',
          11: 'scene 5 face', 12: 'scene 5 face ended', 13: 'scene 5 eyes', 14: 'scene 5 ended',
-         15: 'scene 6 wipe', 16: 'scene 6 fade', 17: 'scene 6 ended'}
+         15: 'scene 6 wipe', 16: 'scene 6 fade', 17: 'scene 6 ended',
+         18: 'credits', 19: 'credits ended'}
 FRAME = 1 + 4 + 768
 
 

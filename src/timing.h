@@ -126,6 +126,9 @@
  * waits through two loops of 50,000 rounds): 0.8 s and 12.8 s. */
 #define TK_ENDING_SCENE6_WIPE_US 8200
 #define TK_ENDING_SCENE6_FADE_US 200000
+/* The credits from the emulator: 1,861 passes (one row each) in 3,576 ticks: 105.5 ms a row, 196 s for the whole roll (CAST.SL's
+ * credits run at 35 rows a second, a choice made there). */
+#define TK_ENDING_CREDITS_US 105500
 /* The BIOS clock the world reads (rain strength, the dark specks, the villagers' direction choice) runs at
  * 1193182 / 65536 = 18.2065 ticks per second. */
 #define TK_BIOS_TICKS_PER_SEC_NUM 1193182ull
