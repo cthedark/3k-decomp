@@ -142,6 +142,27 @@ work/           도구의 임시 출력 (git에서 제외)
 게임은 원본처럼 세이브와 상태 파일을 데이터 디렉터리에 씁니다. `original_bin/`의 사본으로 플레이하거나 `--write-dir DIR`을
 주세요. 더 많은 옵션: `docs/port.md`의 "Build and run".
 
+### 빌드 후 플레이하기
+
+1. **저장소 루트에서 실행하세요.** `build/`에서 실행하면 안 됩니다. `--data`가 없으면 게임은 *현재* 디렉터리에서
+   `original_bin/`을 찾기 때문에, `build/`에서 실행하거나 실행 파일을 더블클릭하면 데이터를 찾지 못하고 바로 종료됩니다.
+   `--data DIR` 대신 `TK_DATA=DIR`을 써도 됩니다.
+2. **`--scene game`을 주세요.** 없으면 프로그램은 `--scene title`, 즉 타이틀 화면만 실행합니다.
+3. **원본 파일을 그대로 두려면** 세이브용 빈 디렉터리를 만들어 `--write-dir`로 지정하세요.
+
+       mkdir -p saves
+       build/3k --data original_bin --scene game --write-dir saves --lang ko
+
+   Escape를 누르거나 창을 닫으면 종료됩니다.
+
+**Windows (MinGW/MSYS2).** 실행 파일은 `build/3k.exe`입니다. 저장소 루트의 MSYS2 셸에서 위와 같은 인자로 실행하세요.
+- `sdl2-config --libs`가 `-mwindows`로 링크하므로 프로그램에 콘솔이 없습니다. 시작하지 못할 때(예:
+  `cannot read ... (data dir: original_bin)`) 메시지를 보여 주지 않고 종료합니다. 메시지를 보려면 출력을 파일로 보내세요.
+  `build/3k.exe --data original_bin --scene game > log.txt 2>&1`을 실행한 뒤 `log.txt`를 읽으면 됩니다.
+- 실행 파일에는 `SDL2.dll`과 `libstdc++-6.dll`이 필요합니다. MSYS2 셸은 `PATH`에서 찾지만, 탐색기에서 시작하려면
+  두 파일을 MinGW의 `bin` 디렉터리(예: `C:\msys64\ucrt64\bin`)에서 `3k.exe` 옆으로 복사하고,
+  "시작 위치"가 저장소 루트이며 위 인자를 붙인 바로 가기로 시작하세요.
+
 **언어.** 기본은 중국어(원본)입니다. 영어나 한국어로 하려면 게임을 시작하는 디렉터리에 `3k.ini`를 두세요.
 
     [game]

@@ -923,8 +923,13 @@ static uint32_t walk_clock0(void)
         return (uint32_t)g_walk_clock;
     time_t t = time(NULL);
     struct tm lt;
+#if defined(_WIN32) || defined(__CYGWIN__)
+    if (localtime_s(&lt, &t) != 0)
+        return 0;
+#else
     if (!localtime_r(&t, &lt))
         return 0;
+#endif
     unsigned long long secs = (unsigned long long)lt.tm_hour * 3600u + (unsigned)lt.tm_min * 60u + (unsigned)lt.tm_sec;
     return (uint32_t)(secs * TK_BIOS_TICKS_PER_SEC_NUM / TK_BIOS_TICKS_PER_SEC_DEN);
 }

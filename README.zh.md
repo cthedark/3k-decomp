@@ -127,6 +127,26 @@ work/           工具的暫存輸出（git 忽略）
 遊戲會像原版一樣，把存檔與狀態檔寫進資料目錄；請在 `original_bin/` 的副本上遊玩，或加上 `--write-dir DIR`。
 更多選項：`docs/port.md` 的「Build and run」。
 
+### 建置後如何遊玩
+
+1. **從儲存庫的根目錄啟動**，而不是從 `build/`。沒有 `--data` 時，遊戲會在*目前*目錄中尋找 `original_bin/`，
+   所以從 `build/` 執行（或直接雙擊執行檔）會找不到資料而立刻結束。也可以用 `TK_DATA=DIR` 代替 `--data DIR`。
+2. **加上 `--scene game`。** 不加的話，程式執行的是 `--scene title`，只有標題畫面。
+3. **讓原始檔案保持不變：** 建立一個空目錄存放存檔，並用 `--write-dir` 指定它：
+
+       mkdir -p saves
+       build/3k --data original_bin --scene game --write-dir saves
+
+   按 Escape 或關閉視窗即可離開。
+
+**Windows（MinGW/MSYS2）。** 執行檔是 `build/3k.exe`。請在儲存庫根目錄的 MSYS2 shell 中，用上面相同的參數執行。
+- `sdl2-config --libs` 會加上 `-mwindows` 連結，所以程式沒有主控台：無法啟動時（例如
+  `cannot read ... (data dir: original_bin)`），它會不顯示訊息就結束。要看到訊息，請把輸出導向檔案：
+  `build/3k.exe --data original_bin --scene game > log.txt 2>&1`，再讀 `log.txt`。
+- 執行檔需要 `SDL2.dll` 與 `libstdc++-6.dll`。MSYS2 shell 會在 `PATH` 上找到它們；若要從檔案總管啟動，
+  請把這兩個檔案從 MinGW 的 `bin` 目錄（例如 `C:\msys64\ucrt64\bin`）複製到 `3k.exe` 旁邊，
+  並用一個「開始位置」設為儲存庫根目錄、且加上上述參數的捷徑來啟動。
+
 **語言。** 預設是中文（原版）。要玩英文或韓文版，在啟動遊戲的目錄放一個 `3k.ini`：
 
     [game]

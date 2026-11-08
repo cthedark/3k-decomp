@@ -176,6 +176,28 @@ work/           scratch output of the tools (git-ignored)
 The game writes its saves and state files into the data directory, as the original does; play on a copy of `original_bin/`,
 or pass `--write-dir DIR`. More options: `docs/port.md`, "Build and run".
 
+### Playing after the build
+
+1. **Start it from the repository root**, not from `build/`. Without `--data`, the game looks for `original_bin/` in the
+   *current* directory, so a run from `build/` (or a double-click on the executable) finds no data and quits at once.
+   `TK_DATA=DIR` works in place of `--data DIR`.
+2. **Pass `--scene game`.** Without it the program runs `--scene title`, only the title screen.
+3. **Keep the original files clean:** make an empty directory for the saves and pass it as `--write-dir`:
+
+       mkdir -p saves
+       build/3k --data original_bin --scene game --write-dir saves --lang en
+
+   Escape or closing the window quits.
+
+**Windows (MinGW/MSYS2).** The executable is `build/3k.exe`. Run it from the MSYS2 shell in the repository root, with
+the same arguments as above.
+- `sdl2-config --libs` links with `-mwindows`, so the program has no console: when it cannot start (for example
+  `cannot read ... (data dir: original_bin)`), it exits without showing the message. To see it, redirect the output:
+  `build/3k.exe --data original_bin --scene game > log.txt 2>&1`, then read `log.txt`.
+- The executable needs `SDL2.dll` and `libstdc++-6.dll`. The MSYS2 shell finds them on `PATH`; to start the game
+  from Explorer, copy both from the MinGW `bin` directory (e.g. `C:\msys64\ucrt64\bin`) next to `3k.exe`, and
+  start it from a shortcut whose "Start in" folder is the repository root, with the arguments above added.
+
 **Language.** Chinese (the original) is the default. For English or Korean put a `3k.ini` in the directory the game is
 started from:
 
