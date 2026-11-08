@@ -156,6 +156,15 @@ work/           工具的暫存輸出（git 忽略）
 `--lang zh|en|ko` 會覆蓋這個設定，`--config FILE` 則讀取另一個檔案。畫面上的一切都已翻譯，只有標題的書法字與製作群名單除外；
 語音旁白仍是國語。翻譯的存放方式、命名規則、字型與檢查：`localization/README.md`。
 
+## 畫面截圖
+
+<p>
+  <img src="docs/screenshots/3k-zh1.jpg" alt="村莊：主角與村民" width="49%">
+  <img src="docs/screenshots/3k-zh2.jpg" alt="世界地圖" width="49%">
+</p>
+
+移植版的中文畫面（預設語言，與原版相同）：第一個村莊，以及村外的世界地圖。
+
 ## 狀態
 
 遊戲已從頭到尾移植完成（`docs/port.md` 的「Current state」）：原版的每個程式都在同一個原生程式中執行，

@@ -173,6 +173,15 @@ work/           도구의 임시 출력 (git에서 제외)
 화면의 모든 것이 번역되어 있습니다. 음성 내레이션은 중국어(표준어) 그대로입니다. 번역을 저장하는 방식, 이름 규칙, 글꼴,
 검사: `localization/README.md`.
 
+## 스크린숏
+
+<p>
+  <img src="docs/screenshots/3k-ko1.jpg" alt="마을: 한국어 대화 상자" width="49%">
+  <img src="docs/screenshots/3k-ko2.jpg" alt="월드 맵과 한국어 버튼" width="49%">
+</p>
+
+한국어로 플레이하는 화면(`--lang ko`): 첫 마을에서 마을 사람과 나누는 대화, 그리고 마을 밖의 월드 맵.
+
 ## 현황
 
 게임은 처음부터 끝까지 이식되었습니다(`docs/port.md`의 "Current state"). 원본의 모든 프로그램이 하나의 네이티브 프로그램 안에서

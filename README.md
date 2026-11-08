@@ -209,6 +209,15 @@ started from:
 logo and the credits; the voice-over stays Mandarin. How the translations are stored, the naming rules, the fonts and the
 checks: `localization/README.md`.
 
+## Screenshots
+
+<p>
+  <img src="docs/screenshots/3k-en1.jpg" alt="The village: a message box in English" width="49%">
+  <img src="docs/screenshots/3k-en2.jpg" alt="The world map, with the English buttons" width="49%">
+</p>
+
+The port in English (`--lang en`): a villager's message box in the first village, and the world outside it.
+
 ## Status
 
 The game is ported from start to finish (`docs/port.md`, "Current state"): every program of the original runs as part of
