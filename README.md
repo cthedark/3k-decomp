@@ -7,6 +7,13 @@ A personal reverse-engineering experiment: reconstruct the source code of
 role-playing game from Taiwanese publisher 第三波 (Third Wave), as C/C++ that
 can be modified, recompiled, and run on modern hardware.
 
+<p>
+  <img src="docs/screenshots/3k-en1.jpg" alt="The village: a message box in English" width="49%">
+  <img src="docs/screenshots/3k-en2.jpg" alt="The world map, with the English buttons" width="49%">
+</p>
+
+The port in English (`--lang en`): a villager's message box in the first village, and the world outside it.
+
 ## Goal
 
 1. **Complete decompilation.** Recover all of the game's executable logic as
@@ -208,15 +215,6 @@ started from:
 `--lang zh|en|ko` overrides it and `--config FILE` reads another file. Everything on screen is translated except the title
 logo and the credits; the voice-over stays Mandarin. How the translations are stored, the naming rules, the fonts and the
 checks: `localization/README.md`.
-
-## Screenshots
-
-<p>
-  <img src="docs/screenshots/3k-en1.jpg" alt="The village: a message box in English" width="49%">
-  <img src="docs/screenshots/3k-en2.jpg" alt="The world map, with the English buttons" width="49%">
-</p>
-
-The port in English (`--lang en`): a villager's message box in the first village, and the world outside it.
 
 ## Status
 
